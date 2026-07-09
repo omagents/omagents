@@ -26,7 +26,7 @@ An OpenCode plugin that bundles agent skills, MCP servers, parallel execution, a
 | `codegraph` | Local | Codebase symbol graph and exploration |
 | `context7` | Remote | Documentation search (free tier available) |
 | `websearch` | Remote | Web search via Exa (free tier available) |
-| `github` | Remote | GitHub tools via GitHub Copilot MCP (OAuth supported) |
+| `github` / `grep_app` | Remote | GitHub Copilot MCP when `GITHUB_TOKEN` is set; otherwise `mcp.grep.app` for public code search |
 
 ### Parallel Execution
 

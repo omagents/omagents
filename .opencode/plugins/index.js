@@ -48,15 +48,25 @@ const BUILTIN_MCPS = {
     type: "remote",
     url: "https://mcp.exa.ai/mcp",
   },
-  github: {
+}
+
+// GitHub code search: use the full GitHub Copilot MCP when a token is
+// available; otherwise fall back to Vercel's public Grep.app MCP.
+if (process.env.GITHUB_TOKEN) {
+  BUILTIN_MCPS.github = {
     type: "remote",
     url: "https://api.githubcopilot.com/mcp/",
     enabled: true,
     oauth: false,
-    ...(process.env.GITHUB_TOKEN
-      ? { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } }
-      : {}),
-  },
+    headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
+  }
+} else {
+  BUILTIN_MCPS.grep_app = {
+    type: "remote",
+    url: "https://mcp.grep.app",
+    enabled: true,
+    oauth: false,
+  }
 }
 
 // Python packages required by bundled skills
