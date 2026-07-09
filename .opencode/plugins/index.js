@@ -51,6 +51,11 @@ const BUILTIN_MCPS = {
   github: {
     type: "remote",
     url: "https://api.githubcopilot.com/mcp/",
+    enabled: true,
+    oauth: false,
+    ...(process.env.GITHUB_TOKEN
+      ? { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } }
+      : {}),
   },
 }
 
