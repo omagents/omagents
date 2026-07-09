@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playwright Web Scraping"
+  short_description: "Use Playwright for web scraping instead of curl"
+  default_prompt: "Scrape the content from this URL using Playwright"

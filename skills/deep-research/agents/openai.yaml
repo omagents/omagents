@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deep Research"
+  short_description: "Run a structured, multi-source deep research workflow with items × fields, gap detection, and Jinja2 report generation."
+  default_prompt: "Run a deep research on this topic using web, GitHub, and codebase sources. Generate a structured plan, execute parallel subagents, run gap analysis, and produce a Markdown report."

@@ -1,0 +1,19 @@
+{
+  "name": "omagents",
+  "version": "0.1.0",
+  "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
+  "type": "module",
+  "main": ".opencode/plugins/index.js",
+  "keywords": [
+    "opencode",
+    "plugin",
+    "skills",
+    "mcp",
+    "agents"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "superpowers": "git+https://github.com/obra/superpowers.git"
+  }
+}
