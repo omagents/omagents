@@ -2,8 +2,123 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-blue)](https://opencode.ai)
+[![npm version](https://img.shields.io/npm/v/@omagents/omagents.svg)](https://www.npmjs.com/package/@omagents/omagents)
+[![npm downloads](https://img.shields.io/npm/dm/@omagents/omagents.svg)](https://www.npmjs.com/package/@omagents/omagents)
+[![GitHub stars](https://img.shields.io/github/stars/omagents/omagents?style=social)](https://github.com/omagents/omagents/stargazers)
 
 An OpenCode plugin that bundles agent skills, MCP servers, parallel execution, and superpowers into a single install.
+
+---
+
+## Skip This README
+
+Paste this into your agent:
+
+```
+Read this and install omagents: https://raw.githubusercontent.com/omagents/omagents/main/README.md
+```
+
+---
+
+## Installation
+
+### TL;DR
+
+| You want | Do this | What happens |
+| :--- | :--- | :--- |
+| **Stable** (npm) | Add `"@omagents/omagents"` to `opencode.json` plugin array | Plugin auto-installs from npm, superpowers bundled |
+| **Pinned** | Add `"@omagents/omagents@^0.1.0"` | Same, but locked to a version range |
+| **Bleeding edge** (git) | Add `"@omagents/omagents@git+https://github.com/omagents/omagents.git"` | Latest source from main branch |
+
+### For Humans
+
+**Prerequisites:** [OpenCode](https://opencode.ai) installed and running.
+
+1. Open your OpenCode config:
+
+```bash
+open -e ~/.config/opencode/opencode.json
+```
+
+2. Add `@omagents/omagents` to the `plugin` array:
+
+```json
+{
+  "plugin": [
+    "@omagents/omagents"
+  ]
+}
+```
+
+3. Restart OpenCode.
+
+That's it. On first launch OmAgents will automatically:
+- Install **superpowers** (bundled, no separate install needed)
+- Register all **skills** (OmAgents + Superpowers)
+- Register all **MCP servers** (agentmemory, codegraph, context7, websearch, github/grep_app)
+- Enable **parallel execution** (background agents with `/ps` and `cancel_task`)
+- Set up **Python venv** at `~/.venvs/omagents` (installs `jinja2` for report templates)
+
+### For LLM Agents
+
+If you're an AI agent helping a user install OmAgents, follow these steps:
+
+```bash
+# 1. Read the user's current OpenCode config
+cat ~/.config/opencode/opencode.json
+
+# 2. Add "@omagents/omagents" to the plugin array
+#    Use jq if available, otherwise edit manually
+
+# 3. Verify the config is valid JSON after editing
+
+# 4. Tell the user to restart OpenCode
+```
+
+The plugin handles everything else automatically — no manual MCP configuration, no skill installation, no venv setup.
+
+### Optional: API Keys
+
+Some remote MCP servers accept optional API keys for higher rate limits:
+
+```bash
+# ~/.zshrc or ~/.bashrc
+export EXA_API_KEY="your-exa-key"
+export CONTEXT7_API_KEY="your-context7-key"
+export GITHUB_TOKEN="your-github-token"
+```
+
+Setting `GITHUB_TOKEN` enables the full GitHub Copilot MCP (issues, PRs, repos, code search). Without it, OmAgents falls back to Vercel's `mcp.grep.app` for public code search only.
+
+### Combine with Other Plugins
+
+OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
+
+```json
+{
+  "plugin": [
+    "@omagents/omagents",
+    "@devcxl/opencode-spec"
+  ]
+}
+```
+
+---
+
+## Highlights
+
+| | Feature | What it does |
+| :---: | :--- | :--- |
+| 🧠 | **Superpowers** (14 skills) | Brainstorming before implementation, TDD, systematic debugging, plan writing, code review, git worktrees |
+| 🔍 | **Deep Research** | Multi-source iterative research with items × fields matrix, gap detection, Jinja2 reports |
+| ⚡ | **Parallel Execution** | Background task dispatch via `task(background: true)`, Job Board tracking, `/ps` command |
+| 📚 | **Built-in MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app — all auto-registered |
+| 🐍 | **Python Tooling** | Dedicated venv at `~/.venvs/omagents`, auto-installs jinja2 and skill dependencies |
+| 📄 | **MarkItDown** | Convert PDF, DOCX, XLSX, PPTX, HTML to Markdown |
+| 🌐 | **Web Scraping** | Playwright-based page fetching and scraping |
+| 🔗 | **GitHub** | Full GitHub API when `GITHUB_TOKEN` is set; falls back to `mcp.grep.app` without token |
+
+---
 
 ## What's Included
 
@@ -36,27 +151,7 @@ An OpenCode plugin that bundles agent skills, MCP servers, parallel execution, a
 - `cancel_task` tool to cancel background tasks
 - `parallel_status` tool for programmatic status checks
 
-## Installation
-
-Add **one line** to your OpenCode config (`~/.config/opencode/opencode.json`):
-
-```json
-{
-  "plugin": [
-    "@omagents/omagents"
-  ]
-}
-```
-
-That's it. Restart OpenCode and the plugin will automatically:
-
-1. Install and load **superpowers** (as a bundled dependency)
-2. Register all **skills** (OmAgents + Superpowers)
-3. Register all **MCP servers**
-4. Enable **parallel execution** (auto-writes `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` to your shell config)
-5. Install **Python dependencies** (e.g., `jinja2`) into `~/.venvs/omagents`
-
-No other plugins or MCP servers need to be configured separately.
+---
 
 ## Architecture
 
@@ -83,45 +178,30 @@ OmAgents is designed as a layered system:
 
 **Superpowers is the process skills layer.** It provides reusable development workflows: brainstorming before implementation, test-driven development, systematic debugging, plan writing and execution, code review, and git worktree management.
 
-**The user choice layer is not bundled.** Development methodology is a choice — spec-driven development (OpenSpec), team-based engineering workflow (gstack), or no methodology at all. OmAgents stays neutral so users can pick what fits their project. Install any of these alongside OmAgents:
+**The user choice layer is not bundled.** Development methodology is a choice — spec-driven development (OpenSpec), team-based engineering workflow (gstack), or no methodology at all. OmAgents stays neutral so users can pick what fits their project.
 
-```json
-{
-  "plugin": [
-    "@omagents/omagents",
-    "@devcxl/opencode-spec"
-  ]
-}
-```
+---
 
-OmAgents' hook merging mechanism ensures no conflicts with additional plugins.
+## Uninstallation
 
-## Optional: Higher Rate Limits
-
-Some remote MCP servers accept optional API keys for higher rate limits. Set them as environment variables and configure the MCP headers in your `opencode.json` if needed:
+1. Remove the plugin from your OpenCode config:
 
 ```bash
-# ~/.zshrc or ~/.bashrc
-export EXA_API_KEY="your-exa-key"
-export CONTEXT7_API_KEY="your-context7-key"
-export GITHUB_TOKEN="your-github-token"
+# Using jq
+jq '.plugin = [.plugin[] | select(. != "@omagents/omagents")]' \
+    ~/.config/opencode/opencode.json > /tmp/oc.json && \
+    mv /tmp/oc.json ~/.config/opencode/opencode.json
 ```
 
-```json
-{
-  "mcp": {
-    "context7": {
-      "type": "remote",
-      "url": "https://mcp.context7.com/mcp",
-      "headers": {
-        "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
-      }
-    }
-  }
-}
+2. Remove the Python venv (optional):
+
+```bash
+rm -rf ~/.venvs/omagents
 ```
 
-For GitHub, run `opencode mcp auth github` to use OAuth instead of a token.
+3. Restart OpenCode.
+
+---
 
 ## Development
 
@@ -144,6 +224,22 @@ To test locally:
 2. Restart OpenCode to reload the plugin
 3. Check that skills appear in the available skills list
 4. Run `opencode mcp list` to verify MCP servers are registered
+
+### Publishing
+
+OmAgents uses OIDC Trusted Publishing — no npm token required.
+
+```bash
+# Bump version
+npm version patch   # 0.1.0 → 0.1.1
+
+# Push tag (triggers GitHub Actions auto-publish)
+git push && git push --tags
+```
+
+Configure Trusted Publisher at [npmjs.com](https://www.npmjs.com/package/@omagents/omagents) → Settings → Trusted Publisher.
+
+---
 
 ## License
 
