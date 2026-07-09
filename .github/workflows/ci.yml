@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check plugin syntax
+        run: |
+          node --check .opencode/plugins/index.js
+          node --check .opencode/plugins/parallel.js
+
+      - name: Check Python scripts
+        run: |
+          python3 -m py_compile skills/deep-research/scripts/deep_research.py
+          python3 -m py_compile skills/deep-research/scripts/plan.py
+          python3 -m py_compile skills/deep-research/scripts/merge.py
+          python3 -m py_compile skills/deep-research/scripts/synthesize.py
+          python3 -m py_compile skills/deep-research/scripts/gap_analysis.py
+          python3 -m py_compile skills/deep-research/scripts/validate.py

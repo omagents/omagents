@@ -1,5 +1,8 @@
 # OmAgents
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-blue)](https://opencode.ai)
+
 An OpenCode plugin that bundles agent skills, MCP servers, parallel execution, and superpowers into a single install.
 
 ## What's Included
@@ -13,13 +16,7 @@ An OpenCode plugin that bundles agent skills, MCP servers, parallel execution, a
 | `agents-python-tools` | OmAgents | Routes Python tooling to the dedicated `~/.venvs/omagents` venv |
 | `markitdown-converter` | OmAgents | Convert documents (PDF, DOCX, XLSX, etc.) to Markdown |
 | `playwright-web-scraping` | OmAgents | Web scraping and page fetching with Playwright |
-| `brainstorming` | Superpowers | Explore user intent before implementation |
-| `test-driven-development` | Superpowers | TDD workflow |
-| `systematic-debugging` | Superpowers | Structured debugging methodology |
-| `writing-plans` | Superpowers | Multi-step task planning |
-| `executing-plans` | Superpowers | Plan execution with review checkpoints |
-| `using-git-worktrees` | Superpowers | Isolated workspace management |
-| ... | Superpowers | 14 skills total |
+| `superpowers` (14 skills) | Superpowers | Brainstorming, TDD, debugging, planning, git worktrees, and more |
 
 ### MCP Servers
 
@@ -60,6 +57,44 @@ That's it. Restart OpenCode and the plugin will automatically:
 5. Install **Python dependencies** (e.g., `jinja2`) into `~/.venvs/omagents`
 
 No other plugins or MCP servers need to be configured separately.
+
+## Architecture
+
+OmAgents is designed as a layered system:
+
+```
+┌─────────────────────────────────────────────────┐
+│  User Choice Layer (not bundled, install separately)  │
+│  OpenSpec · gstack · custom workflows · none     │
+├─────────────────────────────────────────────────┤
+│  Process Skills Layer (bundled: superpowers)      │
+│  Brainstorming · TDD · Debugging · Plans ·       │
+│  Code Review · Git Worktrees · Verification      │
+├─────────────────────────────────────────────────┤
+│  Infrastructure Layer (bundled: OmAgents)         │
+│  MCP servers · Parallel execution ·              │
+│  Deep research · Python tooling · venv            │
+├─────────────────────────────────────────────────┤
+│  OpenCode runtime                                │
+└─────────────────────────────────────────────────┘
+```
+
+**OmAgents is the infrastructure layer.** It provides the tools and capabilities agents need: MCP servers for external data, parallel execution for background tasks, research workflows, and Python environment management.
+
+**Superpowers is the process skills layer.** It provides reusable development workflows: brainstorming before implementation, test-driven development, systematic debugging, plan writing and execution, code review, and git worktree management.
+
+**The user choice layer is not bundled.** Development methodology is a choice — spec-driven development (OpenSpec), team-based engineering workflow (gstack), or no methodology at all. OmAgents stays neutral so users can pick what fits their project. Install any of these alongside OmAgents:
+
+```json
+{
+  "plugin": [
+    "omagents@git+https://github.com/omagents/omagents.git",
+    "@devcxl/opencode-spec"
+  ]
+}
+```
+
+OmAgents' hook merging mechanism ensures no conflicts with additional plugins.
 
 ## Optional: Higher Rate Limits
 
@@ -109,3 +144,7 @@ To test locally:
 2. Restart OpenCode to reload the plugin
 3. Check that skills appear in the available skills list
 4. Run `opencode mcp list` to verify MCP servers are registered
+
+## License
+
+MIT - see [LICENSE](LICENSE).
