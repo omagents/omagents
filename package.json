@@ -1,5 +1,5 @@
 {
-  "name": "omagents",
+  "name": "@omagents/omagents",
   "version": "0.1.0",
   "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
   "type": "module",
@@ -15,5 +15,11 @@
   "license": "MIT",
   "dependencies": {
     "superpowers": "git+https://github.com/obra/superpowers.git"
+  },
+  "bundledDependencies": [
+    "superpowers"
+  ],
+  "scripts": {
+    "build:pack": "npm pack"
   }
 }

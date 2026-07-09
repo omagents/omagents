@@ -43,7 +43,7 @@ Add **one line** to your OpenCode config (`~/.config/opencode/opencode.json`):
 ```json
 {
   "plugin": [
-    "omagents@git+https://github.com/omagents/omagents.git"
+    "@omagents/omagents"
   ]
 }
 ```
@@ -88,7 +88,7 @@ OmAgents is designed as a layered system:
 ```json
 {
   "plugin": [
-    "omagents@git+https://github.com/omagents/omagents.git",
+    "@omagents/omagents",
     "@devcxl/opencode-spec"
   ]
 }
