@@ -13,6 +13,10 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omagents/omagents"
+  },
   "dependencies": {
     "superpowers": "git+https://github.com/obra/superpowers.git"
   },
