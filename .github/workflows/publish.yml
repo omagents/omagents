@@ -18,8 +18,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
+        # Don't set registry-url here: it writes an .npmrc with a placeholder
+        # NODE_AUTH_TOKEN, which prevents npm from using OIDC trusted publishing.
 
       - run: npm ci
 
@@ -27,5 +28,9 @@ jobs:
         run: |
           node --check .opencode/plugins/index.js
           node --check .opencode/plugins/parallel.js
+
+      # Node 22 ships an npm version that does not support OIDC trusted publishing.
+      # npm >= 11.5.1 is required. Update to the latest release before publishing.
+      - run: npm install -g npm@latest
 
       - run: npm publish --access public
