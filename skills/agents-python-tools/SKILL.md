@@ -74,13 +74,8 @@ The same applies to project venvs: `.venv/bin/` on Unix, `.venv/Scripts/` on Win
 - If a tool is missing, just install it; the venv persists across sessions.
 - If an install fails on a system dependency, install the OS-level dev package separately — do not fall back to the system Python. Use the platform's package manager (`apt-get` on Debian/Ubuntu, `brew` on macOS, `choco` or `scoop` on Windows).
 
-## Included tools
+## Pre-installed packages
 
-The following tools are pre-installed in `~/.venvs/omagents`:
+The plugin auto-installs `jinja2` on first session (used by deep-research report templates).
 
-| Tool | Purpose |
-|------|---------|
-| markitdown | Convert documents (PDF/DOCX/XLSX/...) to Markdown |
-| python-docx | Create/edit Word documents |
-| playwright | Web scraping with headless browser |
-| pandoc | Universal document format converter (md↔docx, md↔pdf, ...) |
+Other tools (markitdown, playwright, etc.) are installed on-demand by their respective skills when first needed. They are not pre-installed.

@@ -213,7 +213,6 @@ omagents/
 │   ├── index.js              # Plugin entry point (merges superpowers + omagents hooks)
 │   └── parallel.js           # Parallel execution engine
 ├── skills/                   # Bundled OpenCode skills
-├── templates/                # Jinja2 report templates
 ├── package.json              # Includes superpowers as dependency
 └── README.md
 ```

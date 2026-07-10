@@ -32,7 +32,6 @@ omagents/
 │   ├── agents-python-tools/  # Python venv management
 │   ├── markitdown-converter/ # Document to Markdown conversion
 │   └── playwright-web-scraping/
-├── templates/                # Jinja2 report templates (used by deep-research)
 ├── package.json              # Includes superpowers as dependency
 └── README.md
 ```
