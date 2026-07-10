@@ -1,0 +1,6 @@
+node_modules/
+.opencode/node_modules/
+package-lock.json
+.opencode/package-lock.json
+*.tgz
+skills/

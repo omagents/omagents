@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  syntax-check:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -17,7 +17,10 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Check plugin syntax
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JS syntax
         run: |
           node --check .opencode/plugins/index.js
           node --check .opencode/plugins/parallel.js
@@ -30,3 +33,10 @@ jobs:
           python3 -m py_compile skills/deep-research/scripts/synthesize.py
           python3 -m py_compile skills/deep-research/scripts/gap_analysis.py
           python3 -m py_compile skills/deep-research/scripts/validate.py
+          python3 -m py_compile skills/_shared/scripts/loop_engine.py
+
+      - name: Check formatting
+        run: npx prettier --check ".opencode/plugins/*.js" "tests/*.js"
+
+      - name: Run tests
+        run: node --test tests/*.test.js

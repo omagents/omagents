@@ -24,6 +24,12 @@
     "superpowers"
   ],
   "scripts": {
-    "build:pack": "npm pack"
+    "build:pack": "npm pack",
+    "test": "node --test tests/*.test.js",
+    "format": "prettier --write .opencode/plugins/*.js tests/*.js",
+    "format:check": "prettier --check .opencode/plugins/*.js tests/*.js"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0"
   }
 }

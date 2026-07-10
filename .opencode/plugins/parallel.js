@@ -112,7 +112,9 @@ function ensureBackgroundSubagentsEnv() {
 
   const targetPath = detectShellConfigPath()
   if (!targetPath) {
-    console.warn("[omagents] Could not detect shell config file. Set OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true manually.")
+    console.warn(
+      "[omagents] Could not detect shell config file. Set OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true manually."
+    )
     return
   }
 
@@ -136,7 +138,9 @@ function ensureBackgroundSubagentsEnv() {
     const newContent = `${content}${prefix}${block}\n`
     fs.mkdirSync(path.dirname(targetPath), { recursive: true })
     fs.writeFileSync(targetPath, newContent)
-    console.log(`[omagents] Added ${ENV_NAME}=true to ${targetPath}. Restart your shell or OpenCode for background subagents.`)
+    console.log(
+      `[omagents] Added ${ENV_NAME}=true to ${targetPath}. Restart your shell or OpenCode for background subagents.`
+    )
   } catch (err) {
     console.warn(`[omagents] Could not write to shell config: ${err.message}`)
   }
@@ -156,15 +160,18 @@ function writeTuiState() {
     const snapshot = {
       version: 1,
       updatedAt: Date.now(),
-      running: jobs.filter(j => j.state === "running").length,
-      completed: jobs.filter(j => j.state === "completed" || j.state === "reconciled").length,
-      error: jobs.filter(j => j.state === "error").length,
-      jobs: jobs.map(j => ({
+      running: jobs.filter((j) => j.state === "running").length,
+      completed: jobs.filter((j) => j.state === "completed" || j.state === "reconciled").length,
+      error: jobs.filter((j) => j.state === "error").length,
+      jobs: jobs.map((j) => ({
         alias: j.alias,
         agent: j.agent,
         description: j.description,
         state: j.state,
-        elapsed: j.state === "running" ? Date.now() - j.launchedAt : (j.completedAt || Date.now()) - j.launchedAt,
+        elapsed:
+          j.state === "running"
+            ? Date.now() - j.launchedAt
+            : (j.completedAt || Date.now()) - j.launchedAt,
       })),
     }
     fs.writeFileSync(statePath, JSON.stringify(snapshot, null, 2) + "\n")
@@ -188,7 +195,9 @@ function parseTaskIdFromOutput(output) {
 
 function parseTaskStateFromOutput(output) {
   if (typeof output !== "string") return undefined
-  const xmlMatch = /<task\s+[^>]*\bstate=["'](running|completed|error|cancelled)["'][^>]*>/i.exec(output)
+  const xmlMatch = /<task\s+[^>]*\bstate=["'](running|completed|error|cancelled)["'][^>]*>/i.exec(
+    output
+  )
   if (xmlMatch) return xmlMatch[1].toLowerCase()
   for (const line of output.split(/\r?\n/)) {
     const match = /^state:\s*(running|completed|error|cancelled)/i.exec(line.trim())
@@ -247,15 +256,15 @@ function reconcileJobs(parentSessionID) {
 }
 
 function getJobsForSession(parentSessionID) {
-  return [...jobBoard.values()].filter(j => j.parentSessionID === parentSessionID)
+  return [...jobBoard.values()].filter((j) => j.parentSessionID === parentSessionID)
 }
 
 function getUnreconciledJobs(parentSessionID) {
-  return getJobsForSession(parentSessionID).filter(j => j.terminalUnreconciled)
+  return getJobsForSession(parentSessionID).filter((j) => j.terminalUnreconciled)
 }
 
 function getRunningJobs(parentSessionID) {
-  return getJobsForSession(parentSessionID).filter(j => j.state === "running")
+  return getJobsForSession(parentSessionID).filter((j) => j.state === "running")
 }
 
 // ─── Job Board Context for LLM ──────────────────────────────────────────────
@@ -415,10 +424,14 @@ export function createParallelHooks(ctx) {
 
       // Guard: don't double-inject
       const existingText = lastUser.parts[0]?.text || ""
-      if (typeof existingText === "string" && existingText.includes("SENTINEL: omagents-job-board-v1")) return
+      if (
+        typeof existingText === "string" &&
+        existingText.includes("SENTINEL: omagents-job-board-v1")
+      )
+        return
 
       // Prepend job board to the first text part
-      const firstPart = lastUser.parts.find(p => p.type === "text")
+      const firstPart = lastUser.parts.find((p) => p.type === "text")
       if (firstPart) {
         firstPart.text = `${boardText}\n\n${firstPart.text || ""}`
       } else {
@@ -429,7 +442,10 @@ export function createParallelHooks(ctx) {
     // ── Event listener for session lifecycle ────────────────────────────────
 
     event: async ({ event }) => {
-      if (event.type === "session.idle" || (event.type === "session.status" && event.properties?.type === "idle")) {
+      if (
+        event.type === "session.idle" ||
+        (event.type === "session.status" && event.properties?.type === "idle")
+      ) {
         const sessionID = event.properties?.sessionID || event.properties?.id
         if (!sessionID) return
 
@@ -473,7 +489,8 @@ export function createParallelHooks(ctx) {
       config.command = config.command || {}
       if (!config.command.ps) {
         config.command.ps = {
-          template: "List all background tasks for the current session. Use the parallel_status tool to get the current status, then display as a concise table with columns: Alias | Agent | Status | Elapsed | Description. If no tasks are running, say 'No background tasks.'",
+          template:
+            "List all background tasks for the current session. Use the parallel_status tool to get the current status, then display as a concise table with columns: Alias | Agent | Status | Elapsed | Description. If no tasks are running, say 'No background tasks.'",
           description: "Show running background tasks",
         }
       }
@@ -483,7 +500,8 @@ export function createParallelHooks(ctx) {
 
     tool: {
       parallel_status: {
-        description: "Check the status of all background tasks for the current session. Returns a JSON summary of all tracked background jobs including their state (running/completed/error), elapsed time, and result summaries.",
+        description:
+          "Check the status of all background tasks for the current session. Returns a JSON summary of all tracked background jobs including their state (running/completed/error), elapsed time, and result summaries.",
         args: {
           session_id: {
             type: "string",
@@ -505,16 +523,21 @@ export function createParallelHooks(ctx) {
 
           const summary = {
             total: jobs.length,
-            running: jobs.filter(j => j.state === "running").length,
-            completed: jobs.filter(j => j.state === "completed" || j.state === "reconciled").length,
-            error: jobs.filter(j => j.state === "error").length,
-            tasks: jobs.map(j => ({
+            running: jobs.filter((j) => j.state === "running").length,
+            completed: jobs.filter((j) => j.state === "completed" || j.state === "reconciled")
+              .length,
+            error: jobs.filter((j) => j.state === "error").length,
+            tasks: jobs.map((j) => ({
               alias: j.alias,
               task_id: j.taskID,
               agent: j.agent,
               description: j.description,
               state: j.state,
-              elapsed_s: Math.round((j.state === "running" ? Date.now() - j.launchedAt : (j.completedAt || Date.now()) - j.launchedAt) / 1000),
+              elapsed_s: Math.round(
+                (j.state === "running"
+                  ? Date.now() - j.launchedAt
+                  : (j.completedAt || Date.now()) - j.launchedAt) / 1000
+              ),
               result: j.resultSummary?.slice(0, 200),
             })),
           }
@@ -524,7 +547,8 @@ export function createParallelHooks(ctx) {
       },
 
       cancel_task: {
-        description: "Cancel a running background task by its task ID or alias. Aborts the underlying session.",
+        description:
+          "Cancel a running background task by its task ID or alias. Aborts the underlying session.",
         args: {
           task_id: {
             type: "string",
@@ -538,7 +562,7 @@ export function createParallelHooks(ctx) {
           // Find job by taskID or alias
           let job = jobBoard.get(id)
           if (!job) {
-            job = [...jobBoard.values()].find(j => j.alias === id)
+            job = [...jobBoard.values()].find((j) => j.alias === id)
           }
           if (!job) {
             return `Error: No background task found with ID or alias '${id}'.`
@@ -566,8 +590,8 @@ export function createParallelHooks(ctx) {
 // ── Helper: build job board for all sessions ────────────────────────────────
 
 function buildJobBoardTextForAll() {
-  const running = [...jobBoard.values()].filter(j => j.state === "running")
-  const unreconciled = [...jobBoard.values()].filter(j => j.terminalUnreconciled)
+  const running = [...jobBoard.values()].filter((j) => j.state === "running")
+  const unreconciled = [...jobBoard.values()].filter((j) => j.terminalUnreconciled)
 
   if (running.length === 0 && unreconciled.length === 0) return ""
 

@@ -83,13 +83,13 @@ async function ensurePythonDependencies({ $ }) {
     if (pythonCheck.exitCode !== 0) {
       console.warn(
         "[omagents] Python 3 is not installed or not on PATH.\n" +
-        "  OmAgents requires Python 3.11+ for the following features:\n" +
-        "    - Deep Research (Jinja2 report templates)\n" +
-        "    - MarkItDown converter\n" +
-        "    - Playwright web scraping\n" +
-        "    - Loop engine (remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit)\n" +
-        "  Install Python: https://www.python.org/downloads/\n" +
-        "  After installing, restart OpenCode."
+          "  OmAgents requires Python 3.11+ for the following features:\n" +
+          "    - Deep Research (Jinja2 report templates)\n" +
+          "    - MarkItDown converter\n" +
+          "    - Playwright web scraping\n" +
+          "    - Loop engine (remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit)\n" +
+          "  Install Python: https://www.python.org/downloads/\n" +
+          "  After installing, restart OpenCode."
       )
       return
     }
@@ -130,7 +130,9 @@ async function loadSuperpowers() {
     }
   } catch {
     _superpowersPlugin = false // mark as tried-and-failed (distinct from null=not-tried)
-    console.warn("[omagents] superpowers not available, skipping (install with: bun add superpowers)")
+    console.warn(
+      "[omagents] superpowers not available, skipping (install with: bun add superpowers)"
+    )
   }
   return _superpowersPlugin || null
 }
@@ -145,7 +147,7 @@ export const OmagentsPlugin = async (ctx) => {
   const sp = await loadSuperpowers()
   if (sp) {
     try {
-      superHooks = await sp(ctx) || {}
+      superHooks = (await sp(ctx)) || {}
     } catch (err) {
       console.warn("[omagents] superpowers plugin failed to initialize:", err.message)
     }
