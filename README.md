@@ -32,7 +32,9 @@ Read this and install omagents: https://raw.githubusercontent.com/omagents/omage
 
 ### For Humans
 
-**Prerequisites:** [OpenCode](https://opencode.ai) installed and running.
+**Prerequisites:**
+- [OpenCode](https://opencode.ai) installed and running
+- [Python 3.11+](https://www.python.org/downloads/) installed and on PATH (required for deep-research, markitdown-converter, playwright-web-scraping, and loop engine)
 
 1. Open your OpenCode config:
 

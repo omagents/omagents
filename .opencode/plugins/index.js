@@ -75,9 +75,25 @@ const REQUIRED_PYTHON_PACKAGES = ["jinja2"]
 
 /**
  * Ensure the dedicated agent venv exists and has the required Python packages.
+ * If Python 3 is not found, logs a clear warning with install instructions.
  */
 async function ensurePythonDependencies({ $ }) {
   try {
+    const pythonCheck = await $`python3 --version`.nothrow().quiet()
+    if (pythonCheck.exitCode !== 0) {
+      console.warn(
+        "[omagents] Python 3 is not installed or not on PATH.\n" +
+        "  OmAgents requires Python 3.11+ for the following features:\n" +
+        "    - Deep Research (Jinja2 report templates)\n" +
+        "    - MarkItDown converter\n" +
+        "    - Playwright web scraping\n" +
+        "    - Loop engine (remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit)\n" +
+        "  Install Python: https://www.python.org/downloads/\n" +
+        "  After installing, restart OpenCode."
+      )
+      return
+    }
+
     const venvExists = fs.existsSync(AGENT_PYTHON)
     if (!venvExists) {
       console.log(`[omagents] Creating agent venv at ${AGENT_VENV}`)
