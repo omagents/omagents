@@ -11,6 +11,7 @@ import json
 import re
 import sys
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -432,6 +433,8 @@ def generate_report(
         "total_findings": sum(len(f.get("findings", [])) for f in findings),
         "svg": svg_charts,
         "audit": audit_report,
+        "report_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "report_date_human": datetime.now(timezone.utc).strftime("%B %Y"),
     }
 
     report = tmpl.render(context)
