@@ -31,13 +31,3 @@ jobs:
           node --check .opencode/plugins/parallel.js
 
       - run: npm publish --access public
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${GITHUB_REF_NAME}"
-          gh release create "$VERSION" \
-            --title "$VERSION" \
-            --generate-notes \
-            --verify-tag
