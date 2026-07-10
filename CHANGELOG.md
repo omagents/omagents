@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-10
+
+### Fixed
+
+- **loop_engine.py**: `complete` and `fail` commands now accept both integer `id` and string `task_id` identifiers. Previously, deep-research tasks with string IDs (e.g. `task-flyio`) caused a `ValueError` because the engine forced `int(task_id)`.
+
 ## [0.3.0] - 2026-07-10
 
 ### Added

@@ -79,43 +79,54 @@ def cmd_next(skill):
     print("null")
 
 
+def _find_task_by_id(state, task_id):
+    """Find a task by its integer id or string task_id."""
+    task_id_str = str(task_id)
+    for task in state["tasks"]:
+        if str(task.get("id", "")) == task_id_str:
+            return task
+        if task.get("task_id") == task_id:
+            return task
+    return None
+
+
 def cmd_complete(skill, task_id, result=""):
     state = _load(skill)
-    for task in state["tasks"]:
-        if task["id"] == int(task_id):
-            task["status"] = "completed"
-            task["result"] = result
-            task["completed_at"] = datetime.now().isoformat()
-            state["stats"]["completed"] += 1
-            state["stats"]["pending"] -= 1
-            state["updated_at"] = datetime.now().isoformat()
-            _save(skill, state)
-            print(f"Task {task_id} completed: {result}")
-            return
+    task = _find_task_by_id(state, task_id)
+    if task:
+        task["status"] = "completed"
+        task["result"] = result
+        task["completed_at"] = datetime.now().isoformat()
+        state["stats"]["completed"] += 1
+        state["stats"]["pending"] -= 1
+        state["updated_at"] = datetime.now().isoformat()
+        _save(skill, state)
+        print(f"Task {task_id} completed: {result}")
+        return
     print(f"Task {task_id} not found")
 
 
 def cmd_fail(skill, task_id, error=""):
     state = _load(skill)
-    for task in state["tasks"]:
-        if task["id"] == int(task_id):
-            task["attempts"] += 1
-            task["last_error"] = error
-            if task["attempts"] >= MAX_ATTEMPTS:
-                task["status"] = "blocked"
-                task["error"] = error
-                state["stats"]["blocked"] += 1
-                state["stats"]["pending"] -= 1
-                print(f"Task {task_id} BLOCKED after {MAX_ATTEMPTS} attempts: {error}")
-            else:
-                task["status"] = "pending"
-                state["stats"]["retried"] += 1
-                print(
-                    f"Task {task_id} retry {task['attempts']}/{MAX_ATTEMPTS}: {error}"
-                )
-            state["updated_at"] = datetime.now().isoformat()
-            _save(skill, state)
-            return
+    task = _find_task_by_id(state, task_id)
+    if task:
+        task["attempts"] += 1
+        task["last_error"] = error
+        if task["attempts"] >= MAX_ATTEMPTS:
+            task["status"] = "blocked"
+            task["error"] = error
+            state["stats"]["blocked"] += 1
+            state["stats"]["pending"] -= 1
+            print(f"Task {task_id} BLOCKED after {MAX_ATTEMPTS} attempts: {error}")
+        else:
+            task["status"] = "pending"
+            state["stats"]["retried"] += 1
+            print(
+                f"Task {task_id} retry {task['attempts']}/{MAX_ATTEMPTS}: {error}"
+            )
+        state["updated_at"] = datetime.now().isoformat()
+        _save(skill, state)
+        return
     print(f"Task {task_id} not found")
 
 
