@@ -12,6 +12,21 @@ This report compares {{ items|length }} research subjects across {{ fields|lengt
 - {{ objective }}
 {% endfor %}
 
+{% if svg.comparison_radar %}
+
+## Comparison Radar
+
+{{ svg.comparison_radar }}
+
+{% endif %}
+{% if svg.coverage_heatmap %}
+
+## Coverage Matrix
+
+{{ svg.coverage_heatmap }}
+
+{% endif %}
+
 ## Comparison Table
 
 {% if items|length > 1 %}
@@ -52,6 +67,13 @@ _Only one item was researched. Comparison table requires at least two items._
 
 ## Cross-Cutting Insights
 
+{% if svg.source_donut %}
+
+### Source Distribution Chart
+
+{{ svg.source_donut }}
+{% endif %}
+
 ### Source Distribution
 
 | Source Type | Count |
@@ -68,12 +90,40 @@ _Only one item was researched. Comparison table requires at least two items._
 | {{ rel }} | {{ count }} |
 {% endfor %}
 
+{% if svg.confidence_bars %}
+
+### Confidence Distribution Chart
+
+{{ svg.confidence_bars }}
+{% endif %}
+
 {% if insights.keywords %}
+
 ### Emerging Themes
 
 {% for keyword in insights.keywords %}
 - {{ keyword }}
 {% endfor %}
+{% endif %}
+
+{% if audit %}
+
+## Audit Results
+
+**Audit Score**: {{ audit.overall_score }}/100
+
+{% for check_name, check in audit.checks.items() %}
+- **{{ check_name }}**: {{ check.count }} issue(s) - severity: {{ check.severity }}
+{% endfor %}
+
+{% if audit.recommendations %}
+### Recommendations
+
+{% for rec in audit.recommendations %}
+- {{ rec }}
+{% endfor %}
+{% endif %}
+
 {% endif %}
 
 ## Open Questions / Gaps

@@ -20,6 +20,27 @@ except ImportError as exc:
     print(f"Error: jinja2 is required. Install it first: {exc}", file=sys.stderr)
     sys.exit(1)
 
+try:
+    from svg_charts import (
+        coverage_heatmap,
+        source_donut,
+        research_timeline,
+        comparison_radar,
+        confidence_bars,
+    )
+except ImportError:
+    coverage_heatmap = None
+    source_donut = None
+    research_timeline = None
+    comparison_radar = None
+    confidence_bars = None
+
+try:
+    from provenance import load_events, log_event
+except ImportError:
+    load_events = None
+    log_event = None
+
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = SKILL_DIR / "templates"
@@ -265,7 +286,6 @@ def generate_report(
     template_name = plan.get("template", "survey")
     template_path = TEMPLATES_DIR / f"{template_name}.md.tmpl"
     if not template_path.exists():
-        # Fall back to survey template if custom template is missing
         template_path = TEMPLATES_DIR / "survey.md.tmpl"
 
     enriched_items = build_enriched_items(plan, findings)
@@ -273,6 +293,54 @@ def generate_report(
     sources = collect_sources(findings)
     insights = generate_cross_cutting_insights(findings)
     gaps_report = load_gap_report(output_path.parent)
+
+    # Build coverage matrix for heatmap
+    coverage_matrix: dict[str, dict[str, dict[str, Any]]] = {}
+    for item in enriched_items:
+        coverage_matrix[item["id"]] = {}
+        for fid, fdata in item["fields"].items():
+            coverage_matrix[item["id"]][fid] = {
+                "covered": fdata["covered"],
+                "sources": len(fdata.get("sources", [])),
+                "confidence": fdata.get("confidence", "none"),
+            }
+
+    # Confidence counts for bar chart
+    confidence_counts: dict[str, int] = {"high": 0, "medium": 0, "low": 0, "none": 0}
+    for item in enriched_items:
+        for fdata in item["fields"].values():
+            conf = fdata.get("confidence", "none")
+            confidence_counts[conf] = confidence_counts.get(conf, 0) + 1
+
+    # Generate SVG charts (if available)
+    svg_charts: dict[str, str] = {}
+    if coverage_heatmap:
+        svg_charts["coverage_heatmap"] = coverage_heatmap(
+            plan.get("items", []), plan.get("fields", []), coverage_matrix
+        )
+    if source_donut:
+        svg_charts["source_donut"] = source_donut(
+            len(sources["web"]), len(sources["github"]), len(sources["codebase"])
+        )
+    if confidence_bars:
+        svg_charts["confidence_bars"] = confidence_bars(confidence_counts)
+    if comparison_radar and template_name == "comparison" and len(enriched_items) >= 2:
+        svg_charts["comparison_radar"] = comparison_radar(
+            plan.get("items", []), plan.get("fields", []), enriched_items
+        )
+    if research_timeline and load_events:
+        events = load_events(output_path.parent)
+        if events:
+            svg_charts["timeline"] = research_timeline(events)
+
+    # Load audit report if it exists
+    audit_report: dict[str, Any] | None = None
+    audit_path = output_path.parent / "audit_report.json"
+    if audit_path.exists():
+        try:
+            audit_report = load_json(audit_path)
+        except json.JSONDecodeError:
+            pass
 
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES_DIR)),
@@ -292,12 +360,20 @@ def generate_report(
         "insights": insights,
         "gaps": gaps_report.get("gaps", []) if gaps_report else [],
         "total_findings": sum(len(f.get("findings", [])) for f in findings),
+        "svg": svg_charts,
+        "audit": audit_report,
     }
 
     report = tmpl.render(context)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report, encoding="utf-8")
+
+    # Log provenance
+    if log_event:
+        log_event(output_path.parent, "report_generated",
+                  output=str(output_path.name), template=template_name)
+
     return report
 
 

@@ -1,30 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>OmAgents Icon</title>
-  <desc>Flat minimal icon for OmAgents: AI chip container with a robot head and agent node antenna.</desc>
+  <desc>OmAgents: unified robot-face app icon with violet-gold palette.</desc>
 
   <defs>
-    <linearGradient id="containerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0F172A" />
-      <stop offset="100%" stop-color="#1E293B" />
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#8B5CF6" />
     </linearGradient>
   </defs>
 
-  <!-- Chip / container -->
-  <rect x="56" y="56" width="400" height="400" rx="80" ry="80" fill="url(#containerGrad)" />
+  <!-- Container / face -->
+  <rect x="56" y="56" width="400" height="400" rx="96" ry="96" fill="url(#bg)" />
 
   <!-- Antenna -->
-  <line x1="256" y1="156" x2="256" y2="100" stroke="#3B82F6" stroke-width="12" stroke-linecap="round" />
+  <line x1="256" y1="56" x2="256" y2="20" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.9" />
 
-  <!-- Robot head -->
-  <circle cx="256" cy="256" r="100" fill="#3B82F6" />
+  <!-- Agent node (gold accent) -->
+  <circle cx="256" cy="20" r="16" fill="#FCD34D" />
 
-  <!-- Eyes -->
-  <circle cx="226" cy="246" r="14" fill="#E2E8F0" />
-  <circle cx="286" cy="246" r="14" fill="#E2E8F0" />
+  <!-- Left eye (LED style) -->
+  <rect x="186" y="206" width="28" height="56" rx="14" ry="14" fill="#FFFFFF" />
+
+  <!-- Right eye (LED style) -->
+  <rect x="298" y="206" width="28" height="56" rx="14" ry="14" fill="#FFFFFF" />
 
   <!-- Mouth -->
-  <line x1="236" y1="286" x2="276" y2="286" stroke="#E2E8F0" stroke-width="10" stroke-linecap="round" />
-
-  <!-- Agent node -->
-  <circle cx="256" cy="100" r="18" fill="#22D3EE" />
+  <rect x="216" y="300" width="80" height="16" rx="8" ry="8" fill="#FFFFFF" opacity="0.9" />
 </svg>

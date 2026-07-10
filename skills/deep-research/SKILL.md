@@ -39,13 +39,20 @@ This skill combines the **structured items × fields approach** (inspired by Rhi
 | `/research-add-items` | Confirm | Add more research objects to the plan. |
 | `/research-add-fields` | Confirm | Add more research dimensions to the plan. |
 | `/research-deep` | Research | Execute research tasks in parallel subagents, then run the gap loop. |
-| `/research-report` | Report | Merge findings and generate the Markdown report. |
+| `/research-report` | Report | Merge findings and generate the Markdown report (with inline SVG charts). |
+| `/research-audit` | Audit | Run integrity audit on findings (missing sources, conflicts, gaps, duplicates). |
+| `/research-package` | Package | Generate artifact package manifest and README index. |
+| `/research-provenance` | Provenance | View provenance log (phase-level event timeline). |
+| `/research-status` | Status | Check orchestration state and recommended next action. |
+| `/research-run` | All | Run the full pipeline with pause/resume (plan -> dispatch -> gaps -> report -> audit -> package). |
 
 Under the hood these commands map to:
 
 ```bash
 deep_research.py <subcommand> --workspace <workspace>
 ```
+
+New subcommands: `audit`, `package`, `provenance`, `status`, `run-all`.
 
 ## Workflow
 
@@ -336,6 +343,103 @@ The final `report.md` includes:
 5. **Cross-Cutting Insights** — source/relevance distribution and emerging themes
 6. **Open Questions / Gaps** — remaining uncertainties
 7. **Sources** — web URLs, GitHub repos, and local files
+
+## SVG Charts
+
+The report includes inline SVG charts (rendered by `scripts/svg_charts.py`):
+
+| Chart | Description |
+|-------|-------------|
+| Coverage Heatmap | item x field grid, color-coded by confidence (green/yellow/red/gray) |
+| Source Distribution Donut | web/github/codebase source proportion |
+| Research Timeline | horizontal timeline of phase-level events (from provenance) |
+| Comparison Radar | multi-dimensional radar chart (comparison template, 2+ items) |
+| Confidence Bar Chart | high/medium/low/none confidence distribution |
+
+SVG is embedded directly in Markdown. No external dependencies or JavaScript.
+
+## Provenance
+
+Every research workspace tracks phase-level events in `provenance.jsonl`:
+
+| Event | Trigger |
+|-------|---------|
+| `plan_created` | `plan.py` creates plan.json |
+| `gap_detected` | `gap_analysis.py` detects gaps |
+| `report_generated` | `synthesize.py` generates report.md |
+| `audit_completed` | `audit.py` runs audit |
+
+View with: `deep_research.py provenance --workspace <dir>`
+
+Provenance is optional and backward-compatible. Old workspaces without provenance simply omit timeline charts.
+
+## Integrity Audit
+
+Run automated checks on research findings:
+
+```bash
+deep_research.py audit --workspace ./research/agent-frameworks
+```
+
+| Check | What it detects | Severity |
+|-------|----------------|----------|
+| `missing_sources` | Finding entries without source/url/file | warning |
+| `conflicting_data` | Same field, different values from different sources | error |
+| `coverage_gaps` | Required fields with no data | error |
+| `source_duplicates` | Same source referenced by multiple tasks | warning |
+
+Output: `audit_report.json` with overall score (0-100) and recommendations. Results are also embedded in the Markdown report.
+
+## Artifact Package
+
+Generate a complete package manifest:
+
+```bash
+deep_research.py package --workspace ./research/agent-frameworks
+```
+
+Produces:
+- `package.json` - manifest with metadata, file list, and stats
+- `README.md` - quick index of all artifacts
+
+Package structure:
+```
+<workspace>/
+  report.md              # Main report (Markdown + SVG)
+  findings/              # Raw findings JSON
+  findings_merged.json   # Merged findings
+  gap_report.json        # Gap analysis results
+  provenance.jsonl       # Provenance trail
+  audit_report.json      # Integrity audit
+  package.json           # Package manifest
+  README.md              # Quick index
+```
+
+## Run-All (Meta-Orchestration)
+
+Run the full pipeline with pause/resume:
+
+```bash
+# First run
+deep_research.py run-all --query "AI agent frameworks" --template comparison --workspace ./research/agent-frameworks
+
+# After subagents complete
+deep_research.py run-all --resume --workspace ./research/agent-frameworks
+```
+
+The orchestrator (`orchestrate.py`) is a pausable state machine:
+
+1. **plan** - Creates plan.json, initializes loop_engine (automatic)
+2. **dispatch** - Outputs JSON task instructions for the agent to dispatch subagents (pauses)
+3. **gap_analysis** - Runs gap detection, adds new tasks if needed (automatic)
+4. **merge** - Merges findings (automatic)
+5. **report** - Generates report.md with SVG charts (automatic)
+6. **audit** - Runs integrity audit (automatic)
+7. **package** - Generates artifact package (automatic)
+
+The agent calls `--resume` after subagents complete. The state machine picks up from where it left off via `orchestration_state.json`.
+
+Check status: `deep_research.py status --workspace <dir>`
 
 ## Tips for Best Results
 

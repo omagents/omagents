@@ -242,6 +242,16 @@ def main() -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(report_json, encoding="utf-8")
         print(f"Gap report written to {args.output}")
+
+        # Log provenance
+        try:
+            from provenance import log_event
+            log_event(output_path.parent, "gap_detected",
+                      gap_count=len(report.get("gaps", [])),
+                      new_task_count=len(report.get("new_tasks", [])),
+                      overall_coverage=report.get("overall_coverage", 0))
+        except ImportError:
+            pass
     else:
         print(report_json)
 

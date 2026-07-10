@@ -152,6 +152,58 @@ def run_report(args: argparse.Namespace) -> int:
     ])
 
 
+def run_audit(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    plan_path = workspace / "plan.json"
+    findings_dir = workspace / "findings"
+    output = workspace / "audit_report.json"
+
+    if not plan_path.exists():
+        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        return 1
+
+    return run_script("audit.py", [
+        "--plan", str(plan_path),
+        "--findings-dir", str(findings_dir),
+        "--output", str(output),
+    ])
+
+
+def run_package(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("package.py", ["--workspace", str(workspace)])
+
+
+def run_provenance(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("provenance.py", [
+        "--workspace", str(workspace),
+        "--format", args.format,
+    ])
+
+
+def run_status(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("orchestrate.py", [
+        "status", "--workspace", str(workspace),
+    ])
+
+
+def run_pipeline(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    extra_args = ["run-all", "--workspace", str(workspace)]
+    if args.resume:
+        extra_args.append("--resume")
+    elif args.query:
+        extra_args.extend(["--query", args.query])
+        if args.template:
+            extra_args.extend(["--template", args.template])
+    else:
+        print("Error: --query or --resume required", file=sys.stderr)
+        return 1
+    return run_script("orchestrate.py", extra_args)
+
+
 def run_all(args: argparse.Namespace) -> int:
     """Plan + prompt for research."""
     workspace = resolve_workspace(args)
@@ -220,6 +272,37 @@ def main() -> int:
     report_parser.add_argument("--workspace", "-w", help="Working directory")
     report_parser.add_argument("--plan", "-p", help="Path to a custom plan.json")
     report_parser.set_defaults(func=run_report)
+
+    # audit
+    audit_parser = subparsers.add_parser("audit", help="Run integrity audit on findings")
+    audit_parser.add_argument("--workspace", "-w", help="Working directory")
+    audit_parser.set_defaults(func=run_audit)
+
+    # package
+    package_parser = subparsers.add_parser("package", help="Generate artifact package manifest")
+    package_parser.add_argument("--workspace", "-w", help="Working directory")
+    package_parser.set_defaults(func=run_package)
+
+    # provenance
+    provenance_parser = subparsers.add_parser("provenance", help="View provenance log")
+    provenance_parser.add_argument("--workspace", "-w", help="Working directory")
+    provenance_parser.add_argument("--format", "-f", default="summary",
+                                  choices=["summary", "json", "timeline"])
+    provenance_parser.set_defaults(func=run_provenance)
+
+    # status
+    status_parser = subparsers.add_parser("status", help="Check orchestration status")
+    status_parser.add_argument("--workspace", "-w", help="Working directory")
+    status_parser.set_defaults(func=run_status)
+
+    # run-all
+    runall_parser = subparsers.add_parser("run-all", help="Run full research pipeline (with pause/resume)")
+    runall_parser.add_argument("--query", "-q", help="Research query (required for first run)")
+    runall_parser.add_argument("--template", "-t", default="survey",
+                              choices=["comparison", "survey", "technical", "custom"])
+    runall_parser.add_argument("--workspace", "-w", help="Working directory")
+    runall_parser.add_argument("--resume", action="store_true", help="Resume from last checkpoint")
+    runall_parser.set_defaults(func=run_pipeline)
 
     # run
     run_parser = subparsers.add_parser("run", help="Create plan and prompt for research")

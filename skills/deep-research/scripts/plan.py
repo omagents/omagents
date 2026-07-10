@@ -348,6 +348,14 @@ def main() -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(plan_json, encoding="utf-8")
         print(f"Plan written to {args.output}")
+
+        # Log provenance
+        try:
+            from provenance import log_event
+            log_event(output_path.parent, "plan_created",
+                      query=plan.get("query", ""), template=plan.get("template", ""))
+        except ImportError:
+            pass
     else:
         print(plan_json)
 

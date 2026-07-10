@@ -1,24 +1,26 @@
 # Roadmap
 
-## Short-term (0.2.x) - Feature Enhancements
+## Short-term (0.3.x) - Deep Research Enhancement & Polish
 
-- [ ] LSP guide skill (leverage OpenCode native LSP, no MCP server needed)
-- [ ] AST-Grep skill (pattern-aware code search, detect-and-fallback to grep)
-- [ ] PR workflow skills (work-with-pr, pre-publish-review)
-- [ ] Hyperplan skill (adversarial plan review with 3-5 parallel critics)
-- [ ] Model fallback mechanism (per-agent fallback chain in index.js)
-- [ ] Job Board persistence (file-based, survives restart)
-- [ ] Job Board session isolation (stop cross-session leak)
+- [x] Deep Research provenance tracking (`provenance.jsonl`, phase-level event log)
+- [x] Deep Research inline SVG charts (coverage heatmap, source donut, timeline, comparison radar, confidence bars)
+- [x] Deep Research integrity audit (missing sources, conflicting data, coverage gaps, source duplicates)
+- [x] Deep Research artifact package (manifest + README index)
+- [x] Deep Research meta-orchestration (pausable state machine with pause/resume)
+- [x] Project SVG icon (Unified Bot + Violet/Gold)
 - [ ] CLI installer (`npx @omagents/omagents install` interactive setup)
+- [ ] Model fallback mechanism (per-agent fallback chain in index.js)
 
-## Mid-term (0.3.x - 0.5.x) - Quality & Scale
+## Mid-term (0.4.x - 0.6.x) - Quality & Scale
 
 - [ ] TUI sidebar for Job Board visualization
 - [ ] Unit test coverage for parallel.js (607 lines, currently untested)
+- [ ] Unit tests for deep-research scripts (provenance, svg_charts, audit, package, orchestrate)
 - [ ] Windows support testing and fixes
 - [ ] Skill contribution guide and templates
 - [ ] Community skill registry
 - [ ] Performance profiling for large codebases
+- [ ] Domain-specific research skill templates (science, tech, finance) built on deep-research
 
 ## Long-term (1.0+) - Stability & Ecosystem
 
@@ -26,6 +28,15 @@
 - [ ] Multi-harness support (beyond OpenCode)
 - [ ] Enterprise features (audit logs, team configs)
 - [ ] Skill marketplace integration
+
+## Completed (0.2.x)
+
+- [x] LSP guide skill (leverage OpenCode native LSP, no MCP server needed)
+- [x] AST-Grep skill (pattern-aware code search, detect-and-fallback to grep)
+- [x] PR workflow skills (work-with-pr, pre-publish-review)
+- [x] Hyperplan skill (adversarial plan review with 3-5 parallel critics)
+- [x] Job Board persistence (file-based, survives restart)
+- [x] Job Board session isolation (stop cross-session leak)
 
 ## Design Principles
 

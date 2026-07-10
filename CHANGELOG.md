@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-10
+
+### Added
+
+- **Deep Research provenance tracking**: append-only `provenance.jsonl` logs phase-level events (plan_created, gap_detected, report_generated, audit_completed). Backward-compatible, optional.
+- **Deep Research inline SVG charts**: 5 pure-SVG chart generators (no JS, no external deps) embedded directly in Markdown reports:
+  - Coverage Heatmap: item × field grid, color-coded by confidence
+  - Source Distribution Donut: web/github/codebase proportion
+  - Research Timeline: horizontal phase-level timeline from provenance
+  - Comparison Radar: multi-dimensional radar chart (comparison template, 2+ items)
+  - Confidence Bar Chart: high/medium/low/none distribution
+- **Deep Research integrity audit** (`audit.py`): 4 automated checks (missing_sources, conflicting_data, coverage_gaps, source_duplicates) with 0-100 score and recommendations. Results embedded in report.
+- **Deep Research artifact package** (`package.py`): generates `package.json` manifest and `README.md` index for complete research workspace.
+- **Deep Research meta-orchestration** (`orchestrate.py`): pausable state machine for full pipeline (plan → dispatch → gaps → merge → report → audit → package). Agent calls `--resume` after subagent dispatch.
+- **Project SVG icon**: Unified Bot design with violet/gold palette (`assets/omagents-icon.svg` + `.png`)
+- **Design spec**: icon design documentation (`docs/superpowers/specs/`)
+
+### Changed
+
+- `synthesize.py`: generates SVG charts from findings data, embeds in Markdown templates, logs provenance, includes audit results
+- `deep_research.py`: 6 new subcommands (audit, package, provenance, status, run-all, + existing run renamed to run-all)
+- `plan.py`: logs `plan_created` event to provenance
+- `gap_analysis.py`: logs `gap_detected` event to provenance
+- All 3 Markdown templates (survey, comparison, technical): SVG chart embedding points + audit results section
+- `SKILL.md`: updated command table (10 commands), new sections for SVG Charts, Provenance, Audit, Package, Run-All
+- `ROADMAP.md`: restructured with 0.3.x short-term, moved completed 0.2.x items to completed section
+
 ## [0.2.1] - 2026-07-10
 
 ### Added

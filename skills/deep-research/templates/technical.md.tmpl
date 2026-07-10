@@ -12,6 +12,14 @@ This technical report analyzes implementation patterns, architecture, and engine
 - {{ objective }}
 {% endfor %}
 
+{% if svg.coverage_heatmap %}
+
+## Coverage Matrix
+
+{{ svg.coverage_heatmap }}
+
+{% endif %}
+
 {% if items|length > 1 %}
 ## Comparison Table
 
@@ -50,6 +58,13 @@ This technical report analyzes implementation patterns, architecture, and engine
 
 ## Cross-Cutting Insights
 
+{% if svg.source_donut %}
+
+### Source Distribution Chart
+
+{{ svg.source_donut }}
+{% endif %}
+
 ### Source Distribution
 
 | Source Type | Count |
@@ -66,12 +81,46 @@ This technical report analyzes implementation patterns, architecture, and engine
 | {{ rel }} | {{ count }} |
 {% endfor %}
 
+{% if svg.confidence_bars %}
+
+### Confidence Distribution Chart
+
+{{ svg.confidence_bars }}
+{% endif %}
+
+{% if svg.timeline %}
+
+### Research Timeline
+
+{{ svg.timeline }}
+{% endif %}
+
 {% if insights.keywords %}
 ### Key Technical Themes
 
 {% for keyword in insights.keywords %}
 - {{ keyword }}
 {% endfor %}
+{% endif %}
+
+{% if audit %}
+
+## Audit Results
+
+**Audit Score**: {{ audit.overall_score }}/100
+
+{% for check_name, check in audit.checks.items() %}
+- **{{ check_name }}**: {{ check.count }} issue(s) - severity: {{ check.severity }}
+{% endfor %}
+
+{% if audit.recommendations %}
+### Recommendations
+
+{% for rec in audit.recommendations %}
+- {{ rec }}
+{% endfor %}
+{% endif %}
+
 {% endif %}
 
 ## Open Questions / Gaps

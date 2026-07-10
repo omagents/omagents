@@ -12,6 +12,13 @@ This report synthesizes findings from multiple sources to answer the research qu
 - {{ objective }}
 {% endfor %}
 
+{% if svg.coverage_heatmap %}
+## Coverage Matrix
+
+{{ svg.coverage_heatmap }}
+
+{% endif %}
+
 ## Research Questions / Scope
 
 {% for objective in plan.objectives %}
@@ -57,6 +64,13 @@ This report synthesizes findings from multiple sources to answer the research qu
 
 ## Cross-Cutting Insights
 
+{% if svg.source_donut %}
+
+### Source Distribution Chart
+
+{{ svg.source_donut }}
+{% endif %}
+
 ### Source Distribution
 
 | Source Type | Count |
@@ -85,6 +99,40 @@ This report synthesizes findings from multiple sources to answer the research qu
 ### Consensus
 
 A majority ({{ insights.high_relevance_pct|percent }}) of findings are marked high-relevance, suggesting broad agreement on the core patterns described.
+{% endif %}
+
+{% if svg.confidence_bars %}
+
+### Confidence Distribution Chart
+
+{{ svg.confidence_bars }}
+{% endif %}
+
+{% if svg.timeline %}
+
+### Research Timeline
+
+{{ svg.timeline }}
+{% endif %}
+
+{% if audit %}
+
+## Audit Results
+
+**Audit Score**: {{ audit.overall_score }}/100
+
+{% for check_name, check in audit.checks.items() %}
+- **{{ check_name }}**: {{ check.count }} issue(s) — severity: {{ check.severity }}
+{% endfor %}
+
+{% if audit.recommendations %}
+### Recommendations
+
+{% for rec in audit.recommendations %}
+- {{ rec }}
+{% endfor %}
+{% endif %}
+
 {% endif %}
 
 ## Open Questions / Gaps
