@@ -54,6 +54,16 @@ def run_plan(args: argparse.Namespace) -> int:
     ]
     if args.context:
         cmd_args.extend(["--context", args.context])
+    if args.pre_research:
+        cmd_args.extend(["--pre-research", args.pre_research])
+    if args.max_loops is not None:
+        cmd_args.extend(["--max-loops", str(args.max_loops)])
+    if args.batch_size is not None:
+        cmd_args.extend(["--batch-size", str(args.batch_size)])
+    if args.search_tools:
+        cmd_args.extend(["--search-tools", args.search_tools])
+    if args.language:
+        cmd_args.extend(["--language", args.language])
     return run_script("plan.py", cmd_args)
 
 
@@ -266,7 +276,57 @@ def run_pipeline(args: argparse.Namespace) -> int:
     else:
         print("Error: --query or --resume required", file=sys.stderr)
         return 1
+    if getattr(args, "skip_pre_research", False):
+        extra_args.append("--skip-pre-research")
     return run_script("orchestrate.py", extra_args)
+
+
+def run_scan(args: argparse.Namespace) -> int:
+    """Run pre-research landscape scan."""
+    workspace = resolve_workspace(args)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    extra_args = ["init", "-q", args.query, "-w", str(workspace)]
+    if args.max_loops:
+        extra_args.extend(["--max-loops", str(args.max_loops)])
+    rc = run_script("pre_research.py", extra_args)
+    if rc != 0:
+        return rc
+
+    print(
+        f"\nPre-research initialized. Now:\n"
+        f"1. Run `deep_research.py scan-next --workspace {workspace}` to get the next search task\n"
+        f"2. Do the web search and write findings to {workspace}/pre_findings/\n"
+        f"3. Run `deep_research.py scan-complete <task_id> --workspace {workspace}`\n"
+        f"4. Run `deep_research.py scan-evaluate --workspace {workspace}`\n"
+        f"5. Repeat from step 1 until evaluate says should_continue=false\n"
+        f"6. Run `deep_research.py scan-finalize --workspace {workspace}`\n"
+        f"7. Run `deep_research.py plan --query '{args.query}' --workspace {workspace}`\n"
+    )
+    return 0
+
+
+def run_scan_next(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("pre_research.py", ["next", "-w", str(workspace)])
+
+
+def run_scan_complete(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    extra_args = ["complete", args.task_id, "-w", str(workspace)]
+    if args.result:
+        extra_args.extend(["--result", args.result])
+    return run_script("pre_research.py", extra_args)
+
+
+def run_scan_evaluate(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("pre_research.py", ["evaluate", "-w", str(workspace)])
+
+
+def run_scan_finalize(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("pre_research.py", ["finalize", "-w", str(workspace)])
 
 
 def run_all(args: argparse.Namespace) -> int:
@@ -302,6 +362,11 @@ def main() -> int:
     plan_parser.add_argument("--template", "-t", default="survey", choices=["comparison", "survey", "technical", "custom"],
                             help="Report template (default: survey)")
     plan_parser.add_argument("--workspace", "-w", help="Working directory (default: current directory)")
+    plan_parser.add_argument("--pre-research", help="Path to pre_research.json for generating items from landscape scan")
+    plan_parser.add_argument("--max-loops", type=int, help="Override max_research_loops")
+    plan_parser.add_argument("--batch-size", type=int, help="Override batch_size")
+    plan_parser.add_argument("--search-tools", help="Comma-separated search tools (websearch,github,codegraph)")
+    plan_parser.add_argument("--language", help="Report language (auto, en, zh, ja, ko)")
     plan_parser.set_defaults(func=run_plan)
 
     # add-items
@@ -374,7 +439,38 @@ def main() -> int:
                               choices=["comparison", "survey", "technical", "custom"])
     runall_parser.add_argument("--workspace", "-w", help="Working directory")
     runall_parser.add_argument("--resume", action="store_true", help="Resume from last checkpoint")
+    runall_parser.add_argument("--skip-pre-research", action="store_true",
+                              help="Skip pre-research landscape scan phase")
     runall_parser.set_defaults(func=run_pipeline)
+
+    # scan (pre-research)
+    scan_parser = subparsers.add_parser("scan", help="Initialize pre-research landscape scan")
+    scan_parser.add_argument("--query", "-q", required=True, help="Research query")
+    scan_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_parser.add_argument("--max-loops", type=int, default=2, help="Max pre-research loops")
+    scan_parser.set_defaults(func=run_scan)
+
+    # scan-next
+    scan_next_parser = subparsers.add_parser("scan-next", help="Get next pre-research task")
+    scan_next_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_next_parser.set_defaults(func=run_scan_next)
+
+    # scan-complete
+    scan_complete_parser = subparsers.add_parser("scan-complete", help="Complete a pre-research task")
+    scan_complete_parser.add_argument("task_id", help="Task ID to complete")
+    scan_complete_parser.add_argument("--result", "-r", default="", help="Completion result")
+    scan_complete_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_complete_parser.set_defaults(func=run_scan_complete)
+
+    # scan-evaluate
+    scan_eval_parser = subparsers.add_parser("scan-evaluate", help="Evaluate pre-research coverage")
+    scan_eval_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_eval_parser.set_defaults(func=run_scan_evaluate)
+
+    # scan-finalize
+    scan_finalize_parser = subparsers.add_parser("scan-finalize", help="Finalize pre-research into pre_research.json")
+    scan_finalize_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_finalize_parser.set_defaults(func=run_scan_finalize)
 
     # run
     run_parser = subparsers.add_parser("run", help="Create plan and prompt for research")

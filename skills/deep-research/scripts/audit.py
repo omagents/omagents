@@ -163,9 +163,13 @@ def check_source_duplicates(findings: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def calculate_score(checks: list[dict[str, Any]]) -> int:
+def calculate_score(checks: list[dict[str, Any]], config: dict[str, Any] | None = None) -> int:
     """Calculate an overall audit score (0-100)."""
-    penalties = {"info": 0, "warning": 5, "error": 15, "critical": 30}
+    default_penalties = {"info": 0, "warning": 5, "error": 15, "critical": 30}
+    if config and "audit_weights" in config:
+        penalties = config["audit_weights"]
+    else:
+        penalties = default_penalties
     total_penalty = 0
     for check in checks:
         severity = check.get("severity", "info")
@@ -204,6 +208,7 @@ def run_audit(plan_path: Path, findings_dir: Path) -> dict[str, Any]:
     """Run all audit checks and return the audit report."""
     plan = load_plan(plan_path)
     findings = load_findings(findings_dir)
+    config = plan.get("config", {})
 
     checks = [
         check_missing_sources(findings),
@@ -212,7 +217,7 @@ def run_audit(plan_path: Path, findings_dir: Path) -> dict[str, Any]:
         check_source_duplicates(findings),
     ]
 
-    score = calculate_score(checks)
+    score = calculate_score(checks, config)
 
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),

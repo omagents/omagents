@@ -48,7 +48,9 @@ def merge_findings(findings: list[dict[str, Any]]) -> dict[str, Any]:
     for finding in findings:
         ftype = finding.get("type", "web")
         if ftype not in merged:
-            ftype = "web"
+            print(f"Warning: unknown finding type '{ftype}', treating as 'other'", file=sys.stderr)
+            ftype = "other"
+            merged.setdefault("other", [])
 
         items = finding.get("findings", [])
         for item in items:
@@ -64,11 +66,13 @@ def merge_findings(findings: list[dict[str, Any]]) -> dict[str, Any]:
                 merged["gaps"].append(gap)
 
     # Add metadata
+    source_types = [k for k in merged if k not in ("gaps", "summary")]
     merged["summary"] = {
-        "total_findings": sum(len(merged[t]) for t in ("web", "github", "codebase")),
+        "total_findings": sum(len(merged[t]) for t in source_types),
         "web_count": len(merged["web"]),
         "github_count": len(merged["github"]),
         "codebase_count": len(merged["codebase"]),
+        "other_count": len(merged.get("other", [])),
         "gap_count": len(merged["gaps"]),
     }
 

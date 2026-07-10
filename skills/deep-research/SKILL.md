@@ -45,7 +45,8 @@ This skill combines the **structured items × fields approach** (inspired by Rhi
 | `/research-package` | Package | Generate artifact package manifest and README index. |
 | `/research-provenance` | Provenance | View provenance log (phase-level event timeline). |
 | `/research-status` | Status | Check orchestration state and recommended next action. |
-| `/research-run` | All | Run the full pipeline with pause/resume (plan -> dispatch -> gaps -> report -> polish -> audit -> package). |
+| `/research-run` | All | Run the full pipeline with pause/resume (pre-research -> plan -> dispatch -> gaps -> report -> polish -> audit -> package). |
+| `/research-scan` | Pre-Research | Run pre-research landscape scan to identify current entities before planning. |
 
 Under the hood these commands map to:
 
@@ -53,19 +54,48 @@ Under the hood these commands map to:
 deep_research.py <subcommand> --workspace <workspace>
 ```
 
-New subcommands: `audit`, `package`, `provenance`, `status`, `polish`, `run-all`.
+New subcommands: `audit`, `package`, `provenance`, `status`, `polish`, `run-all`, `scan`, `scan-next`, `scan-complete`, `scan-evaluate`, `scan-finalize`.
 
 ## Workflow
+
+### Phase 0: Landscape Scan (Pre-Research)
+
+**CRITICAL:** Before generating any plan, a pre-research landscape scan MUST run. This ensures research items are based on current, real-world data rather than potentially outdated model knowledge.
+
+The pre-research phase uses the loop engine (skill key: `deep-research-pre`) to iteratively scan the web for current entities. The current date is automatically injected into all task descriptions and search instructions to ensure the agent searches for the most recent information.
+
+1. **Initialize**: `pre_research.py init --query "..." --workspace <dir>` creates a broad search task. Task description includes the current date (e.g., "Current date: July 2026").
+2. **Search**: Agent does web search (must include current year in queries), extracts candidates, writes to `pre_findings/<task_id>.json`.
+3. **Evaluate**: `pre_research.py evaluate` checks if enough candidates/sources found. If not, adds targeted search tasks (also date-injected).
+4. **Loop**: Repeat steps 2-3 until coverage is sufficient or `max_pre_research_loops` (default 2) is reached.
+5. **Finalize**: `pre_research.py finalize` merges all pre-findings into `pre_research.json`.
+
+`pre_research.json` format:
+```json
+{
+  "query": "current top LLMs",
+  "scanned_at": "2025-07-10T...",
+  "summary": "Brief landscape overview",
+  "candidates": [
+    {"name": "DeepSeek-V4", "vendor": "DeepSeek", "note": "...", "source": "https://..."},
+    {"name": "Kimi K2", "vendor": "Moonshot AI", "note": "...", "source": "https://..."}
+  ],
+  "sources": ["https://..."],
+  "loops_completed": 2
+}
+```
+
+This file feeds directly into Phase 1 to generate `items` from real candidates.
 
 ### Phase 1: Generate Plan (`/research <topic>`)
 
 Generate a `plan.json` with:
 
 - `query`: original question
-- `items`: list of research objects
-- `fields`: dimensions to collect for each item
-- `tasks`: parallel research tasks (web/github/codebase)
-- `config`: max loops, batch size, report sections, etc.
+- `items`: list of research objects (auto-populated from `pre_research.json` if available)
+- `fields`: dimensions to collect for each item (template-aware: comparison gets version/strengths/weaknesses, technical gets architecture/API)
+- `tasks`: parallel research tasks covering ALL items x fields (not just the first item)
+- `config`: max loops, batch size, search tools, confidence weights, audit weights, etc.
 
 Example:
 
@@ -73,6 +103,20 @@ Example:
 deep_research.py plan \
   --query "AI agent frameworks" \
   --template comparison \
+  --workspace agent-frameworks
+```
+
+If `pre_research.json` exists in the workspace, items are automatically generated from its candidates. You can also explicitly pass `--pre-research <path>`.
+
+Config overrides:
+```bash
+deep_research.py plan \
+  --query "..." \
+  --template comparison \
+  --max-loops 3 \
+  --batch-size 5 \
+  --search-tools websearch,github \
+  --language zh \
   --workspace agent-frameworks
 ```
 
@@ -130,6 +174,9 @@ Do not wait for all subagents to return before proceeding. Background task compl
 ```
 You are a web research specialist. Research the following item and collect the specified fields.
 
+Current date: {current_date}
+IMPORTANT: Include the current year ({current_year}) in your search queries. Do NOT rely on your training data - it may be outdated. Search for the most recent sources available.
+
 Item: {item_name}
 Description: {item_description}
 Fields to collect:
@@ -138,14 +185,15 @@ Focus: {task_focus}
 Workspace: {workspace}
 
 Instructions:
-1. Use websearch_web_search_exa to find relevant sources.
+1. Use websearch_web_search_exa to find relevant sources. Include the current year in queries.
 2. For each promising source, use webfetch or websearch_web_fetch_exa to read it.
 3. Extract data for EACH field listed above.
 4. Mark uncertain values with [uncertain].
 5. If information is missing or contradictory, do additional targeted searches (up to 3 iterations).
-6. Write findings to {workspace}/findings/{task_id}.json. IMPORTANT: Use a bash
+6. For each finding, record the publication date if available.
+7. Write findings to {workspace}/findings/{task_id}.json. IMPORTANT: Use a bash
    command (e.g. `cat > {workspace}/findings/{task_id}.json << 'ENDOFFILE' ... ENDOFILE`)
-   instead of the `write` tool — subagent sessions run in a temporary directory, so
+   instead of the `write` tool - subagent sessions run in a temporary directory, so
    the `write` tool may trigger a confirmation dialog for paths outside it.
    Use this JSON schema:
    {
@@ -159,6 +207,7 @@ Instructions:
        {
          "source": "URL",
          "title": "...",
+         "published_date": "YYYY-MM-DD or null",
          "field_data": { "field-1": "data", "field-2": "data" },
          "summary": "...",
          "key_quotes": ["..."],
@@ -168,7 +217,7 @@ Instructions:
      ],
      "gaps": ["..."]
    }
-7. Validate:
+8. Validate:
    validate.py --plan {workspace}/plan.json --findings {workspace}/findings/{task_id}.json
 ```
 
@@ -251,7 +300,7 @@ This will:
 **The agent then:**
 1. Reads `report_raw.md` and the plan context
 2. Reads `prompts/polish_report.md` for instructions
-3. Rewrites the report: merges "补充信息" bullets into flowing prose, writes a real executive summary, ensures language consistency, keeps SVG charts and source citations
+3. Rewrites the report: merges "Supplemental" bullets into flowing prose, writes a real executive summary, ensures language consistency, keeps SVG charts and source citations
 4. Saves the polished version to `report.md` (overwrite)
 5. Continues to audit/package
 
@@ -303,7 +352,12 @@ In the `run-all` pipeline, this phase pauses automatically — the agent polishe
     "items_per_agent": 1,
     "search_tools": ["websearch", "github", "codegraph"],
     "report_sections": ["executive_summary", "comparison_table", "detailed_findings", "cross_cutting_insights", "gaps", "sources"],
-    "language": "auto"
+    "language": "auto",
+    "max_pre_research_loops": 2,
+    "min_pre_research_candidates": 5,
+    "min_pre_research_sources": 3,
+    "confidence_weights": {"source_count_high": 2, "relevance_high": 3, "cross_source_bonus": 1},
+    "audit_weights": {"info": 0, "warning": 5, "error": 15, "critical": 30}
   },
   "metadata": {
     "created_at": "...",
@@ -327,6 +381,7 @@ In the `run-all` pipeline, this phase pauses automatically — the agent polishe
     {
       "source": "URL",
       "title": "...",
+      "published_date": "YYYY-MM-DD or null",
       "field_data": { "field-1": "data", "field-2": "data" },
       "summary": "...",
       "key_quotes": ["..."],
@@ -348,7 +403,7 @@ In the `run-all` pipeline, this phase pauses automatically — the agent polishe
   "gaps": [
     { "item_id": "item-1", "field_id": "field-2", "reason": "no_findings", "severity": "high" }
   ],
-  "new_tasks": [ { "id": "task-r1-1", "type": "web", "item_id": "item-1", "field_ids": ["field-2"], ... } ],
+  "new_tasks": [ { "id": "task-r1-1", "type": "github", "item_id": "item-1", "field_ids": ["field-2"], ... } ],
   "should_continue": true
 }
 ```
@@ -436,6 +491,8 @@ Produces:
 Workspace structure:
 ```
 <workspace>/
+  pre_research.json       # Pre-research landscape scan results
+  pre_findings/           # Pre-research search findings (per task)
   plan.json              # Research plan
   findings/              # Raw findings JSON from subagents
   artifacts/             # Intermediate/derived artifacts
@@ -464,23 +521,31 @@ deep_research.py run-all --resume --workspace agent-frameworks
 
 The orchestrator (`orchestrate.py`) is a pausable state machine:
 
-1. **plan** - Creates plan.json, initializes loop_engine (automatic)
-2. **dispatch** - Outputs JSON task instructions for the agent to dispatch subagents (pauses)
-3. **gap_analysis** - Runs gap detection, adds new tasks if needed (automatic)
+0. **pre_research** - Iterative landscape scan via loop engine (pauses for agent searches)
+1. **planning** - Creates plan.json from pre-research results, initializes loop_engine (automatic)
+2. **dispatch** - Outputs batch JSON task instructions (up to `batch_size` tasks at once) for the agent to dispatch subagents (pauses)
+3. **gap_analysis** - Runs gap detection with source-aware task types, adds new tasks if needed (automatic)
 4. **merge** - Merges findings (automatic)
 5. **report** - Generates report.md with SVG charts (automatic)
-6. **audit** - Runs integrity audit (automatic)
+5b. **polish** - LLM polish (pauses)
+6. **audit** - Runs integrity audit with configurable weights (automatic)
 7. **package** - Generates artifact package (automatic)
 
 The agent calls `--resume` after subagents complete. The state machine picks up from where it left off via `orchestration_state.json`.
+
+To skip pre-research (not recommended): `--skip-pre-research`
 
 Check status: `deep_research.py status --workspace <dir>`
 
 ## Tips for Best Results
 
+- **Always include the current date in searches.** The pre-research and dispatch instructions automatically inject the current date. Never search without a year qualifier - your training data may be months out of date.
+- **Always run pre-research.** The landscape scan ensures your research items are current. Skipping it risks researching outdated entities.
 - Keep each research task focused. A task should answer one specific sub-question.
-- Run independent tasks in parallel using `task(background: true)`. Multiple calls in one response run simultaneously.
-- Always cite the original URL/repo/file for every claim.
-- If sources conflict, report both sides and explain which evidence is stronger.
-- Use the gap loop aggressively — the first pass rarely tells the whole story.
+- Run independent tasks in parallel using `task(background: true)`. The orchestrator dispatches up to `batch_size` tasks at once.
+- Always cite the original URL/repo/file for every claim. Include publication dates when available.
+- If sources conflict, report both sides and explain which evidence is stronger. Prefer more recent sources.
+- Use the gap loop aggressively - the first pass rarely tells the whole story. Gap tasks now pick the right source type based on field category.
 - Mark uncertain values with `[uncertain]` so the gap analyzer can flag them.
+- Use `--template comparison` for side-by-side comparisons (gets version/strengths/weaknesses fields automatically).
+- Use `--template technical` for architecture analysis (gets architecture/API/performance fields automatically).

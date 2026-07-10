@@ -58,9 +58,18 @@ def generate_package(workspace: Path) -> dict[str, Any]:
         "gaps": gap_path,
         "provenance": provenance_path,
         "audit": audit_path,
+        "pre_research": workspace / "pre_research.json",
     }
     for key, path in expected_files.items():
         files[key] = str(path.relative_to(workspace)) if path.exists() else None
+
+    # Dynamically discover any additional artifacts
+    if artifacts_dir.exists():
+        for entry in sorted(artifacts_dir.iterdir()):
+            if entry.is_file() and entry.name not in ("package.json", "README.md"):
+                rel = str(entry.relative_to(workspace))
+                if rel not in [v for v in files.values() if v]:
+                    files[f"artifact_{entry.stem}"] = rel
 
     manifest: dict[str, Any] = {
         "version": 1,
@@ -129,6 +138,7 @@ def generate_readme(manifest: dict[str, Any]) -> str:
         "gaps": "Gap Report",
         "provenance": "Provenance Log",
         "audit": "Audit Report",
+        "pre_research": "Pre-Research Scan",
     }
 
     for key, label in file_labels.items():
@@ -137,6 +147,12 @@ def generate_readme(manifest: dict[str, Any]) -> str:
             lines.append(f"- [{label}]({path})")
         else:
             lines.append(f"- {label}: _not available_")
+
+    # Add any dynamically discovered artifacts
+    for key, path in files.items():
+        if key.startswith("artifact_") and path:
+            label = key.replace("artifact_", "").replace("_", " ").title()
+            lines.append(f"- [{label}]({path})")
 
     return "\n".join(lines) + "\n"
 

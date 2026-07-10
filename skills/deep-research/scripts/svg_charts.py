@@ -46,12 +46,13 @@ def coverage_heatmap(
     n_items = len(items)
     n_fields = len(fields)
 
-    cell_w = 60
-    cell_h = 40
-    margin_left = 120
+    # Dynamic cell sizing based on data volume
+    cell_w = max(50, min(80, 600 // max(n_fields, 1)))
+    cell_h = max(30, min(45, 400 // max(n_items, 1)))
+    margin_left = max(100, min(160, max(len(i.get("name", i.get("id", ""))) for i in items) * 7 if items else 120))
     margin_top = 80
     margin_right = 20
-    margin_bottom = 20
+    margin_bottom = 30
 
     label_max = max(n_items, 1)
     svg_w = margin_left + n_fields * cell_w + margin_right

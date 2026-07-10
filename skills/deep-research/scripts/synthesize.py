@@ -160,14 +160,54 @@ def build_item_field_data(
     return data
 
 
-def assess_confidence(sources: list[str], relevance_scores: list[str]) -> str:
-    """Assess confidence based on sources and relevance."""
+def assess_confidence(
+    sources: list[str],
+    relevance_scores: list[str],
+    config: dict[str, Any] | None = None,
+) -> str:
+    """Assess confidence based on sources, relevance, and cross-source agreement.
+
+    Dimensions:
+    - Source count: more independent sources = higher confidence
+    - Relevance: higher average relevance = higher confidence
+    - Cross-source agreement: multiple sources with consistent data = bonus
+    """
+    cfg = config or {}
+    weights = cfg.get("confidence_weights", {})
+
     order = {"high": 3, "medium": 2, "low": 1}
     score_sum = sum(order.get(s, 2) for s in relevance_scores)
     avg = score_sum / len(relevance_scores) if relevance_scores else 2
-    if len(sources) >= 2 and avg >= 3:
+    source_count = len(sources)
+
+    # Base score from source count and relevance
+    base_score = 0
+    if source_count >= weights.get("source_count_high", 2):
+        base_score += weights.get("source_count_high", 2)
+    elif source_count >= 1:
+        base_score += weights.get("source_count_medium", 1)
+
+    # Relevance contribution
+    if avg >= order["high"]:
+        base_score += weights.get("relevance_high", 3)
+    elif avg >= order["medium"]:
+        base_score += weights.get("relevance_medium", 2)
+    else:
+        base_score += weights.get("relevance_low", 1)
+
+    # Cross-source agreement bonus: multiple sources with high relevance
+    cross_source_bonus = 0
+    if source_count >= 2 and avg >= order["high"]:
+        cross_source_bonus = weights.get("cross_source_bonus", 1)
+        base_score += cross_source_bonus
+
+    # Determine confidence level
+    high_threshold = weights.get("source_count_high", 2) + weights.get("relevance_high", 3) + cross_source_bonus
+    medium_threshold = weights.get("source_count_medium", 1) + weights.get("relevance_medium", 2)
+
+    if source_count >= 2 and base_score >= high_threshold:
         return "high"
-    if len(sources) >= 1 and avg >= 2:
+    if source_count >= 1 and base_score >= medium_threshold:
         return "medium"
     return "low"
 
@@ -178,6 +218,7 @@ def build_enriched_items(
     """Build a list of items enriched with field data."""
     raw = build_item_field_data(plan, findings)
     fields = {f["id"]: f for f in plan.get("fields", [])}
+    config = plan.get("config", {})
 
     enriched: list[dict[str, Any]] = []
     for item in plan.get("items", []):
@@ -204,23 +245,30 @@ def build_enriched_items(
                 primary = max(unique_values, key=len)
                 others = [v for v in unique_values if v != primary]
                 if others:
-                    value = primary + "\n\n**补充信息**:\n" + "\n".join(f"- {v}" for v in others)
+                    value = primary + "\n\n**Supplemental**:\n" + "\n".join(f"- {v}" for v in others)
                 else:
                     value = primary
             else:
                 value = "_No data_"
 
-            # Short value for comparison table (truncated, single line)
+            # Short value for comparison table (word-aware truncation, single line)
             short_value = str(value).replace("\n", " ").replace("\r", "")
-            if len(short_value) > 150:
-                short_value = short_value[:150] + "..."
+            max_len = config.get("comparison_table_cell_limit", 150)
+            if len(short_value) > max_len:
+                # Try to cut at a word boundary
+                cut = short_value[:max_len]
+                last_space = cut.rfind(" ")
+                if last_space > max_len * 0.7:
+                    short_value = cut[:last_space] + "..."
+                else:
+                    short_value = cut + "..."
             short_value = short_value.replace("|", "\\|")
 
             enriched_fields[fid] = {
                 "name": field["name"],
                 "value": value,
                 "short_value": short_value,
-                "confidence": assess_confidence(sources, relevance_scores),
+                "confidence": assess_confidence(sources, relevance_scores, config),
                 "sources": sources,
                 "conflicts": [],
                 "covered": len(values) > 0,
@@ -280,8 +328,9 @@ def generate_cross_cutting_insights(findings: list[dict[str, Any]]) -> dict[str,
     if all_summaries:
         words: Counter[str] = Counter()
         for summary in all_summaries:
-            for word in re.findall(r"\b[a-zA-Z]{5,}\b", summary.lower()):
-                words[word] += 1
+            # Unicode-aware tokenization: matches CJK characters and Latin words
+            for word in re.findall(r"[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]+|[a-zA-Z]{4,}", summary):
+                words[word.lower()] += 1
         keywords = [word for word, _ in words.most_common(10)]
 
     total = sum(relevance_counts.values())

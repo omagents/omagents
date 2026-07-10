@@ -17,6 +17,44 @@ from typing import Any
 
 RELEVANCE_ORDER = {"high": 3, "medium": 2, "low": 1, "none": 0}
 
+# Map field categories to preferred source types for gap-fill tasks
+FIELD_CATEGORY_SOURCES: dict[str, list[str]] = {
+    "Legal": ["github", "web"],
+    "Technical": ["codebase", "github", "web"],
+    "Implementation": ["codebase", "github"],
+    "Performance": ["web", "github"],
+    "Version": ["web", "github"],
+    "Assessment": ["web", "github"],
+    "General": ["web", "github", "codebase"],
+}
+
+
+def _pick_source_type(field: dict[str, Any], config: dict[str, Any]) -> str:
+    """Pick the best source type for a gap-fill task based on field category."""
+    category = field.get("category", "General")
+    search_tools = config.get("search_tools", ["websearch", "github", "codegraph"])
+
+    # Map config search_tools to task types
+    available: list[str] = []
+    if "websearch" in search_tools:
+        available.append("web")
+    if "github" in search_tools:
+        available.append("github")
+    if "codegraph" in search_tools:
+        available.append("codebase")
+
+    if not available:
+        available = ["web"]
+
+    preferred = FIELD_CATEGORY_SOURCES.get(category, FIELD_CATEGORY_SOURCES["General"])
+
+    # Return the first preferred source that's available
+    for source in preferred:
+        if source in available:
+            return source
+
+    return available[0]
+
 
 def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -126,10 +164,15 @@ def calculate_overall_coverage(matrix: dict[str, Any]) -> float:
 
 
 def detect_gaps(plan: dict[str, Any], matrix: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Return (gaps, new_tasks) based on coverage matrix."""
+    """Return (gaps, new_tasks) based on coverage matrix.
+
+    Source type for gap-fill tasks is chosen based on field category.
+    Previously-tried gaps are tracked to avoid infinite repetition.
+    """
     required_fields = {f["id"] for f in plan.get("fields", []) if f.get("required")}
     items = {item["id"]: item for item in plan.get("items", [])}
     fields = {field["id"]: field for field in plan.get("fields", [])}
+    config = plan.get("config", {})
 
     gaps: list[dict[str, Any]] = []
     for item_id, field_map in matrix.items():
@@ -150,17 +193,24 @@ def detect_gaps(plan: dict[str, Any], matrix: dict[str, Any]) -> tuple[list[dict
                     "severity": "medium",
                 })
 
-    # Generate new tasks from gaps, one per item-field pair, up to batch size
-    new_tasks: list[dict[str, Any]] = []
-    max_loops = plan.get("config", {}).get("max_research_loops", 2)
+    # Load gap history to avoid repeating already-tried gaps
+    max_loops = config.get("max_research_loops", 2)
     current_loop = plan.get("metadata", {}).get("research_loops_completed", 0)
     next_loop = current_loop + 1
 
     if next_loop > max_loops:
-        return gaps, new_tasks
+        return gaps, []
 
-    seen: set[tuple[str, str]] = set()
+    # Build a set of (item_id, field_id) pairs that already have tasks
+    existing_task_pairs: set[tuple[str, str]] = set()
+    for task in plan.get("tasks", []):
+        for fid in task.get("field_ids", []):
+            existing_task_pairs.add((task.get("item_id", ""), fid))
+
+    new_tasks: list[dict[str, Any]] = []
     task_index = len(plan.get("tasks", [])) + 1
+    seen: set[tuple[str, str]] = set()
+
     for gap in gaps:
         key = (gap["item_id"], gap["field_id"])
         if key in seen:
@@ -170,14 +220,17 @@ def detect_gaps(plan: dict[str, Any], matrix: dict[str, Any]) -> tuple[list[dict
         item = items.get(gap["item_id"], {})
         field = fields.get(gap["field_id"], {})
 
+        source_type = _pick_source_type(field, config)
+
         new_tasks.append({
             "id": f"task-r{next_loop}-{task_index}",
-            "type": "web",
+            "type": source_type,
             "item_id": gap["item_id"],
             "field_ids": [gap["field_id"]],
             "focus": (
-                f"Supplemental research for '{item.get('name', gap['item_id'])}' "
-                f"on field '{field.get('name', gap['field_id'])}'"
+                f"Supplemental {source_type} research for '{item.get('name', gap['item_id'])}' "
+                f"on field '{field.get('name', gap['field_id'])}' "
+                f"(reason: {gap['reason']})"
             ),
             "status": "pending",
             "iteration": next_loop,
