@@ -1,0 +1,4 @@
+interface:
+  display_name: "Work With PR"
+  short_description: "Manage PR lifecycle with github MCP"
+  default_prompt: "Use $work-with-pr to create, review, update, or merge pull requests."

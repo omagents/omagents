@@ -122,7 +122,7 @@ Registered automatically via `config` hook. User config takes precedence (won't 
 
 ## Skills
 
-### OmAgents Skills (11)
+### OmAgents Skills (17)
 
 | Skill | Description | Has scripts? | Has agents/? | Loop? |
 |-------|-------------|-------------|-------------|-------|
@@ -137,6 +137,12 @@ Registered automatically via `config` hook. User config takes precedence (won't 
 | `remove-deadcode` | Find and remove unreferenced code | No | Yes | Yes (loop_engine) |
 | `github-triage` | Triage and categorize GitHub issues | No | Yes | Yes (loop_engine) |
 | `tech-debt-audit` | Audit codebase for technical debt | No | Yes | Yes (loop_engine) |
+| `lsp-guide` | Guide agents to use the right code intelligence tool | No | Yes | No |
+| `ast-grep` | AST-aware code search and rewrite | No | Yes | Optional (loop for refactor mode) |
+| `work-with-pr` | PR lifecycle management with github MCP | No | Yes | No |
+| `pre-publish-review` | Pre-publish release gate checklist | No | Yes | Yes (loop_engine) |
+| `hyperplan` | Adversarial plan review with 3 parallel critics | No | Yes | Yes (loop_engine + parallel) |
+| `refactor` | Systematic code refactoring with verification | No | Yes | Yes (loop_engine) |
 
 ### Superpowers Skills (14, bundled via dependency)
 

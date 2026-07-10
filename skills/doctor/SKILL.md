@@ -89,6 +89,19 @@ echo $OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS
 
 Check if superpowers was loaded successfully by looking for superpowers skills in the available skills list. If superpowers failed to load, the user will see a warning in the OpenCode console.
 
+### 8. Model Configuration
+
+Check that the user has at least one model configured:
+
+```bash
+cat ~/.config/opencode/opencode.json
+```
+
+- **PASS**: `model` field is set (e.g., `"model": "anthropic/claude-sonnet-4-5"`)
+- **WARN**: `model` not set. Tell user to configure a model or use `/connect` command.
+- **INFO**: Check if `small_model` is set (used for titles/summaries). If not, suggest setting it to a cheaper model.
+- **INFO**: Suggest configuring a backup provider in case the primary is unavailable.
+
 ## Output Format
 
 Present results as a table:

@@ -151,6 +151,48 @@ function getTuiStatePath() {
   return path.join(dataDir, "opencode", "storage", "omagents", "tui-state.json")
 }
 
+function getJobBoardPath() {
+  const dataDir = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share")
+  return path.join(dataDir, "opencode", "storage", "omagents", "job-board.json")
+}
+
+let persistTimer = null
+
+function persistJobBoard() {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    try {
+      const boardPath = getJobBoardPath()
+      fs.mkdirSync(path.dirname(boardPath), { recursive: true })
+      const data = [...jobBoard.values()]
+      fs.writeFileSync(boardPath, JSON.stringify(data, null, 2) + "\n")
+    } catch {
+      // best-effort
+    }
+  }, 500)
+}
+
+function loadJobBoard() {
+  try {
+    const boardPath = getJobBoardPath()
+    if (!fs.existsSync(boardPath)) return
+    const data = JSON.parse(fs.readFileSync(boardPath, "utf-8"))
+    for (const job of data) {
+      if (job.state === "running") {
+        job.state = "completed"
+        job.terminalState = "completed"
+        job.terminalUnreconciled = false
+      }
+      jobBoard.set(job.taskID, job)
+    }
+    if (data.length > 0) {
+      console.log(`[omagents] Restored ${data.length} jobs from disk`)
+    }
+  } catch {
+    // best-effort
+  }
+}
+
 function writeTuiState() {
   try {
     const statePath = getTuiStatePath()
@@ -175,6 +217,7 @@ function writeTuiState() {
       })),
     }
     fs.writeFileSync(statePath, JSON.stringify(snapshot, null, 2) + "\n")
+    persistJobBoard()
   } catch {
     // best-effort
   }
@@ -316,6 +359,13 @@ function buildJobBoardText(sessionID) {
 export function createParallelHooks(ctx) {
   const { client } = ctx
 
+  // Restore persisted Job Board from disk
+  try {
+    loadJobBoard()
+  } catch {
+    // best-effort
+  }
+
   // Auto-enable background subagents on first load
   try {
     ensureBackgroundSubagentsEnv()
@@ -413,13 +463,27 @@ export function createParallelHooks(ctx) {
       if (!lastUser) return
 
       // Extract session ID from the message context
-      // We use the first job's parentSessionID as the session context
-      const sessionJobs = [...jobBoard.values()]
-      if (sessionJobs.length === 0) return
+      const sessionID =
+        output.messages?.[0]?.info?.sessionID ||
+        output.messages?.[0]?.sessionID ||
+        _input?.sessionID ||
+        null
 
-      // Try to find jobs for this session - we don't have direct sessionID here
-      // so we inject for all sessions that have active jobs
-      const boardText = buildJobBoardTextForAll()
+      if (!sessionID) {
+        // Fallback: if we can't determine session, use all jobs (legacy behavior)
+        const boardText = buildJobBoardTextForAll()
+        if (!boardText) return
+        const firstPart = lastUser.parts.find((p) => p.type === "text")
+        if (firstPart) {
+          firstPart.text = `${boardText}\n\n${firstPart.text || ""}`
+        } else {
+          lastUser.parts.unshift({ type: "text", text: boardText })
+        }
+        return
+      }
+
+      // Session-scoped: only show jobs for this session
+      const boardText = buildJobBoardText(sessionID)
       if (!boardText) return
 
       // Guard: don't double-inject

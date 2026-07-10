@@ -70,6 +70,12 @@ test("expected skills are present", () => {
     "remove-deadcode",
     "github-triage",
     "tech-debt-audit",
+    "lsp-guide",
+    "ast-grep",
+    "work-with-pr",
+    "pre-publish-review",
+    "hyperplan",
+    "refactor",
   ]
   for (const skill of expected) {
     assert.ok(dirs.includes(skill), `Missing expected skill: ${skill}`)
@@ -83,6 +89,9 @@ test("loop-based skills reference loop_engine.py in SKILL.md", () => {
     "remove-deadcode",
     "github-triage",
     "tech-debt-audit",
+    "pre-publish-review",
+    "hyperplan",
+    "refactor",
   ]
   for (const skill of loopSkills) {
     const skillMd = path.join(SKILLS_DIR, skill, "SKILL.md")

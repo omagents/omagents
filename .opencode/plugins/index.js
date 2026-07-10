@@ -260,6 +260,17 @@ export const OmagentsPlugin = async (ctx) => {
     "tool.execute.after": mergedToolAfter,
     "experimental.chat.messages.transform": mergedMessagesTransform,
     "experimental.chat.system.transform": parallelHooks["experimental.chat.system.transform"],
+    "experimental.session.compacting": async (_input, output) => {
+      output.context = output.context || []
+      output.context.push(
+        "## OmAgents State Preservation\n" +
+          "If you were processing a loop_engine task queue, run:\n" +
+          "  loop_engine.py status <skill>\n" +
+          "  loop_engine.py next <skill>\n" +
+          "to resume where you left off.\n" +
+          "If you had background tasks running, use parallel_status to check their state."
+      )
+    },
     event: mergedEvent,
 
     // Custom tools
