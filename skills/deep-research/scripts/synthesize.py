@@ -73,13 +73,14 @@ def load_findings(findings_dir: Path) -> list[dict[str, Any]]:
 
 
 def load_gap_report(workspace: Path) -> dict[str, Any] | None:
-    gap_path = workspace / "gap_report.json"
-    if not gap_path.exists():
-        return None
-    try:
-        return load_json(gap_path)
-    except json.JSONDecodeError:
-        return None
+    # Try artifacts/ first, fall back to root for backward compat
+    for gap_path in [workspace / "artifacts" / "gap_report.json", workspace / "gap_report.json"]:
+        if gap_path.exists():
+            try:
+                return load_json(gap_path)
+            except json.JSONDecodeError:
+                pass
+    return None
 
 
 def collect_sources(findings: list[dict[str, Any]]) -> dict[str, list[str]]:
@@ -190,20 +191,38 @@ def build_enriched_items(
             sources = cell.get("sources", [])
             relevance_scores = cell.get("relevance_scores", [])
 
-            # Detect conflicts among non-empty values
-            conflicts: list[str] = []
-            if len(values) > 1:
-                unique_values = set(str(v) for v in values)
-                if len(unique_values) > 1:
-                    conflicts = [f"Different sources report: {v}" for v in unique_values]
+            # Merge all unique values into a single coherent text
+            unique_values: list[str] = []
+            seen: set[str] = set()
+            for v in values:
+                vs = str(v).strip()
+                if vs and vs not in seen:
+                    seen.add(vs)
+                    unique_values.append(vs)
 
-            value = values[0] if values else "_No data_"
+            if unique_values:
+                primary = max(unique_values, key=len)
+                others = [v for v in unique_values if v != primary]
+                if others:
+                    value = primary + "\n\n**补充信息**:\n" + "\n".join(f"- {v}" for v in others)
+                else:
+                    value = primary
+            else:
+                value = "_No data_"
+
+            # Short value for comparison table (truncated, single line)
+            short_value = str(value).replace("\n", " ").replace("\r", "")
+            if len(short_value) > 150:
+                short_value = short_value[:150] + "..."
+            short_value = short_value.replace("|", "\\|")
+
             enriched_fields[fid] = {
                 "name": field["name"],
                 "value": value,
+                "short_value": short_value,
                 "confidence": assess_confidence(sources, relevance_scores),
                 "sources": sources,
-                "conflicts": conflicts,
+                "conflicts": [],
                 "covered": len(values) > 0,
             }
 
@@ -333,14 +352,16 @@ def generate_report(
         if events:
             svg_charts["timeline"] = research_timeline(events)
 
-    # Load audit report if it exists
+    # Load audit report if it exists (try artifacts/ first, then root)
     audit_report: dict[str, Any] | None = None
-    audit_path = output_path.parent / "audit_report.json"
-    if audit_path.exists():
-        try:
-            audit_report = load_json(audit_path)
-        except json.JSONDecodeError:
-            pass
+    workspace = output_path.parent
+    for audit_path in [workspace / "artifacts" / "audit_report.json", workspace / "audit_report.json"]:
+        if audit_path.exists():
+            try:
+                audit_report = load_json(audit_path)
+            except json.JSONDecodeError:
+                pass
+            break
 
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES_DIR)),

@@ -15,13 +15,16 @@ def load_json(path: Path) -> Any:
 
 def generate_package(workspace: Path) -> dict[str, Any]:
     """Generate package.json manifest and README.md index."""
+    artifacts_dir = workspace / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
     plan_path = workspace / "plan.json"
     report_path = workspace / "report.md"
     findings_dir = workspace / "findings"
-    merged_path = workspace / "findings_merged.json"
-    gap_path = workspace / "gap_report.json"
-    provenance_path = workspace / "provenance.jsonl"
-    audit_path = workspace / "audit_report.json"
+    merged_path = artifacts_dir / "findings_merged.json"
+    gap_path = artifacts_dir / "gap_report.json"
+    provenance_path = artifacts_dir / "provenance.jsonl"
+    audit_path = artifacts_dir / "audit_report.json"
 
     plan = load_json(plan_path) if plan_path.exists() else {}
 
@@ -75,13 +78,13 @@ def generate_package(workspace: Path) -> dict[str, Any]:
         },
     }
 
-    manifest_path = workspace / "package.json"
+    manifest_path = artifacts_dir / "package.json"
     manifest_path.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
     readme = generate_readme(manifest)
-    (workspace / "README.md").write_text(readme, encoding="utf-8")
+    (artifacts_dir / "README.md").write_text(readme, encoding="utf-8")
 
     return manifest
 
@@ -155,7 +158,7 @@ def main() -> int:
         return 1
 
     manifest = generate_package(workspace)
-    print(f"Package manifest written to {workspace / 'package.json'}")
+    print(f"Package manifest written to {workspace / 'artifacts' / 'package.json'}")
     print(f"  Items: {manifest['stats']['items']}, Fields: {manifest['stats']['fields']}")
     print(f"  Coverage: {manifest['stats'].get('overall_coverage', 'N/A')}")
     print(f"  Audit score: {manifest['stats'].get('audit_score', 'N/A')}")

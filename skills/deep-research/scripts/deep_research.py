@@ -18,9 +18,12 @@ If --workspace is omitted, the CLI defaults to the current working directory.
 from __future__ import annotations
 
 import argparse
+import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
@@ -84,10 +87,17 @@ def run_add_fields(args: argparse.Namespace) -> int:
     ])
 
 
+def _artifacts_dir(workspace: Path) -> Path:
+    """Return the artifacts directory, creating it if needed."""
+    d = workspace / "artifacts"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def run_merge(args: argparse.Namespace) -> int:
     workspace = resolve_workspace(args)
     findings_dir = workspace / "findings"
-    output = workspace / "findings_merged.json"
+    output = _artifacts_dir(workspace) / "findings_merged.json"
 
     return run_script("merge.py", [
         "--input-dir", str(findings_dir),
@@ -99,7 +109,7 @@ def run_gaps(args: argparse.Namespace) -> int:
     workspace = resolve_workspace(args)
     plan_path = workspace / "plan.json"
     findings_dir = workspace / "findings"
-    output = workspace / "gap_report.json"
+    output = _artifacts_dir(workspace) / "gap_report.json"
 
     if not plan_path.exists():
         print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
@@ -152,11 +162,66 @@ def run_report(args: argparse.Namespace) -> int:
     ])
 
 
+def run_polish(args: argparse.Namespace) -> int:
+    """Prepare report for LLM polishing: backup raw, output instructions."""
+    workspace = resolve_workspace(args)
+    report_path = workspace / "report.md"
+    raw_path = _artifacts_dir(workspace) / "report_raw.md"
+    plan_path = workspace / "plan.json"
+
+    if not report_path.exists():
+        print("Error: no report.md found. Run `report` first.", file=sys.stderr)
+        return 1
+
+    # Backup raw report
+    shutil.copy2(report_path, raw_path)
+
+    # Load plan context
+    plan_context: dict[str, Any] = {}
+    if plan_path.exists():
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan_context = {
+            "query": plan.get("query", ""),
+            "context": plan.get("context", ""),
+            "objectives": plan.get("objectives", []),
+            "language": plan.get("config", {}).get("language", "auto"),
+            "items": [i.get("name", i.get("id", "")) for i in plan.get("items", [])],
+            "fields": [f.get("name", f.get("id", "")) for f in plan.get("fields", [])],
+        }
+
+    # Output instructions for the agent
+    instructions = {
+        "action": "polish_report",
+        "raw_report": str(raw_path),
+        "output": str(report_path),
+        "plan_context": plan_context,
+        "prompt_file": str(Path(__file__).resolve().parent.parent / "prompts" / "polish_report.md"),
+        "instruction": (
+            "Read the raw report at report_raw.md and the plan context above. "
+            "Rewrite the report into a polished, coherent narrative following "
+            "the polish prompt file. Save the polished version to report.md "
+            "(overwrite). Keep SVG charts and source citations intact."
+        ),
+    }
+    print(json.dumps(instructions, indent=2, ensure_ascii=False))
+    return 0
+
+
+def run_report_with_polish(args: argparse.Namespace) -> int:
+    """Generate report and optionally prepare for polishing."""
+    rc = run_report(args)
+    if rc != 0:
+        return rc
+    if getattr(args, "polish", False):
+        return run_polish(args)
+    return 0
+
+
 def run_audit(args: argparse.Namespace) -> int:
     workspace = resolve_workspace(args)
     plan_path = workspace / "plan.json"
     findings_dir = workspace / "findings"
-    output = workspace / "audit_report.json"
+    output = _artifacts_dir(workspace) / "audit_report.json"
 
     if not plan_path.exists():
         print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
@@ -271,7 +336,14 @@ def main() -> int:
     report_parser = subparsers.add_parser("report", help="Generate the Markdown report from findings")
     report_parser.add_argument("--workspace", "-w", help="Working directory")
     report_parser.add_argument("--plan", "-p", help="Path to a custom plan.json")
-    report_parser.set_defaults(func=run_report)
+    report_parser.add_argument("--polish", action="store_true",
+                               help="After generating, prepare for LLM polishing (backup raw, output instructions)")
+    report_parser.set_defaults(func=run_report_with_polish)
+
+    # polish
+    polish_parser = subparsers.add_parser("polish", help="Prepare existing report for LLM polishing")
+    polish_parser.add_argument("--workspace", "-w", help="Working directory")
+    polish_parser.set_defaults(func=run_polish)
 
     # audit
     audit_parser = subparsers.add_parser("audit", help="Run integrity audit on findings")

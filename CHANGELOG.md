@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-10
+
+### Added
+
+- **Deep Research LLM report polishing**: new `polish` subcommand and `report --polish` flag. After the Jinja2 template generates a raw `report.md`, it is backed up to `artifacts/report_raw.md` and the agent (LLM) rewrites it into coherent prose — merging multi-source bullet lists into flowing narrative, writing a real executive summary, ensuring language consistency, and preserving SVG charts and source citations.
+- **Deep Research polish prompt template**: `prompts/polish_report.md` provides structured instructions for the LLM polishing phase.
+- **Deep Research `polishing` orchestration phase**: the `run-all` pipeline now pauses between `reporting` and `auditing` for LLM polishing, with automatic resume via `--resume`.
+
+### Changed
+
+- **Deep Research workspace structure**: intermediate artifacts now live in `artifacts/` instead of the workspace root. Final deliverables (`report.md`, `summary.md`) and inputs (`plan.json`, `findings/`) remain at root.
+  - `findings_merged.json` → `artifacts/findings_merged.json`
+  - `gap_report.json` → `artifacts/gap_report.json`
+  - `audit_report.json` → `artifacts/audit_report.json`
+  - `provenance.jsonl` → `artifacts/provenance.jsonl`
+  - `package.json` → `artifacts/package.json`
+  - `README.md` → `artifacts/README.md`
+  - `report_raw.md` → `artifacts/report_raw.md`
+- **Deep Research synthesize.py**: multi-source field values are now merged into a single coherent text (longest value as primary, others as "补充信息") instead of being labeled as "Conflicts". Added `short_value` (truncated to 150 chars) for comparison table cells.
+- **Deep Research templates** (comparison/survey/technical): fixed Markdown table rendering using Jinja2 `-%}` whitespace control. Table cells now use `short_value`. Removed "Conflicts" section from detailed findings.
+
+### Fixed
+
+- **Deep Research comparison table**: blank lines between table rows caused Markdown renderers to split the table into multiple independent tables. Fixed with Jinja2 `-%}` whitespace control on `{% for %}` / `{% endfor %}` blocks.
+
 ## [0.3.2] - 2026-07-10
 
 ### Fixed

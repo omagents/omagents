@@ -40,11 +40,12 @@ This skill combines the **structured items × fields approach** (inspired by Rhi
 | `/research-add-fields` | Confirm | Add more research dimensions to the plan. |
 | `/research-deep` | Research | Execute research tasks in parallel subagents, then run the gap loop. |
 | `/research-report` | Report | Merge findings and generate the Markdown report (with inline SVG charts). |
+| `/research-polish` | Polish | Prepare the raw report for LLM polishing (backup raw, output instructions). The agent then rewrites the report into coherent prose. |
 | `/research-audit` | Audit | Run integrity audit on findings (missing sources, conflicts, gaps, duplicates). |
 | `/research-package` | Package | Generate artifact package manifest and README index. |
 | `/research-provenance` | Provenance | View provenance log (phase-level event timeline). |
 | `/research-status` | Status | Check orchestration state and recommended next action. |
-| `/research-run` | All | Run the full pipeline with pause/resume (plan -> dispatch -> gaps -> report -> audit -> package). |
+| `/research-run` | All | Run the full pipeline with pause/resume (plan -> dispatch -> gaps -> report -> polish -> audit -> package). |
 
 Under the hood these commands map to:
 
@@ -52,7 +53,7 @@ Under the hood these commands map to:
 deep_research.py <subcommand> --workspace <workspace>
 ```
 
-New subcommands: `audit`, `package`, `provenance`, `status`, `run-all`.
+New subcommands: `audit`, `package`, `provenance`, `status`, `polish`, `run-all`.
 
 ## Workflow
 
@@ -230,6 +231,30 @@ deep_research.py report --workspace ./research/agent-frameworks
 
 This produces `report.md` using the selected Jinja2 template (`survey`, `comparison`, or `technical`).
 
+### Phase 5b: Polish Report (`/research-polish`)
+
+The template-generated report is mechanically assembled and may feel stiff. This phase uses the LLM (the agent itself) to rewrite it into coherent prose.
+
+```bash
+deep_research.py report --polish --workspace ./research/agent-frameworks
+# or standalone:
+deep_research.py polish --workspace ./research/agent-frameworks
+```
+
+This will:
+1. Generate the template-based report (if `--polish` is used with `report`)
+2. Back up the raw report to `report_raw.md`
+3. Output JSON instructions with plan context and the polish prompt file path
+
+**The agent then:**
+1. Reads `report_raw.md` and the plan context
+2. Reads `prompts/polish_report.md` for instructions
+3. Rewrites the report: merges "补充信息" bullets into flowing prose, writes a real executive summary, ensures language consistency, keeps SVG charts and source citations
+4. Saves the polished version to `report.md` (overwrite)
+5. Continues to audit/package
+
+In the `run-all` pipeline, this phase pauses automatically — the agent polishes, then resumes with `run-all --resume`.
+
 ## Data Schemas
 
 ### plan.json (v2)
@@ -364,7 +389,7 @@ SVG is embedded directly in Markdown. No external dependencies or JavaScript.
 
 ## Provenance
 
-Every research workspace tracks phase-level events in `provenance.jsonl`:
+Every research workspace tracks phase-level events in `artifacts/provenance.jsonl`:
 
 | Event | Trigger |
 |-------|---------|
@@ -392,7 +417,7 @@ deep_research.py audit --workspace ./research/agent-frameworks
 | `coverage_gaps` | Required fields with no data | error |
 | `source_duplicates` | Same source referenced by multiple tasks | warning |
 
-Output: `audit_report.json` with overall score (0-100) and recommendations. Results are also embedded in the Markdown report.
+Output: `artifacts/audit_report.json` with overall score (0-100) and recommendations. Results are also embedded in the Markdown report.
 
 ## Artifact Package
 
@@ -403,20 +428,24 @@ deep_research.py package --workspace ./research/agent-frameworks
 ```
 
 Produces:
-- `package.json` - manifest with metadata, file list, and stats
-- `README.md` - quick index of all artifacts
+- `artifacts/package.json` - manifest with metadata, file list, and stats
+- `artifacts/README.md` - quick index of all artifacts
 
-Package structure:
+Workspace structure:
 ```
 <workspace>/
-  report.md              # Main report (Markdown + SVG)
-  findings/              # Raw findings JSON
-  findings_merged.json   # Merged findings
-  gap_report.json        # Gap analysis results
-  provenance.jsonl       # Provenance trail
-  audit_report.json      # Integrity audit
-  package.json           # Package manifest
-  README.md              # Quick index
+  plan.json              # Research plan
+  findings/              # Raw findings JSON from subagents
+  artifacts/             # Intermediate/derived artifacts
+    findings_merged.json # Merged findings
+    gap_report.json      # Gap analysis results
+    audit_report.json    # Integrity audit
+    provenance.jsonl     # Provenance trail
+    report_raw.md        # Pre-polish report backup
+    package.json         # Package manifest
+    README.md            # Quick index
+  report.md              # Final deliverable: polished report (Markdown + SVG)
+  summary.md             # Final deliverable: executive summary
 ```
 
 ## Run-All (Meta-Orchestration)

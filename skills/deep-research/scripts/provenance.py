@@ -16,21 +16,30 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _provenance_path(workspace: Path) -> Path:
+    """Return provenance file path, preferring artifacts/ dir."""
+    artifacts = workspace / "artifacts"
+    if artifacts.exists():
+        return artifacts / "provenance.jsonl"
+    return workspace / "provenance.jsonl"
+
+
 def log_event(workspace: Path, event_type: str, **details: Any) -> None:
-    """Append a provenance event to <workspace>/provenance.jsonl."""
+    """Append a provenance event to <workspace>/artifacts/provenance.jsonl."""
     event: dict[str, Any] = {
         "timestamp": now(),
         "event_type": event_type,
     }
     event.update(details)
-    provenance_path = workspace / "provenance.jsonl"
+    provenance_path = _provenance_path(workspace)
+    provenance_path.parent.mkdir(parents=True, exist_ok=True)
     with provenance_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
 def load_events(workspace: Path) -> list[dict[str, Any]]:
     """Load all provenance events from a workspace."""
-    provenance_path = workspace / "provenance.jsonl"
+    provenance_path = _provenance_path(workspace)
     if not provenance_path.exists():
         return []
     events: list[dict[str, Any]] = []

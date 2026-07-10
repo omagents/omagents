@@ -30,9 +30,9 @@ This report synthesizes findings from multiple sources to answer the research qu
 
 | Dimension | {% for item in items %}{{ item.name }} | {% endfor %}
 |----------|{% for item in items %}----------|{% endfor %}
-{% for field in fields %}
-| {{ field.name }} |{% for item in items %} {{ item.fields[field.id].value|default("_No data_") }} |{% endfor %}
-{% endfor %}
+{% for field in fields -%}
+| {{ field.name }} |{% for item in items %} {{ item.fields[field.id].short_value|default(item.fields[field.id].value|default("_No data_")) }} |{% endfor %}
+{% endfor -%}
 
 {% endif %}
 
@@ -47,13 +47,6 @@ This report synthesizes findings from multiple sources to answer the research qu
 #### {{ field.name }}
 
 {{ item.fields[field.id].value|default("_No data_") }}
-
-{% if item.fields[field.id].conflicts %}
-**Conflicts**:
-{% for conflict in item.fields[field.id].conflicts %}
-- {{ conflict }}
-{% endfor %}
-{% endif %}
 
 {% if item.fields[field.id].sources %}
 *Sources: {{ item.fields[field.id].sources|join(", ") }}*

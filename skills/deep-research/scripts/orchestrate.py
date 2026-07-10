@@ -186,9 +186,11 @@ def run_all(
     # Phase 4: Merge
     if state["phase"] == "merging":
         print("Phase 4: Merging findings...")
+        artifacts = workspace / "artifacts"
+        artifacts.mkdir(parents=True, exist_ok=True)
         run_script("merge.py", [
             "--input-dir", str(workspace / "findings"),
-            "--output", str(workspace / "findings_merged.json"),
+            "--output", str(artifacts / "findings_merged.json"),
         ])
         state["phase"] = "reporting"
         save_state(workspace, state)
@@ -201,16 +203,65 @@ def run_all(
             "--findings-dir", str(workspace / "findings"),
             "--output", str(workspace / "report.md"),
         ])
+        state["phase"] = "polishing"
+        save_state(workspace, state)
+
+    # Phase 5b: Polish (LLM-powered, pauses for agent)
+    if state["phase"] == "polishing":
+        print("Phase 5b: Preparing report for LLM polishing...")
+        report_path = workspace / "report.md"
+        artifacts = workspace / "artifacts"
+        artifacts.mkdir(parents=True, exist_ok=True)
+        raw_path = artifacts / "report_raw.md"
+
+        if report_path.exists():
+            import shutil
+            shutil.copy2(report_path, raw_path)
+
+        plan: dict[str, Any] = {}
+        plan_path = workspace / "plan.json"
+        if plan_path.exists():
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+
+        plan_context = {
+            "query": plan.get("query", ""),
+            "context": plan.get("context", ""),
+            "objectives": plan.get("objectives", []),
+            "language": plan.get("config", {}).get("language", "auto"),
+            "items": [i.get("name", i.get("id", "")) for i in plan.get("items", [])],
+            "fields": [f.get("name", f.get("id", "")) for f in plan.get("fields", [])],
+        }
+
+        polish_prompt = SKILL_DIR / "prompts" / "polish_report.md"
+
+        print(json.dumps({
+            "action": "polish_report",
+            "raw_report": str(raw_path),
+            "output": str(report_path),
+            "plan_context": plan_context,
+            "prompt_file": str(polish_prompt),
+            "instruction": (
+                "Read the raw report at artifacts/report_raw.md and the plan context above. "
+                "Rewrite the report into a polished, coherent narrative following "
+                "the polish prompt file. Save the polished version to report.md "
+                "(overwrite). Keep SVG charts and source citations intact. "
+                "After polishing, run: deep_research.py run-all --resume --workspace "
+                + str(workspace)
+            ),
+        }, indent=2, ensure_ascii=False))
         state["phase"] = "auditing"
         save_state(workspace, state)
+        return 0  # Pause — agent needs to polish
 
     # Phase 6: Audit
     if state["phase"] == "auditing":
         print("Phase 6: Running integrity audit...")
+        artifacts = workspace / "artifacts"
+        artifacts.mkdir(parents=True, exist_ok=True)
         run_script("audit.py", [
             "--plan", str(workspace / "plan.json"),
             "--findings-dir", str(workspace / "findings"),
-            "--output", str(workspace / "audit_report.json"),
+            "--output", str(artifacts / "audit_report.json"),
         ])
         state["phase"] = "packaging"
         save_state(workspace, state)
@@ -264,6 +315,7 @@ def _recommend_next_action(phase: str) -> str:
         "gap_analysis": "Run: run-all --resume (will process gaps automatically)",
         "merging": "Run: run-all --resume (will merge automatically)",
         "reporting": "Run: run-all --resume (will generate report automatically)",
+        "polishing": "Polish the report (read report_raw.md, rewrite, save to report.md), then run: run-all --resume",
         "auditing": "Run: run-all --resume (will audit automatically)",
         "packaging": "Run: run-all --resume (will package automatically)",
         "done": "Research complete. No further action needed.",
