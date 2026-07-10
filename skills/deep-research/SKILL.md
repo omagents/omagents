@@ -73,8 +73,10 @@ Example:
 deep_research.py plan \
   --query "AI agent frameworks" \
   --template comparison \
-  --workspace ./research/agent-frameworks
+  --workspace agent-frameworks
 ```
+
+> `--workspace` is the output directory name. Use a slug of the research topic (lowercase, hyphenated, e.g. "AI Agent Frameworks" -> `ai-agent-frameworks`). It will be created in the current working directory.
 
 After generating the plan, initialize the loop engine with the research tasks:
 
@@ -91,11 +93,11 @@ Review the generated plan. If items or fields are missing, add them:
 
 ```bash
 deep_research.py add-items \
-  --workspace ./research/agent-frameworks \
+  --workspace agent-frameworks \
   --items-json '[{"name":"LangGraph","type":"framework","description":"LangChain agent framework"}]'
 
 deep_research.py add-fields \
-  --workspace ./research/agent-frameworks \
+  --workspace agent-frameworks \
   --fields-json '[{"name":"License","category":"Legal","description":"Software license","required":false}]'
 ```
 
@@ -195,7 +197,7 @@ Repeat from Step 1. When `next` returns `null`, all initial tasks are done. Proc
 **Step 1: Run gap analysis**
 
 ```bash
-deep_research.py gaps --workspace ./research/agent-frameworks
+deep_research.py gaps --workspace agent-frameworks
 ```
 
 This builds an `item x field` coverage matrix, identifies missing or low-confidence coverage, and outputs `gap_report.json` with `new_tasks` and `should_continue`.
@@ -225,8 +227,8 @@ When the loop is complete, proceed to Phase 5.
 ### Phase 5: Synthesize Report (`/research-report`)
 
 ```bash
-deep_research.py merge --workspace ./research/agent-frameworks
-deep_research.py report --workspace ./research/agent-frameworks
+deep_research.py merge --workspace agent-frameworks
+deep_research.py report --workspace agent-frameworks
 ```
 
 This produces `report.md` using the selected Jinja2 template (`survey`, `comparison`, or `technical`).
@@ -236,9 +238,9 @@ This produces `report.md` using the selected Jinja2 template (`survey`, `compari
 The template-generated report is mechanically assembled and may feel stiff. This phase uses the LLM (the agent itself) to rewrite it into coherent prose.
 
 ```bash
-deep_research.py report --polish --workspace ./research/agent-frameworks
+deep_research.py report --polish --workspace agent-frameworks
 # or standalone:
-deep_research.py polish --workspace ./research/agent-frameworks
+deep_research.py polish --workspace agent-frameworks
 ```
 
 This will:
@@ -407,7 +409,7 @@ Provenance is optional and backward-compatible. Old workspaces without provenanc
 Run automated checks on research findings:
 
 ```bash
-deep_research.py audit --workspace ./research/agent-frameworks
+deep_research.py audit --workspace agent-frameworks
 ```
 
 | Check | What it detects | Severity |
@@ -424,7 +426,7 @@ Output: `artifacts/audit_report.json` with overall score (0-100) and recommendat
 Generate a complete package manifest:
 
 ```bash
-deep_research.py package --workspace ./research/agent-frameworks
+deep_research.py package --workspace agent-frameworks
 ```
 
 Produces:
@@ -454,10 +456,10 @@ Run the full pipeline with pause/resume:
 
 ```bash
 # First run
-deep_research.py run-all --query "AI agent frameworks" --template comparison --workspace ./research/agent-frameworks
+deep_research.py run-all --query "AI agent frameworks" --template comparison --workspace agent-frameworks
 
 # After subagents complete
-deep_research.py run-all --resume --workspace ./research/agent-frameworks
+deep_research.py run-all --resume --workspace agent-frameworks
 ```
 
 The orchestrator (`orchestrate.py`) is a pausable state machine:

@@ -6,11 +6,11 @@ merge, synthesize) into a single command-line entry point.
 
 Typical workflow:
 
-    deep_research.py plan --query "..." --workspace ./research
+    deep_research.py plan --query "..." --workspace agent-frameworks
     # run research subagents, writing findings to <workspace>/findings/
-    deep_research.py gaps --workspace ./research   # optional loop
-    deep_research.py merge --workspace ./research
-    deep_research.py report --workspace ./research
+    deep_research.py gaps --workspace agent-frameworks   # optional loop
+    deep_research.py merge --workspace agent-frameworks
+    deep_research.py report --workspace agent-frameworks
 
 If --workspace is omitted, the CLI defaults to the current working directory.
 """
