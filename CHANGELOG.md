@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-10
+
+### Added
+
+- **Deep Research Phase 0: Pre-research Landscape Scan**: new `pre_research.py` script using the shared loop engine to iteratively scan the web for current entities before generating a research plan. Ensures research items are based on real-world, up-to-date data rather than stale model knowledge. New CLI subcommands: `scan`, `scan-next`, `scan-complete`, `scan-evaluate`, `scan-finalize`.
+- **Current date injection**: all pre-research task descriptions, dispatch instructions, and subagent prompts now include the current date (e.g., "Current date: July 2026") and instruct the agent to include the current year in search queries and not rely on training data.
+- **Report date in templates**: all three report templates (survey, comparison, technical) now display `Research conducted: July 2026 (2026-07-10)` in the report header.
+- **Template-aware fields**: `comparison` template now generates 7 fields (Overview, Key Technologies, Evidence, Latest Version, Strengths, Weaknesses, Pricing/License). `technical` template generates 6 fields (adds Architecture, API/Interface, Performance).
+- **Configurable plan options**: new CLI flags `--max-loops`, `--batch-size`, `--search-tools`, `--language`, `--pre-research` for `plan` and `run-all` subcommands.
+- **Extended DEFAULT_CONFIG**: `max_pre_research_loops`, `min_pre_research_candidates`, `min_pre_research_sources`, `confidence_weights`, `audit_weights`.
+- **`--skip-pre-research` flag** for `run-all` to bypass the landscape scan phase.
+
+### Changed
+
+- **`build_tasks()` now covers ALL items x ALL fields**: previously only generated tasks for the first item and first two fields. Now generates one task per item per search source type, covering all required and optional fields.
+- **`add_items()` respects `config.search_tools`**: generates web, github, and codebase tasks based on configured tools (was hardcoded web + github only).
+- **Batch dispatch**: orchestrator now dispatches up to `batch_size` tasks at once instead of one at a time, enabling true parallel subagent execution.
+- **Source-aware gap analysis**: gap-fill tasks now select the appropriate source type based on field category (Legal→github, Technical→codebase, Performance→web) instead of always defaulting to web.
+- **Multi-dimensional confidence assessment**: `assess_confidence()` now considers source count, relevance, and cross-source agreement with configurable weights (was: source count + relevance average only).
+- **Unicode-aware keyword extraction**: cross-cutting insights now extract CJK (Chinese/Japanese/Korean) keywords in addition to English (was: English-only `\b[a-zA-Z]{5,}\b`).
+- **Language-agnostic supplemental marker**: raw report uses "Supplemental" instead of hardcoded Chinese "补充信息".
+- **Dynamic SVG dimensions**: coverage heatmap cell/margin sizes now scale based on item/field count.
+- **Configurable audit weights**: audit scoring penalties now read from `plan.config.audit_weights`.
+- **Dynamic artifact discovery**: package manifest now scans the artifacts directory for additional files.
+- **Template preserved across resume**: orchestrator state now saves and restores the report template through pause/resume cycles.
+
+### Fixed
+
+- **Orchestrator template loss on resume**: the `--template` flag value was lost when resuming with `--resume`, causing comparison plans to regress to survey template. Template is now saved in `orchestration_state.json`.
+- **`merge.py` silent fallback**: unknown finding types now emit a warning and are bucketed as "other" instead of silently being treated as "web".
+- **Word-aware truncation**: comparison table cell truncation now cuts at word boundaries instead of mid-word.
+
 ## [0.4.1] - 2026-07-10
 
 ### Fixed
