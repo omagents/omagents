@@ -228,6 +228,7 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 | 0.1.2 | v0.1.2 | OIDC trusted publishing fix |
 | 0.1.3 | - | Node 24, CI upgrades |
 | 0.1.4 | v0.1.4 | Version bump |
+| 0.2.1 | v0.2.1 | Loop engine, 12 new skills, Job Board persistence + isolation, compaction hook, multilingual README, project governance |
 
 ## Design Principles
 
