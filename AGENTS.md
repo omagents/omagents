@@ -46,6 +46,7 @@ omagents/
 │       ├── ci.yml              # Syntax check on push/PR
 │       └── publish.yml         # OIDC trusted publishing on tag push
 ├── skills/                     # Bundled OpenCode skills
+│   ├── _shared/scripts/        # Shared scripts (loop_engine.py)
 │   ├── deep-research/          # Multi-source research workflow
 │   │   ├── SKILL.md
 │   │   ├── agents/
@@ -121,15 +122,21 @@ Registered automatically via `config` hook. User config takes precedence (won't 
 
 ## Skills
 
-### OmAgents Skills (5)
+### OmAgents Skills (11)
 
-| Skill | Description | Has scripts? | Has agents/? |
-|-------|-------------|-------------|-------------|
-| `deep-research` | Multi-source iterative research with items x fields, gap detection, Jinja2 reports | Yes (6 Python files) | Yes |
-| `parallel-execution` | Background task dispatch with Job Board tracking | No | No |
-| `agents-python-tools` | Route Python tooling to `~/.venvs/omagents` | No | Yes |
-| `markitdown-converter` | Convert documents (PDF/DOCX/XLSX/...) to Markdown | Yes | Yes |
-| `playwright-web-scraping` | Web scraping with Playwright headless browser | Yes | Yes |
+| Skill | Description | Has scripts? | Has agents/? | Loop? |
+|-------|-------------|-------------|-------------|-------|
+| `deep-research` | Multi-source iterative research with items x fields, gap detection, Jinja2 reports | Yes (6 Python files) | Yes | Yes (gap loop) |
+| `parallel-execution` | Background task dispatch with Job Board tracking | No | No | No |
+| `agents-python-tools` | Route Python tooling to `~/.venvs/omagents` | No | Yes | No |
+| `markitdown-converter` | Convert documents (PDF/DOCX/XLSX/...) to Markdown | Yes | Yes | No |
+| `playwright-web-scraping` | Web scraping with Playwright headless browser | Yes | Yes | No |
+| `init-deep` | Auto-generate hierarchical AGENTS.md files | No | Yes | No |
+| `doctor` | Diagnose OmAgents installation and configuration | No | Yes | No |
+| `remove-ai-slops` | Clean up AI-generated code artifacts | No | Yes | Yes (loop_engine) |
+| `remove-deadcode` | Find and remove unreferenced code | No | Yes | Yes (loop_engine) |
+| `github-triage` | Triage and categorize GitHub issues | No | Yes | Yes (loop_engine) |
+| `tech-debt-audit` | Audit codebase for technical debt | No | Yes | Yes (loop_engine) |
 
 ### Superpowers Skills (14, bundled via dependency)
 
@@ -158,6 +165,27 @@ The `agents-python-tools` skill has full documentation on venv paths, cross-plat
    - `agents/openai.yaml` for agent display name
 3. If the skill has scripts, add the script directory to `SKILL_SCRIPT_DIRS` in `.opencode/plugins/index.js`
 4. The skill is auto-discovered via `config.skills.paths` - no other registration needed
+
+## Loop Engine
+
+Skills that process items iteratively (remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit) use a shared loop engine at `skills/_shared/scripts/loop_engine.py`.
+
+The loop engine provides a durable task queue stored in `.omagents/loops/<skill>/tasks.json` within the project directory. State survives context clearing and can be resumed.
+
+**Commands:**
+
+| Command | Usage |
+|---------|-------|
+| `init <skill> '<tasks_json>'` | Initialize task queue |
+| `next <skill>` | Get next pending task (outputs JSON or `null`) |
+| `complete <skill> <id> [result]` | Mark task complete |
+| `fail <skill> <id> [error]` | Mark task failed (retries up to 3 times, then blocked) |
+| `status <skill>` | Print stats (total/completed/pending/blocked) |
+| `summary <skill>` | Print full task list with icons |
+| `reset <skill>` | Clear task queue |
+| `add <skill> '<task_json>'` | Add a task to existing queue |
+
+**Task state machine:** `pending` -> (execute) -> `completed` (success) or `pending`/retry (fail, attempts < 3) or `blocked` (fail, attempts >= 3)
 
 ## Development
 

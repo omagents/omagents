@@ -26,6 +26,7 @@ const SKILL_SCRIPT_DIRS = [
   path.join(OMAGENTS_DIR, "skills", "deep-research", "scripts"),
   path.join(OMAGENTS_DIR, "skills", "markitdown-converter", "scripts"),
   path.join(OMAGENTS_DIR, "skills", "playwright-web-scraping", "scripts"),
+  path.join(OMAGENTS_DIR, "skills", "_shared", "scripts"),
 ]
 
 // Built-in MCP servers bundled by this plugin

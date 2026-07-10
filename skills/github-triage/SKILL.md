@@ -1,11 +1,11 @@
 ---
 name: github-triage
-description: "Triage GitHub issues using the github MCP. Automatically categorize, prioritize, and label issues. Trigger when the user says 'triage issues', 'classify issues', 'organize issues', or wants to review and sort their GitHub issue backlog."
+description: "Triage GitHub issues using a durable loop workflow. Each issue is classified, labeled, and recorded before moving to the next. Trigger when the user says 'triage issues', 'classify issues', 'organize issues'."
 ---
 
-# GitHub Issue Triage
+# GitHub Issue Triage (Loop Engine)
 
-Systematically review, categorize, and prioritize GitHub issues using the github MCP tools.
+Systematically review, categorize, and label GitHub issues using a durable task queue. Each issue is processed individually with its result recorded.
 
 ## When to Use
 
@@ -14,68 +14,65 @@ Systematically review, categorize, and prioritize GitHub issues using the github
 - After a release to clean up stale issues
 - Weekly/monthly issue review
 
-## Workflow
+## Classification Reference
 
-### Step 1: Fetch Open Issues
+**By Type:** `bug`, `feature`, `enhancement`, `documentation`, `question`, `duplicate`
+**By Priority:** `priority:critical`, `priority:high`, `priority:medium`, `priority:low`
+**By Effort:** `effort:small` (<1h), `effort:medium` (1-4h), `effort:large` (>4h)
 
-Use `github_list_issues` to get all open issues:
+## Loop Workflow
+
+### Phase 1: Build Task Queue
+
+Fetch open issues using the github MCP:
 
 ```
 github_list_issues(owner="<owner>", repo="<repo>", state="OPEN", perPage=50)
 ```
 
-If more than 50, paginate with `after` cursor.
+Initialize the loop with one task per issue:
 
-### Step 2: Classify Each Issue
+```bash
+loop_engine.py init github-triage '[
+  {"issue_number": 42, "title": "Login fails on Safari", "description": "Triage issue #42: Login fails on Safari"},
+  {"issue_number": 43, "title": "Add dark mode", "description": "Triage issue #43: Add dark mode"},
+  {"issue_number": 44, "title": "How to configure X?", "description": "Triage issue #44: How to configure X?"}
+]'
+```
 
-For each issue, read the title and body, then classify:
+### Phase 2: Execute Loop
 
-**By Type:**
-| Label | Criteria |
-|-------|----------|
-| `bug` | Unexpected behavior, error, crash |
-| `feature` | Request for new functionality |
-| `enhancement` | Improvement to existing feature |
-| `documentation` | Docs issue, missing or incorrect |
-| `question` | User question, not a code issue |
-| `duplicate` | Same as another existing issue |
+Repeat until `next` returns `null`:
 
-**By Priority:**
-| Label | Criteria |
-|-------|----------|
-| `priority:critical` | Blocks production, data loss, security |
-| `priority:high` | Blocks major functionality, no workaround |
-| `priority:medium` | Affects functionality, has workaround |
-| `priority:low` | Minor inconvenience, cosmetic |
+**Step 1: Get next task**
+```bash
+loop_engine.py next github-triage
+```
 
-**By Effort (if determinable):**
-| Label | Criteria |
-|-------|----------|
-| `effort:small` | < 1 hour, single file change |
-| `effort:medium` | 1-4 hours, multiple files |
-| `effort:large` | > 4 hours, architectural change |
+If output is `null`, go to Phase 3.
 
-### Step 3: Detect Duplicates
+**Step 2: Read the full issue**
 
-For each issue, search for similar issues:
+```
+github_issue_read(method="get", owner="<owner>", repo="<repo>", issue_number=<N>)
+```
+
+Read the title, body, and existing labels. Read comments if needed.
+
+**Step 3: Classify**
+
+Determine type, priority, and effort based on the classification reference above.
+
+**Step 4: Check for duplicates**
+
 ```
 github_search_issues(query="repo:<owner>/<repo> is:issue <keywords from title>")
 ```
 
-If a similar issue exists, mark as `duplicate` and reference the original.
+If a duplicate is found, note the original issue number.
 
-### Step 4: Identify Stale Issues
+**Step 5: Apply labels**
 
-Issues with no activity for 30+ days:
-```
-github_search_issues(query="repo:<owner>/<repo> is:issue is:open updated:<30d")
-```
-
-Suggest closing with a comment, or label `stale`.
-
-### Step 5: Apply Labels
-
-Use `github_issue_write` to update each issue:
 ```
 github_issue_write(
   method="update",
@@ -86,24 +83,47 @@ github_issue_write(
 )
 ```
 
-### Step 6: Generate Summary Report
+For duplicates, close with a comment:
+```
+github_add_issue_comment(
+  owner="<owner>", repo="<repo>", issue_number=<N>,
+  body="Closing as duplicate of #<original>. Please follow the original issue for updates."
+)
+github_issue_write(method="update", owner="<owner>", repo="<repo>", issue_number=<N>, state="closed", state_reason="duplicate")
+```
 
-Present a table:
+**Step 6: Record result**
+
+```bash
+loop_engine.py complete github-triage <id> "Labeled: bug, priority:high, effort:medium"
+```
+
+If labeling fails (permissions, etc.):
+```bash
+loop_engine.py fail github-triage <id> "Permission denied: cannot label issues"
+```
+
+### Phase 3: Report
+
+```bash
+loop_engine.py summary github-triage
+```
+
+Present the summary table:
 
 ```
-| # | Title | Type | Priority | Effort | Action |
-|---|-------|------|----------|--------|--------|
-| 42 | Login fails on Safari | bug | high | small | Labeled |
-| 43 | Add dark mode | feature | medium | large | Labeled |
-| 44 | How to configure X? | question | - | - | Closed (answered) |
-| 45 | Same as #42 | duplicate | - | - | Closed (dup of #42) |
+| # | Title | Type | Priority | Action |
+|---|-------|------|----------|--------|
+| 42 | Login fails on Safari | bug | high | Labeled |
+| 43 | Add dark mode | feature | medium | Labeled |
+| 44 | How to configure X? | question | - | Closed (answered) |
 ```
 
 ## Rules
 
 - **Don't close issues without user approval** - only label and comment
-- **Don't change priority of issues someone else set** - add a comment instead
 - **Read the full issue body** - titles alone are misleading
 - **Check existing labels first** - don't duplicate or contradict
 - **Be conservative with `priority:critical`** - reserve for true blockers
-- **Always explain why** - add a comment when labeling, not just silent labels
+- **Always add a comment when labeling** - not just silent labels
+- **If an issue is already well-labeled**, mark complete with "already triaged"

@@ -1,149 +1,110 @@
 ---
 name: remove-ai-slops
-description: "Clean up AI-generated code artifacts: redundant comments, obvious code explanations, unused imports, over-engineered abstractions, verbose naming, and other AI coding bad habits. Trigger when the user says 'clean AI code', 'remove slops', 'remove AI artifacts', or notices low-quality AI-generated code."
+description: "Clean up AI-generated code artifacts using a durable loop workflow. Trigger when the user says 'clean AI code', 'remove slops', 'remove AI artifacts', or notices low-quality AI-generated code. Processes files one by one with verification."
 ---
 
-# Remove AI Slops
+# Remove AI Slops (Loop Engine)
 
-Clean up common AI-generated code artifacts that make code harder to read and maintain.
+Clean up common AI-generated code artifacts using a durable task queue. Each file is processed, verified, and marked complete before moving to the next.
 
 ## When to Use
 
 - User says "clean AI code", "remove slops", "remove AI artifacts"
 - After a large AI-generated change that needs cleanup
 - Before code review or commit
-- User notices redundant comments or over-engineering
 
-## What to Remove
+## What to Remove (Reference)
 
-### 1. Redundant Comments
+| Pattern | Example | Action |
+|---------|---------|--------|
+| Redundant comments | `# Set counter to zero` before `counter = 0` | Remove |
+| Obvious docstrings | `"""Get the name."""` on `def get_name(self)` | Remove |
+| Unused imports | `import os` never referenced | Remove |
+| Over-engineered abstractions | Single-use factory with one product | Inline |
+| Verbose naming | `user_account_configuration_settings` | Shorten to `config` |
+| Redundant type checking | `isinstance` check when type hints exist | Remove |
+| Boilerplate error handling | `try/except: raise` that adds nothing | Remove |
 
-Remove comments that restate the code:
+Keep comments that explain **why**, not **what**.
 
-```python
-# BAD - remove these
-# Set the counter to zero
-counter = 0
+## Loop Workflow
 
-# Loop through the items
-for item in items:
-    # Process the item
-    process(item)
+### Phase 1: Build Task Queue
 
-# Return the result
-return result
+Scan the codebase for files to process:
+
+```bash
+# Find all source files in the changed area (adjust extensions as needed)
+glob "**/*.{py,ts,js,go,rs,java}"
 ```
 
-Keep comments that explain **why**, not **what**:
+Initialize the loop:
 
-```python
-# GOOD - keep these
-# Reset counter because the batch boundary changed
-counter = 0
-
-# Skip items that failed validation in the previous pass
-for item in items:
-    process(item)
+```bash
+loop_engine.py init remove-ai-slops '[
+  {"file": "src/auth.py", "description": "Clean AI slops in auth module"},
+  {"file": "src/cache.py", "description": "Clean AI slops in cache module"},
+  {"file": "src/utils.ts", "description": "Clean AI slops in utils"}
+]'
 ```
 
-### 2. Obvious Docstrings on Simple Functions
+### Phase 2: Execute Loop
 
-Remove docstrings from trivial functions where the name + signature is enough:
+Repeat until `next` returns `null`:
 
-```python
-# BAD - remove
-def get_name(self):
-    """Get the name."""
-    return self.name
-
-# GOOD - keep if it adds info
-def get_name(self):
-    """Return the display name, falling back to email if not set."""
-    return self.name or self.email
+**Step 1: Get next task**
+```bash
+loop_engine.py next remove-ai-slops
 ```
 
-### 3. Unused Imports
+If output is `null`, go to Phase 3.
 
-Scan for imports that are never referenced:
+**Step 2: Read the file and identify slops**
 
-```python
-# Remove if 'os' is never used
-import os
-import sys  # Keep if used
+Read the file, scan for the 7 patterns listed above. For each found slop, note the line number and what to change.
+
+**Step 3: Apply fixes**
+
+Edit the file to remove the identified slops.
+
+**Step 4: Verify**
+```bash
+# Run linter (adjust for project)
+ruff check <file>          # Python
+npx eslint <file>          # JS/TS
+
+# Run tests if available
+npm test 2>/dev/null || pytest tests/ 2>/dev/null || true
 ```
 
-Use `grep` or codegraph to verify each import is actually referenced before removing.
+**Step 5: Record result**
 
-### 4. Over-Engineered Abstractions
-
-Look for:
-- Single-use wrapper classes with no added value
-- Factory patterns where only one product exists
-- Interface/abstract classes with one implementation
-- Excessive configuration options that are never varied
-
-Simplify by inlining or removing the abstraction. Keep it only if there's a concrete plan to add a second implementation.
-
-### 5. Verbose Naming
-
-AI tends to over-describe variable names:
-
-```python
-# BAD
-user_account_configuration_settings = get_config()
-processed_user_data_list = [process(u) for u in users]
-
-# GOOD
-config = get_config()
-users = [process(u) for u in users]
+If verification passes:
+```bash
+loop_engine.py complete remove-ai-slops <id> "Removed N slops: 2 comments, 1 unused import"
 ```
 
-Shorten names where the context makes the meaning clear. Don't shorten to the point of ambiguity.
-
-### 6. Unnecessary Type Checking
-
-Remove redundant runtime type checks when the type system already covers it:
-
-```python
-# BAD - remove if using type hints
-def add(a: int, b: int) -> int:
-    if not isinstance(a, int) or not isinstance(b, int):
-        raise TypeError("a and b must be integers")
-    return a + b
-
-# GOOD
-def add(a: int, b: int) -> int:
-    return a + b
+If verification fails (tests broke):
+```bash
+loop_engine.py fail remove-ai-slops <id> "Test failure in test_auth.py"
 ```
 
-### 7. Boilerplate Error Handling
+The engine will allow up to 3 retries before marking the task as blocked.
 
-Remove catch-all exception handlers that just re-raise or log and continue:
+### Phase 3: Report
 
-```python
-# BAD - remove
-try:
-    result = do_something()
-except Exception as e:
-    print(f"Error: {e}")
-    raise
-
-# GOOD - just call it
-result = do_something()
+```bash
+loop_engine.py summary remove-ai-slops
 ```
 
-## Workflow
-
-1. **Scan**: Use `grep` and `read` to find candidates in the changed files
-2. **Review**: Show each candidate to the user with context
-3. **Clean**: Apply the fix
-4. **Verify**: Run linters/tests to ensure nothing broke
-5. **Report**: Summary of what was removed and why
+Present the summary to the user. For any blocked tasks, show the error and suggest manual review.
 
 ## Rules
 
-- **Don't remove comments that explain non-obvious business logic**
+- **One file per task** - don't batch multiple files
+- **Always verify after cleaning** - lint or test must pass
+- **Don't remove comments that explain business logic**
 - **Don't rename public API functions** without checking all callers
-- **Run tests after cleanup** to verify behavior is unchanged
-- **Show diffs** for user approval before applying large changes
-- **Preserve copyright/license headers** at the top of files
+- **Show diffs for large changes** before applying
+- **Preserve copyright/license headers**
+- **If a file has no slops**, mark complete with result "no slops found"

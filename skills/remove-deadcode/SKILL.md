@@ -1,118 +1,125 @@
 ---
 name: remove-deadcode
-description: "Find and remove unreferenced code: unused functions, variables, imports, files, and exports. Trigger when the user says 'remove dead code', 'clean unused code', 'find unused', or wants to reduce codebase size."
+description: "Find and remove unreferenced code using a durable loop workflow. Each candidate is verified, removed, tested, and marked complete before moving to the next. Trigger when the user says 'remove dead code', 'clean unused code', 'find unused'."
 ---
 
-# Remove Dead Code
+# Remove Dead Code (Loop Engine)
 
-Systematically find and remove code that is never referenced or executed.
+Systematically find and remove dead code using a durable task queue. Each candidate is verified as truly dead, removed, tested, and recorded before moving to the next.
 
 ## When to Use
 
 - User says "remove dead code", "clean unused code", "find unused"
 - Before refactoring
-- Reducing bundle size
+- Reducing codebase size
 - Tech debt cleanup
 
-## What to Find
+## What to Find (Reference)
 
-### 1. Unused Imports
+| Type | How to detect | Exceptions (don't remove) |
+|------|--------------|---------------------------|
+| Unused imports | grep import, verify usage in file | - |
+| Unreferenced functions | codegraph or grep for callers | Entry points, public API, event handlers |
+| Unused variables | Assigned but never read | - |
+| Unreferenced files | Not imported anywhere | Entry points, config, test files |
+| Dead CSS classes | Defined but never used in templates | - |
+| Commented-out code | Blocks of commented code | Documentation comments |
+
+## Loop Workflow
+
+### Phase 1: Build Task Queue
+
+Scan the codebase for dead code candidates:
 
 ```bash
-# Python
-grep -rn "^import\|^from" --include="*.py" |  # find all imports
-# Then verify each is actually used
+# Find unused imports
+grep -rn "^import\|^from" --include="*.py" --include="*.ts" --include="*.js"
 
-# JavaScript/TypeScript
-grep -rn "^import\|^const.*require" --include="*.ts" --include="*.js"
+# Find potentially unreferenced functions (use codegraph)
+codegraph_codegraph_explore query="all function names"
+
+# Find commented-out code
+grep -rn "^\s*#.*=\|^\s*//.*=" --include="*.py" --include="*.ts" --include="*.js"
 ```
 
-For each import found, search for its usage in the same file. If not found, it's dead.
+For each candidate, verify it's not an exception before adding to queue.
 
-### 2. Unreferenced Functions/Methods
+Initialize the loop:
 
-Use `codegraph_codegraph_explore` to find functions that are never called:
-- Query for each function name
-- If no callers are found (other than the definition), it may be dead
-
-Fallback with grep:
 ```bash
-grep -rn "function_name" --include="*.py" --include="*.ts"
+loop_engine.py init remove-deadcode '[
+  {"file": "src/utils.py", "line": 12, "type": "unused-import", "name": "os", "description": "Remove unused import os from utils.py"},
+  {"file": "src/old_api.py", "line": 1, "type": "unreferenced-file", "name": "old_api.py", "description": "Remove unreferenced old_api.py"},
+  {"file": "src/helpers.ts", "line": 45, "type": "unreferenced-function", "name": "oldHelper()", "description": "Remove unreferenced oldHelper() from helpers.ts"}
+]'
 ```
 
-If the only matches are the definition itself, the function is dead.
+### Phase 2: Execute Loop
 
-**Exceptions - don't remove:**
-- Public API endpoints (decorated with `@app.route`, `@api_view`, etc.)
-- Exported module functions (in `__init__.py`, `index.ts`, etc.)
-- Entrypoints (`main()`, `if __name__ == "__main__"`)
-- Test helper functions (used by tests)
-- Callback/event handler registrations
+Repeat until `next` returns `null`:
 
-### 3. Unused Variables
-
-Scan for variables assigned but never read:
+**Step 1: Get next task**
 ```bash
-# Look for assignments, then check if the variable is read later
+loop_engine.py next remove-deadcode
 ```
 
-### 4. Unreferenced Files
+If output is `null`, go to Phase 3.
 
-Find files that are never imported by any other file:
+**Step 2: Verify the candidate is truly dead**
+
+Double-check using grep:
 ```bash
-# List all source files
-glob "**/*.{py,ts,js}"
-# For each, grep to see if it's imported anywhere
+grep -rn "<name>" --include="*.py" --include="*.ts" --include="*.js"
 ```
 
-**Don't remove:**
-- Entry point files (`main.py`, `index.ts`, `app.js`)
-- Test files
-- Configuration files
-- Files referenced by build config (webpack, vite, etc.)
-
-### 5. Dead CSS/Styles
-
-Find CSS classes that are never used in any template:
+Check for dynamic references:
 ```bash
-# Extract class names from CSS
-grep -oP '\.\K[a-zA-Z_-][a-zA-Z0-9_-]*' styles.css
-# Search for each in templates
+grep -rn "import(\|__import__\|require(" --include="*.py" --include="*.ts"
 ```
 
-### 6. Commented-Out Code
-
-Find blocks of commented-out code (not documentation comments):
+If references are found, mark complete with "not dead - referenced in X":
 ```bash
-grep -rn "^\s*//.*=\|^\s*#.*=" --include="*.py" --include="*.ts" --include="*.js"
+loop_engine.py complete remove-deadcode <id> "not dead - referenced in src/main.py:23"
 ```
 
-Remove commented-out code. It's in version control if you need it back.
+**Step 3: Remove the dead code**
 
-## Workflow
+Edit the file to remove the import, function, or file.
 
-1. **Scan**: Use grep, codegraph, and glob to find candidates
-2. **Classify**: For each candidate, determine if it's truly dead (check exceptions list)
-3. **Report**: Present a table of findings with file, line, and reason
-4. **Remove**: After user approval, remove the dead code
-5. **Verify**: Run tests and linters to confirm nothing broke
-6. **Commit**: Suggest committing with a clear message
+**Step 4: Verify**
+```bash
+# Run tests
+npm test 2>/dev/null || pytest tests/ 2>/dev/null || true
 
-## Output Format
-
+# Run linter
+ruff check <file> 2>/dev/null || npx eslint <file> 2>/dev/null || true
 ```
-| File | Line | Type | Name | Reason |
-|------|------|------|------|--------|
-| src/utils.py | 12 | import | `os` | Never used in file |
-| src/utils.py | 45 | function | `old_helper()` | No callers found |
-| src/types.ts | 8 | interface | `OldConfig` | Not imported anywhere |
+
+**Step 5: Record result**
+
+If verification passes:
+```bash
+loop_engine.py complete remove-deadcode <id> "Removed unused import os"
 ```
+
+If tests fail:
+```bash
+loop_engine.py fail remove-deadcode <id> "test_utils.py failed after removal"
+```
+
+### Phase 3: Report
+
+```bash
+loop_engine.py summary remove-deadcode
+```
+
+Present the summary. For blocked tasks, show what failed and suggest the user review manually.
 
 ## Rules
 
-- **Always verify before removing** - grep/codegraph may miss dynamic references
-- **Check for dynamic imports** - `import()`, `__import__()`, `require()`
+- **Always double-check before removing** - grep may miss dynamic references
+- **One candidate per task** - don't batch
+- **Run tests after each removal** - not just at the end
 - **Don't remove entry points or public APIs**
-- **Run tests after removal** - the ultimate verification
-- **Show findings before removing** - let the user decide what to keep
+- **If not dead, mark complete with explanation** - don't leave as pending
 - **Remove in small batches** - easier to review and revert
