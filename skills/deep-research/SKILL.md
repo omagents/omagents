@@ -9,6 +9,8 @@ Conduct iterative, multi-source research and produce a high-quality Markdown rep
 
 This skill combines the **structured items × fields approach** (inspired by RhinoInsight and Weizhena's Deep Research skills) with the **dynamic gap-detection loop** from LangChain's Open Deep Research, while staying native to OpenCode's subagent and MCP infrastructure.
 
+**Loop Engine:** Research task state is managed by the shared `loop_engine.py` (see `skills/_shared/scripts/loop_engine.py`). This provides durable state that survives context clearing, retry logic, and a unified summary across all loop-based skills.
+
 ## When to Use
 
 - You need more than a quick answer — a structured, cited research report.
@@ -66,6 +68,15 @@ deep_research.py plan \
   --workspace ./research/agent-frameworks
 ```
 
+After generating the plan, initialize the loop engine with the research tasks:
+
+```bash
+loop_engine.py init deep-research '[
+  {"task_id": "task-1", "type": "web", "item_id": "item-1", "field_ids": ["field-1"], "focus": "...", "description": "Research LangGraph overview"},
+  {"task_id": "task-2", "type": "github", "item_id": "item-2", "field_ids": ["field-2"], "focus": "...", "description": "Research AutoGPT license"}
+]'
+```
+
 ### Phase 2: Confirm and Refine (`/research-add-items`, `/research-add-fields`)
 
 Review the generated plan. If items or fields are missing, add them:
@@ -82,7 +93,19 @@ deep_research.py add-fields \
 
 ### Phase 3: Execute Research (`/research-deep`)
 
-For each pending task, launch a subagent using `task(background: true)` so they run in parallel. Multiple `task` calls in one response execute simultaneously. Each subagent:
+Managed by the loop engine. Get the next pending task, dispatch it as a subagent, and mark complete when done.
+
+**Step 1: Get next task**
+
+```bash
+loop_engine.py next deep-research
+```
+
+If output is `null`, proceed to Phase 4 (gap detection).
+
+**Step 2: Dispatch subagent**
+
+For each task returned, launch a subagent using `task(background: true)`. Multiple `task` calls in one response execute simultaneously. Each subagent:
 
 1. Searches the appropriate source (web, GitHub, or codebase).
 2. Reads key sources.
@@ -137,18 +160,55 @@ Instructions:
 
 GitHub and codebase subagents follow the same structure but use their respective tools.
 
+**Step 3: Mark task complete**
+
+When a subagent finishes and its findings are written and validated:
+
+```bash
+loop_engine.py complete deep-research <id> "Found 5 sources, coverage: high"
+```
+
+If the subagent fails (no findings, validation error):
+
+```bash
+loop_engine.py fail deep-research <id> "No web sources found for this item"
+```
+
+**Step 4: Loop**
+
+Repeat from Step 1. When `next` returns `null`, all initial tasks are done. Proceed to Phase 4.
+
 ### Phase 4: Detect Gaps and Re-Research (Loop)
 
-Automatically:
+**Step 1: Run gap analysis**
 
-1. Run gap analysis:
-   ```bash
-   deep_research.py gaps --workspace ./research/agent-frameworks
-   ```
-2. Build an `item × field` coverage matrix.
-3. Identify missing or low-confidence coverage.
-4. Generate new tasks to fill gaps.
-5. If `max_research_loops` is not reached, dispatch new subagents via `task(background: true)` and repeat.
+```bash
+deep_research.py gaps --workspace ./research/agent-frameworks
+```
+
+This builds an `item x field` coverage matrix, identifies missing or low-confidence coverage, and outputs `gap_report.json` with `new_tasks` and `should_continue`.
+
+**Step 2: Add gap tasks to loop engine**
+
+If `should_continue` is true, add each new task from the gap report:
+
+```bash
+loop_engine.py add deep-research '{"task_id": "task-r1-1", "type": "web", "item_id": "item-1", "field_ids": ["field-2"], "focus": "Supplemental research for LangGraph on field License", "description": "Gap fill: LangGraph License"}'
+```
+
+**Step 3: Loop back to Phase 3**
+
+Return to Phase 3 to execute the new gap-fill tasks. The loop continues until:
+- `next` returns `null` (all tasks complete), AND
+- `should_continue` is false (no more gaps or `max_research_loops` reached)
+
+**Step 4: Check final status**
+
+```bash
+loop_engine.py summary deep-research
+```
+
+When the loop is complete, proceed to Phase 5.
 
 ### Phase 5: Synthesize Report (`/research-report`)
 

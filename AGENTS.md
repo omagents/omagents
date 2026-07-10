@@ -126,7 +126,7 @@ Registered automatically via `config` hook. User config takes precedence (won't 
 
 | Skill | Description | Has scripts? | Has agents/? | Loop? |
 |-------|-------------|-------------|-------------|-------|
-| `deep-research` | Multi-source iterative research with items x fields, gap detection, Jinja2 reports | Yes (6 Python files) | Yes | Yes (gap loop) |
+| `deep-research` | Multi-source iterative research with items x fields, gap detection, Jinja2 reports | Yes (6 Python files) | Yes | Yes (loop_engine + gap loop) |
 | `parallel-execution` | Background task dispatch with Job Board tracking | No | No | No |
 | `agents-python-tools` | Route Python tooling to `~/.venvs/omagents` | No | Yes | No |
 | `markitdown-converter` | Convert documents (PDF/DOCX/XLSX/...) to Markdown | Yes | Yes | No |
@@ -222,6 +222,13 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 | 0.1.2 | v0.1.2 | OIDC trusted publishing fix |
 | 0.1.3 | - | Node 24, CI upgrades |
 | 0.1.4 | v0.1.4 | Version bump |
+
+## Design Principles
+
+1. **Prefer loop engineering over one-shot prompts.** When a skill involves processing multiple items (files, issues, categories, tasks), use the shared `loop_engine.py` to manage state. This provides durability (survives context clearing), retry logic, and a unified summary. Don't write a skill that says "scan everything and fix it" -- instead, build a task queue, process one item at a time, verify, and record the result.
+2. **Infrastructure, not methodology.** OmAgents provides tools and capabilities. Development methodology (OpenSpec, gstack, etc.) is the user's choice. Don't bundle methodology into the plugin.
+3. **Don't duplicate what the host provides.** OpenCode has LSP, edit tools, and search. Don't bundle alternatives. Instead, write skills that guide agents to use the right tool at the right time.
+4. **Pin dependencies.** Superpowers is pinned to a commit. Don't unpin without testing.
 
 ## Common Mistakes to Avoid
 

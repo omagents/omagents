@@ -109,10 +109,11 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
 
 | | Feature | What it does |
 | :---: | :--- | :--- |
+| 🔁 | **Loop Engineering** | Durable task queues for iterative skills. Survives context clearing, retry logic, unified summary. Used by deep-research, remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit |
 | 🧠 | **Superpowers** (14 skills) | Brainstorming before implementation, TDD, systematic debugging, plan writing, code review, git worktrees |
-| 🔍 | **Deep Research** | Multi-source iterative research with items × fields matrix, gap detection, Jinja2 reports |
+| 🔍 | **Deep Research** | Multi-source iterative research with items × fields matrix, gap detection loop, Jinja2 reports |
 | ⚡ | **Parallel Execution** | Background task dispatch via `task(background: true)`, Job Board tracking, `/ps` command |
-| 📚 | **Built-in MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app — all auto-registered |
+| 📚 | **Built-in MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app - all auto-registered |
 | 🐍 | **Python Tooling** | Dedicated venv at `~/.venvs/omagents`, auto-installs jinja2 and skill dependencies |
 | 📄 | **MarkItDown** | Convert PDF, DOCX, XLSX, PPTX, HTML to Markdown |
 | 🌐 | **Web Scraping** | Playwright-based page fetching and scraping |
@@ -120,18 +121,70 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
 
 ---
 
+## Loop Engineering
+
+OmAgents pioneers **loop engineering** for AI agent skills. Instead of one-shot prompts that say "scan everything and fix it," loop-based skills use a durable task queue that processes items one at a time with verification.
+
+### How It Works
+
+```
+Phase 1: Build Task Queue          Phase 2: Execute Loop           Phase 3: Report
+┌─────────────────────┐    ┌──────────────────────────┐    ┌─────────────────┐
+│ Scan codebase       │    │ loop_engine.py next      │    │ loop_engine.py  │
+│ Build task list     │───>│   -> get next task       │───>│   summary       │
+│ loop_engine.py init │    │   -> execute + verify    │    │ Show results    │
+└─────────────────────┘    │   -> complete or fail    │    └─────────────────┘
+                           │   -> repeat until null   │
+                           └──────────────────────────┘
+```
+
+**State persists** in `.omagents/loops/<skill>/tasks.json` -- if the agent's context is cleared mid-task, it can resume exactly where it left off.
+
+**Retry logic:** Failed tasks retry up to 3 times before being marked blocked.
+
+### Skills Using Loop Engineering
+
+| Skill | What it loops over | Verification |
+|-------|-------------------|--------------|
+| `deep-research` | Research tasks -> gap detection -> new tasks | Findings validation + coverage matrix |
+| `remove-ai-slops` | Source files (one per task) | Lint / test pass |
+| `remove-deadcode` | Dead code candidates (one per task) | Test pass after removal |
+| `github-triage` | Open issues (one per task) | Labels applied successfully |
+| `tech-debt-audit` | Audit categories (one per task) | Findings collected |
+
+### Loop Engine API
+
+```bash
+loop_engine.py init <skill> '<tasks_json>'   # Initialize task queue
+loop_engine.py next <skill>                   # Get next pending task
+loop_engine.py complete <skill> <id> [result] # Mark task complete
+loop_engine.py fail <skill> <id> [error]      # Mark task failed (retries 3x)
+loop_engine.py status <skill>                 # Print stats
+loop_engine.py summary <skill>                # Full task list with icons
+loop_engine.py reset <skill>                  # Clear queue
+loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
+```
+
+---
+
 ## What's Included
 
 ### Skills
 
-| Skill | Source | Description |
-|-------|--------|-------------|
-| `deep-research` | OmAgents | Multi-source, iterative research with items × fields, gap detection, and Jinja2 reports |
-| `parallel-execution` | OmAgents | Background parallel task dispatch with Job Board tracking |
-| `agents-python-tools` | OmAgents | Routes Python tooling to the dedicated `~/.venvs/omagents` venv |
-| `markitdown-converter` | OmAgents | Convert documents (PDF, DOCX, XLSX, etc.) to Markdown |
-| `playwright-web-scraping` | OmAgents | Web scraping and page fetching with Playwright |
-| `superpowers` (14 skills) | Superpowers | Brainstorming, TDD, debugging, planning, git worktrees, and more |
+| Skill | Source | Loop? | Description |
+|-------|--------|-------|-------------|
+| `deep-research` | OmAgents | Yes | Multi-source, iterative research with items × fields, gap detection, Jinja2 reports |
+| `parallel-execution` | OmAgents | - | Background parallel task dispatch with Job Board tracking |
+| `agents-python-tools` | OmAgents | - | Routes Python tooling to the dedicated `~/.venvs/omagents` venv |
+| `markitdown-converter` | OmAgents | - | Convert documents (PDF, DOCX, XLSX, etc.) to Markdown |
+| `playwright-web-scraping` | OmAgents | - | Web scraping and page fetching with Playwright |
+| `init-deep` | OmAgents | - | Auto-generate hierarchical AGENTS.md files |
+| `doctor` | OmAgents | - | Diagnose OmAgents installation and configuration |
+| `remove-ai-slops` | OmAgents | Yes | Clean up AI-generated code artifacts (loop: file-by-file) |
+| `remove-deadcode` | OmAgents | Yes | Find and remove unreferenced code (loop: candidate-by-candidate) |
+| `github-triage` | OmAgents | Yes | Triage and categorize GitHub issues (loop: issue-by-issue) |
+| `tech-debt-audit` | OmAgents | Yes | Audit codebase for technical debt (loop: category-by-category) |
+| `superpowers` (14 skills) | Superpowers | - | Brainstorming, TDD, debugging, planning, git worktrees, and more |
 
 ### MCP Servers
 
