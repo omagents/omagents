@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>OmAgents Icon</title>
+  <desc>Flat minimal icon for OmAgents: AI chip container with a robot head and agent node antenna.</desc>
+
+  <defs>
+    <linearGradient id="containerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#1E293B" />
+    </linearGradient>
+  </defs>
+
+  <!-- Chip / container -->
+  <rect x="56" y="56" width="400" height="400" rx="80" ry="80" fill="url(#containerGrad)" />
+
+  <!-- Antenna -->
+  <line x1="256" y1="156" x2="256" y2="100" stroke="#3B82F6" stroke-width="12" stroke-linecap="round" />
+
+  <!-- Robot head -->
+  <circle cx="256" cy="256" r="100" fill="#3B82F6" />
+
+  <!-- Eyes -->
+  <circle cx="226" cy="246" r="14" fill="#E2E8F0" />
+  <circle cx="286" cy="246" r="14" fill="#E2E8F0" />
+
+  <!-- Mouth -->
+  <line x1="236" y1="286" x2="276" y2="286" stroke="#E2E8F0" stroke-width="10" stroke-linecap="round" />
+
+  <!-- Agent node -->
+  <circle cx="256" cy="100" r="18" fill="#22D3EE" />
+</svg>
