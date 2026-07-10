@@ -235,6 +235,8 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 2. **Infrastructure, not methodology.** OmAgents provides tools and capabilities. Development methodology (OpenSpec, gstack, etc.) is the user's choice. Don't bundle methodology into the plugin.
 3. **Don't duplicate what the host provides.** OpenCode has LSP, edit tools, and search. Don't bundle alternatives. Instead, write skills that guide agents to use the right tool at the right time.
 4. **Pin dependencies.** Superpowers is pinned to a commit. Don't unpin without testing.
+5. **Keep README in sync with all languages.** README.md exists in 4 languages: English (README.md), Simplified Chinese (README.zh-cn.md), Japanese (README.ja.md), Korean (README.ko.md). Any change to README.md MUST be reflected in all language versions in the same commit. If a translation cannot be completed immediately, add `<!-- TODO: sync with README.md -->` at the top of the untranslated file.
+6. **Analyze README impact on every change.** Before committing any change, ask: "Does this change affect what users see in README?" If yes -- new skill added, feature changed, installation steps modified, architecture updated -- update README.md (and all language versions) in the same commit. Don't let README go stale.
 
 ## Common Mistakes to Avoid
 
@@ -244,4 +246,6 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 4. **Don't unpin superpowers.** It's pinned to a commit for stability.
 5. **Don't add `templates/` to project structure diagrams.** It doesn't exist at root.
 6. **Don't forget `.opencode/` has its own `.gitignore`** that excludes `node_modules`, `package.json`, etc. Those are not committed.
-7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 5; superpowers has 14. They're registered separately.
+7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 17; superpowers has 14. They're registered separately.
+8. **Don't change README.md without updating all language versions.** README exists in 4 languages (EN, ZH-CN, JA, KO). All must be updated in the same commit.
+9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.

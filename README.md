@@ -6,6 +6,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/@omagents/omagents.svg)](https://www.npmjs.com/package/@omagents/omagents)
 [![GitHub stars](https://img.shields.io/github/stars/omagents/omagents?style=social)](https://github.com/omagents/omagents/stargazers)
 
+[English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+
 An OpenCode plugin that bundles agent skills, MCP servers, parallel execution, and superpowers into a single install.
 
 ---
@@ -60,6 +62,7 @@ That's it. On first launch OmAgents will automatically:
 - Register all **MCP servers** (agentmemory, codegraph, context7, websearch, github/grep_app)
 - Enable **parallel execution** (background agents with `/ps` and `cancel_task`)
 - Set up **Python venv** at `~/.venvs/omagents` (installs `jinja2` for report templates)
+- Check **Python prerequisite** (warns with install instructions if Python is missing)
 
 ### For LLM Agents
 
@@ -77,7 +80,7 @@ cat ~/.config/opencode/opencode.json
 # 4. Tell the user to restart OpenCode
 ```
 
-The plugin handles everything else automatically — no manual MCP configuration, no skill installation, no venv setup.
+The plugin handles everything else automatically - no manual MCP configuration, no skill installation, no venv setup.
 
 ### Optional: API Keys
 
@@ -111,15 +114,18 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
 
 | | Feature | What it does |
 | :---: | :--- | :--- |
-| 🔁 | **Loop Engineering** | Durable task queues for iterative skills. Survives context clearing, retry logic, unified summary. Used by deep-research, remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit |
+| 🔁 | **Loop Engineering** | Durable task queues for iterative skills. Survives context clearing, retry logic, unified summary. Used by 8 skills |
 | 🧠 | **Superpowers** (14 skills) | Brainstorming before implementation, TDD, systematic debugging, plan writing, code review, git worktrees |
 | 🔍 | **Deep Research** | Multi-source iterative research with items × fields matrix, gap detection loop, Jinja2 reports |
-| ⚡ | **Parallel Execution** | Background task dispatch via `task(background: true)`, Job Board tracking, `/ps` command |
+| ⚡ | **Parallel Execution** | Background task dispatch via `task(background: true)`, Job Board with persistence + session isolation, `/ps` command |
 | 📚 | **Built-in MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app - all auto-registered |
 | 🐍 | **Python Tooling** | Dedicated venv at `~/.venvs/omagents`, auto-installs jinja2 and skill dependencies |
 | 📄 | **MarkItDown** | Convert PDF, DOCX, XLSX, PPTX, HTML to Markdown |
 | 🌐 | **Web Scraping** | Playwright-based page fetching and scraping |
 | 🔗 | **GitHub** | Full GitHub API when `GITHUB_TOKEN` is set; falls back to `mcp.grep.app` without token |
+| 🏗️ | **Refactor** | Systematic code refactoring with loop engine verification |
+| 🛡️ | **Hyperplan** | Adversarial plan review with 3 parallel critics (security, architecture, edge cases) |
+| 🔧 | **Code Intelligence** | LSP guide + AST-grep for structural code search and rewrite |
 
 ---
 
@@ -144,6 +150,8 @@ Phase 1: Build Task Queue          Phase 2: Execute Loop           Phase 3: Repo
 
 **Retry logic:** Failed tasks retry up to 3 times before being marked blocked.
 
+**Compaction safe:** The `experimental.session.compacting` hook injects loop engine state into the compaction prompt, so the agent knows to resume after context clearing.
+
 ### Skills Using Loop Engineering
 
 | Skill | What it loops over | Verification |
@@ -153,6 +161,9 @@ Phase 1: Build Task Queue          Phase 2: Execute Loop           Phase 3: Repo
 | `remove-deadcode` | Dead code candidates (one per task) | Test pass after removal |
 | `github-triage` | Open issues (one per task) | Labels applied successfully |
 | `tech-debt-audit` | Audit categories (one per task) | Findings collected |
+| `pre-publish-review` | Release checklist items (one per task) | Each check passes |
+| `hyperplan` | 3 parallel critics (tracked, not sequential) | Critic produces findings |
+| `refactor` | Refactoring targets (one file per task) | Tests pass after refactor |
 
 ### Loop Engine API
 
@@ -186,6 +197,12 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 | `remove-deadcode` | OmAgents | Yes | Find and remove unreferenced code (loop: candidate-by-candidate) |
 | `github-triage` | OmAgents | Yes | Triage and categorize GitHub issues (loop: issue-by-issue) |
 | `tech-debt-audit` | OmAgents | Yes | Audit codebase for technical debt (loop: category-by-category) |
+| `lsp-guide` | OmAgents | - | Guide agents to use the right code intelligence tool (LSP, codegraph, grep, ast-grep) |
+| `ast-grep` | OmAgents | Optional | AST-aware code search and rewrite with grep fallback |
+| `work-with-pr` | OmAgents | - | PR lifecycle management with github MCP |
+| `pre-publish-review` | OmAgents | Yes | Pre-publish release gate checklist (loop: check-by-check) |
+| `hyperplan` | OmAgents | Yes | Adversarial plan review with 3 parallel critics (loop: critic tracking) |
+| `refactor` | OmAgents | Yes | Systematic code refactoring with verification (loop: file-by-file) |
 | `superpowers` (14 skills) | Superpowers | - | Brainstorming, TDD, debugging, planning, git worktrees, and more |
 
 ### MCP Servers
@@ -202,6 +219,9 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 
 - Background task dispatch via OpenCode's native `task(background: true)`
 - Job Board tracking with automatic result injection
+- **Persistence**: Job Board survives restart (saved to `job-board.json`)
+- **Session isolation**: Each session only sees its own jobs (no cross-session leak)
+- **Compaction safe**: Loop engine and Job Board state preserved across context compaction
 - `/ps` command to check running tasks
 - `cancel_task` tool to cancel background tasks
 - `parallel_status` tool for programmatic status checks
@@ -233,7 +253,7 @@ OmAgents is designed as a layered system:
 
 **Superpowers is the process skills layer.** It provides reusable development workflows: brainstorming before implementation, test-driven development, systematic debugging, plan writing and execution, code review, and git worktree management.
 
-**The user choice layer is not bundled.** Development methodology is a choice — spec-driven development (OpenSpec), team-based engineering workflow (gstack), or no methodology at all. OmAgents stays neutral so users can pick what fits their project.
+**The user choice layer is not bundled.** Development methodology is a choice - spec-driven development (OpenSpec), team-based engineering workflow (gstack), or no methodology at all. OmAgents stays neutral so users can pick what fits their project.
 
 ---
 
@@ -267,31 +287,43 @@ omagents/
 ├── .opencode/plugins/
 │   ├── index.js              # Plugin entry point (merges superpowers + omagents hooks)
 │   └── parallel.js           # Parallel execution engine
-├── skills/                   # Bundled OpenCode skills
+├── skills/                   # Bundled OpenCode skills (17 skills)
+│   ├── _shared/scripts/      # Shared scripts (loop_engine.py)
+│   ├── deep-research/        # Research workflow with gap detection
+│   └── ...                   # 16 more skills
+├── tests/                    # Node.js built-in test runner (26 tests)
+├── AGENTS.md                 # AI agent context file
+├── ROADMAP.md                # Development roadmap
 ├── package.json              # Includes superpowers as dependency
 └── README.md
 ```
 
-To test locally:
+### Testing
 
-1. Edit files in your local clone
-2. Restart OpenCode to reload the plugin
-3. Check that skills appear in the available skills list
-4. Run `opencode mcp list` to verify MCP servers are registered
+```bash
+# Run all tests
+npm test
+
+# Check formatting
+npm run format:check
+
+# Format code
+npm run format
+```
 
 ### Publishing
 
-OmAgents uses OIDC Trusted Publishing — no npm token required.
+OmAgents uses OIDC Trusted Publishing - no npm token required.
 
 ```bash
 # Bump version
-npm version patch   # 0.1.0 → 0.1.1
+npm version patch   # 0.1.0 -> 0.1.1
 
 # Push tag (triggers GitHub Actions auto-publish)
 git push && git push --tags
 ```
 
-Configure Trusted Publisher at [npmjs.com](https://www.npmjs.com/package/@omagents/omagents) → Settings → Trusted Publisher.
+Configure Trusted Publisher at [npmjs.com](https://www.npmjs.com/package/@omagents/omagents) -> Settings -> Trusted Publisher.
 
 ---
 
