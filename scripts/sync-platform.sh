@@ -18,16 +18,8 @@ NAME="omagents"
 VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
 DESCRIPTION="$(node -p "require('$ROOT_DIR/package.json').description")"
 
-cat > "$ROOT_DIR/.$PLATFORM-plugin/plugin.json" <<EOF
-{
-  "name": "$NAME",
-  "version": "$VERSION",
-  "description": "$DESCRIPTION",
-  "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
-  "hooks": "./hooks/hooks.json"
-}
-EOF
+sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{DESCRIPTION}}/$DESCRIPTION/g" \
+  "$SCRIPT_DIR/templates/plugin.$PLATFORM.json" > "$ROOT_DIR/.$PLATFORM-plugin/plugin.json"
 
 node - "$ROOT_DIR/mcp-servers/base.json" "$ROOT_DIR/.$PLATFORM-plugin/.mcp.json" <<'JS'
 const fs = require("fs");

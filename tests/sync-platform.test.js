@@ -34,6 +34,35 @@ test("sync script generates claude and codex directories", () => {
     )
     assert.ok(plugin.version, `.${platform}-plugin/plugin.json should have a version`)
     assert.ok(plugin.description, `.${platform}-plugin/plugin.json should have a description`)
+    assert.deepStrictEqual(
+      plugin.author,
+      { name: "OmAgents" },
+      `.${platform}-plugin/plugin.json author should be OmAgents`
+    )
+    assert.strictEqual(
+      plugin.license,
+      "MIT",
+      `.${platform}-plugin/plugin.json license should be MIT`
+    )
+
+    if (platform === "codex") {
+      assert.ok(plugin.interface, `.${platform}-plugin/plugin.json should have an interface block`)
+      assert.strictEqual(
+        plugin.interface.displayName,
+        "OmAgents",
+        `.${platform}-plugin/plugin.json interface.displayName should be OmAgents`
+      )
+      assert.strictEqual(
+        plugin.interface.category,
+        "Developer Tools",
+        `.${platform}-plugin/plugin.json interface.category should be Developer Tools`
+      )
+      assert.deepStrictEqual(
+        plugin.interface.capabilities,
+        ["Read", "Write"],
+        `.${platform}-plugin/plugin.json interface.capabilities should be Read, Write`
+      )
+    }
   }
 })
 
