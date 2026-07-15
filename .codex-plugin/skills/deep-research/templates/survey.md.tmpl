@@ -1,0 +1,167 @@
+# Deep Research Report: {{ plan.query }}
+
+> **Research conducted**: {{ report_date_human }} ({{ report_date }})
+
+## Executive Summary
+
+This report synthesizes findings from multiple sources to answer the research query.
+
+- **Research scope**: {{ items|length }} item(s), {{ fields|length }} dimension(s)
+- **Overall coverage**: {{ coverage|percent }}
+- **Total findings**: {{ total_findings }}
+- **Objectives**:
+{% for objective in plan.objectives %}
+- {{ objective }}
+{% endfor %}
+
+{% if svg.coverage_heatmap %}
+## Coverage Matrix
+
+{{ svg.coverage_heatmap }}
+
+{% endif %}
+
+## Research Questions / Scope
+
+{% for objective in plan.objectives %}
+- {{ objective }}
+{% endfor %}
+
+{% if items|length > 1 %}
+## Comparison Table
+
+| Dimension | {% for item in items %}{{ item.name }} | {% endfor %}
+|----------|{% for item in items %}----------|{% endfor %}
+{% for field in fields -%}
+| {{ field.name }} |{% for item in items %} {{ item.fields[field.id].short_value|default(item.fields[field.id].value|default("_No data_")) }} |{% endfor %}
+{% endfor -%}
+
+{% endif %}
+
+## Detailed Findings
+
+{% for item in items %}
+### {{ loop.index }}. {{ item.name }}
+
+{{ item.description }}
+
+{% for field in fields %}
+#### {{ field.name }}
+
+{{ item.fields[field.id].value|default("_No data_") }}
+
+{% if item.fields[field.id].sources %}
+*Sources: {{ item.fields[field.id].sources|join(", ") }}*
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+
+## Cross-Cutting Insights
+
+{% if svg.source_donut %}
+
+### Source Distribution Chart
+
+{{ svg.source_donut }}
+{% endif %}
+
+### Source Distribution
+
+| Source Type | Count |
+|-------------|-------|
+{% for stype, count in insights.source_distribution.items() %}
+| {{ stype }} | {{ count }} |
+{% endfor %}
+
+### Relevance Distribution
+
+| Relevance | Count |
+|-----------|-------|
+{% for rel, count in insights.relevance_distribution.items() %}
+| {{ rel }} | {{ count }} |
+{% endfor %}
+
+{% if insights.keywords %}
+### Emerging Themes
+
+{% for keyword in insights.keywords %}
+- {{ keyword }}
+{% endfor %}
+{% endif %}
+
+{% if insights.consensus %}
+### Consensus
+
+A majority ({{ insights.high_relevance_pct|percent }}) of findings are marked high-relevance, suggesting broad agreement on the core patterns described.
+{% endif %}
+
+{% if svg.confidence_bars %}
+
+### Confidence Distribution Chart
+
+{{ svg.confidence_bars }}
+{% endif %}
+
+{% if svg.timeline %}
+
+### Research Timeline
+
+{{ svg.timeline }}
+{% endif %}
+
+{% if audit %}
+
+## Audit Results
+
+**Audit Score**: {{ audit.overall_score }}/100
+
+{% for check_name, check in audit.checks.items() %}
+- **{{ check_name }}**: {{ check.count }} issue(s) — severity: {{ check.severity }}
+{% endfor %}
+
+{% if audit.recommendations %}
+### Recommendations
+
+{% for rec in audit.recommendations %}
+- {{ rec }}
+{% endfor %}
+{% endif %}
+
+{% endif %}
+
+## Open Questions / Gaps
+
+{% if gaps %}
+{% for gap in gaps %}
+- **{{ gap.item_id }} / {{ gap.field_id }}**: {{ gap.reason }} (severity: {{ gap.severity }})
+{% endfor %}
+{% else %}
+_No major gaps identified._
+{% endif %}
+
+## Sources
+
+{% if sources.web %}
+### Web
+
+{% for url in sources.web %}
+- {{ url }}
+{% endfor %}
+{% endif %}
+
+{% if sources.github %}
+### GitHub Repositories
+
+{% for repo in sources.github %}
+- {{ repo }}
+{% endfor %}
+{% endif %}
+
+{% if sources.codebase %}
+### Local Code Files
+
+{% for file in sources.codebase %}
+- `{{ file }}`
+{% endfor %}
+{% endif %}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Doctor"
+  short_description: "Diagnose OmAgents installation and configuration"
+  default_prompt: "Use $doctor to run diagnostic checks on your OmAgents setup."

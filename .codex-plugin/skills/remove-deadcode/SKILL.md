@@ -36,7 +36,7 @@ Scan the codebase for dead code candidates:
 grep -rn "^import\|^from" --include="*.py" --include="*.ts" --include="*.js"
 
 # Find potentially unreferenced functions (use codegraph)
-codegraph_codegraph_explore query="all function names"
+mcp__codegraph__explore query="all function names"
 
 # Find commented-out code
 grep -rn "^\s*#.*=\|^\s*//.*=" --include="*.py" --include="*.ts" --include="*.js"

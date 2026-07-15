@@ -40,7 +40,7 @@ What do you need?
 │                 goToImplementation, incomingCalls, outgoingCalls
 │
 ├─ Call path / Impact radius / Blast radius
-│  └─ Use codegraph MCP: codegraph_codegraph_explore
+│  └─ Use codegraph MCP: {{tool:codegraph_explore}}
 │     Returns verbatim source + call paths between symbols
 │
 ├─ Precise text search (regex)

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export LC_ALL=C
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -76,6 +77,20 @@ for skill_dir in "$SKILL_SOURCE_DIR"/*/; do
 
   mkdir -p "$SKILL_TARGET_DIR/$skill_name"
   sed -f "$SED_SCRIPT" "$src" > "$SKILL_TARGET_DIR/$skill_name/SKILL.md"
+
+  # Copy optional skill subdirectories and apply tool mapping to their files
+  for subdir in scripts templates agents; do
+    if [[ -d "$skill_dir/$subdir" ]]; then
+      target_subdir="$SKILL_TARGET_DIR/$skill_name/$subdir"
+      mkdir -p "$target_subdir"
+      cp -R "$skill_dir/$subdir/"* "$target_subdir/"
+      find "$target_subdir" -type f -print0 | while IFS= read -r -d '' file; do
+        tmp=$(mktemp)
+        sed -f "$SED_SCRIPT" "$file" > "$tmp"
+        mv "$tmp" "$file"
+      done
+    fi
+  done
 done
 
 rm "$SED_SCRIPT"

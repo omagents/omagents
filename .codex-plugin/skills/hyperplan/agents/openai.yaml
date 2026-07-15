@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hyperplan"
+  short_description: "Adversarial plan review with 3 parallel critics"
+  default_prompt: "Use $hyperplan to dispatch 3 parallel critics that attack your plan from security, architecture, and edge case perspectives."

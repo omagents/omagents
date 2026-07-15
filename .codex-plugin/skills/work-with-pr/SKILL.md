@@ -34,7 +34,7 @@ git log origin/main..HEAD --oneline
 ### 2. Create a PR
 
 ```
-github_create_pull_request(
+mcp__github__create_pull_request(
   owner="<owner>",
   repo="<repo>",
   title="<clear title>",
@@ -53,29 +53,29 @@ PR body structure:
 
 ```
 # Get PR details
-github_pull_request_read(method="get", owner="<owner>", repo="<repo>", pullNumber=<N>)
+mcp__github__pull_request_read(method="get", owner="<owner>", repo="<repo>", pullNumber=<N>)
 
 # Get changed files
-github_pull_request_read(method="get_files", owner="<owner>", repo="<repo>", pullNumber=<N>)
+mcp__github__pull_request_read(method="get_files", owner="<owner>", repo="<repo>", pullNumber=<N>)
 
 # Get diff
-github_pull_request_read(method="get_diff", owner="<owner>", repo="<repo>", pullNumber=<N>)
+mcp__github__pull_request_read(method="get_diff", owner="<owner>", repo="<repo>", pullNumber=<N>)
 
 # Get CI check runs
-github_pull_request_read(method="get_check_runs", owner="<owner>", repo="<repo>", pullNumber=<N>)
+mcp__github__pull_request_read(method="get_check_runs", owner="<owner>", repo="<repo>", pullNumber=<N>)
 ```
 
 ### 4. Update PR
 
 ```
 # Update title or body
-github_update_pull_request(owner="<owner>", repo="<repo>", pullNumber=<N>, title="<new title>")
+mcp__github__update_pull_request(owner="<owner>", repo="<repo>", pullNumber=<N>, title="<new title>")
 
 # Update branch with latest from base
-github_update_pull_request_branch(owner="<owner>", repo="<repo>", pullNumber=<N>)
+mcp__github__update_pull_request_branch(owner="<owner>", repo="<repo>", pullNumber=<N>)
 
 # Convert to/from draft
-github_update_pull_request(owner="<owner>", repo="<repo>", pullNumber=<N>, draft=false)
+mcp__github__update_pull_request(owner="<owner>", repo="<repo>", pullNumber=<N>, draft=false)
 ```
 
 ### 5. Review a PR
@@ -84,10 +84,10 @@ Create a pending review, add comments, then submit:
 
 ```
 # Create pending review
-github_pull_request_review_write(method="create", owner="<owner>", repo="<repo>", pullNumber=<N>)
+mcp__github__pull_request_review_write(method="create", owner="<owner>", repo="<repo>", pullNumber=<N>)
 
 # Add line comments
-github_add_comment_to_pending_review(
+mcp__github__add_comment_to_pending_review(
   owner="<owner>", repo="<repo>", pullNumber=<N>,
   path="src/file.ts", line=42, side="RIGHT",
   body="Consider extracting this to a helper function.",
@@ -95,7 +95,7 @@ github_add_comment_to_pending_review(
 )
 
 # Submit the review
-github_pull_request_review_write(
+mcp__github__pull_request_review_write(
   method="submit_pending", owner="<owner>", repo="<repo>", pullNumber=<N>,
   event="COMMENT"  # or "APPROVE" or "REQUEST_CHANGES"
 )
@@ -104,7 +104,7 @@ github_pull_request_review_write(
 ### 6. Merge a PR
 
 ```
-github_merge_pull_request(
+mcp__github__merge_pull_request(
   owner="<owner>",
   repo="<repo>",
   pullNumber=<N>,
@@ -118,10 +118,10 @@ github_merge_pull_request(
 
 ```
 # Get review threads
-github_pull_request_read(method="get_review_comments", owner="<owner>", repo="<repo>", pullNumber=<N>)
+mcp__github__pull_request_read(method="get_review_comments", owner="<owner>", repo="<repo>", pullNumber=<N>)
 
 # Reply to a review comment
-github_add_reply_to_pull_request_comment(
+mcp__github__add_reply_to_pull_request_comment(
   owner="<owner>", repo="<repo>",
   commentId=<comment_id>,
   body="Fixed in <commit_sha>",

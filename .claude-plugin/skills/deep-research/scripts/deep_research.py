@@ -1,0 +1,489 @@
+#!/usr/bin/env python3
+"""Unified CLI for the OpenCode Deep Research skill.
+
+This script wraps the individual research helpers (plan, validate, gap,
+merge, synthesize) into a single command-line entry point.
+
+Typical workflow:
+
+    deep_research.py plan --query "..." --workspace agent-frameworks
+    # run research subagents, writing findings to <workspace>/findings/
+    deep_research.py gaps --workspace agent-frameworks   # optional loop
+    deep_research.py merge --workspace agent-frameworks
+    deep_research.py report --workspace agent-frameworks
+
+If --workspace is omitted, the CLI defaults to the current working directory.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+SKILL_DIR = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = SKILL_DIR / "scripts"
+
+
+def resolve_workspace(args: argparse.Namespace) -> Path:
+    """Resolve workspace from CLI args or fall back to current working directory."""
+    if args.workspace:
+        return Path(args.workspace)
+    return Path.cwd()
+
+
+def run_script(script_name: str, extra_args: list[str]) -> int:
+    """Run a helper script with the current Python interpreter."""
+    cmd = [sys.executable, str(SCRIPTS_DIR / script_name), *extra_args]
+    return subprocess.run(cmd, check=False).returncode
+
+
+def run_plan(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    workspace.mkdir(parents=True, exist_ok=True)
+    plan_path = workspace / "plan.json"
+
+    cmd_args: list[str] = [
+        "--query", args.query,
+        "--template", args.template,
+        "--output", str(plan_path),
+    ]
+    if args.context:
+        cmd_args.extend(["--context", args.context])
+    if args.pre_research:
+        cmd_args.extend(["--pre-research", args.pre_research])
+    if args.max_loops is not None:
+        cmd_args.extend(["--max-loops", str(args.max_loops)])
+    if args.batch_size is not None:
+        cmd_args.extend(["--batch-size", str(args.batch_size)])
+    if args.search_tools:
+        cmd_args.extend(["--search-tools", args.search_tools])
+    if args.language:
+        cmd_args.extend(["--language", args.language])
+    return run_script("plan.py", cmd_args)
+
+
+def run_add_items(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    plan_path = workspace / "plan.json"
+
+    if not plan_path.exists():
+        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        return 1
+
+    return run_script("plan.py", [
+        "--input", str(plan_path),
+        "--add-items", args.items_json,
+        "--output", str(plan_path),
+    ])
+
+
+def run_add_fields(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    plan_path = workspace / "plan.json"
+
+    if not plan_path.exists():
+        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        return 1
+
+    return run_script("plan.py", [
+        "--input", str(plan_path),
+        "--add-fields", args.fields_json,
+        "--output", str(plan_path),
+    ])
+
+
+def _artifacts_dir(workspace: Path) -> Path:
+    """Return the artifacts directory, creating it if needed."""
+    d = workspace / "artifacts"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def run_merge(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    findings_dir = workspace / "findings"
+    output = _artifacts_dir(workspace) / "findings_merged.json"
+
+    return run_script("merge.py", [
+        "--input-dir", str(findings_dir),
+        "--output", str(output),
+    ])
+
+
+def run_gaps(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    plan_path = workspace / "plan.json"
+    findings_dir = workspace / "findings"
+    output = _artifacts_dir(workspace) / "gap_report.json"
+
+    if not plan_path.exists():
+        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        return 1
+
+    return run_script("gap_analysis.py", [
+        "--plan", str(plan_path),
+        "--findings-dir", str(findings_dir),
+        "--output", str(output),
+    ])
+
+
+def run_validate(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    plan_path = workspace / "plan.json"
+    findings_path = workspace / "findings" / f"{args.task_id}.json"
+
+    if not plan_path.exists():
+        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        return 1
+    if not findings_path.exists():
+        print(f"Error: findings not found: {findings_path}", file=sys.stderr)
+        return 1
+
+    return run_script("validate.py", [
+        "--plan", str(plan_path),
+        "--findings", str(findings_path),
+    ])
+
+
+def run_report(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    findings_dir = workspace / "findings"
+    plan_path = workspace / "plan.json"
+    output = workspace / "report.md"
+
+    if not plan_path.exists() and not args.plan:
+        print(
+            "Error: no plan.json found in workspace. Run `plan` first or pass --plan.",
+            file=sys.stderr,
+        )
+        return 1
+
+    used_plan = Path(args.plan) if args.plan else plan_path
+
+    return run_script("synthesize.py", [
+        "--plan", str(used_plan),
+        "--findings-dir", str(findings_dir),
+        "--output", str(output),
+    ])
+
+
+def run_polish(args: argparse.Namespace) -> int:
+    """Prepare report for LLM polishing: backup raw, output instructions."""
+    workspace = resolve_workspace(args)
+    report_path = workspace / "report.md"
+    raw_path = _artifacts_dir(workspace) / "report_raw.md"
+    plan_path = workspace / "plan.json"
+
+    if not report_path.exists():
+        print("Error: no report.md found. Run `report` first.", file=sys.stderr)
+        return 1
+
+    # Backup raw report
+    shutil.copy2(report_path, raw_path)
+
+    # Load plan context
+    plan_context: dict[str, Any] = {}
+    if plan_path.exists():
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan_context = {
+            "query": plan.get("query", ""),
+            "context": plan.get("context", ""),
+            "objectives": plan.get("objectives", []),
+            "language": plan.get("config", {}).get("language", "auto"),
+            "items": [i.get("name", i.get("id", "")) for i in plan.get("items", [])],
+            "fields": [f.get("name", f.get("id", "")) for f in plan.get("fields", [])],
+        }
+
+    # Output instructions for the agent
+    instructions = {
+        "action": "polish_report",
+        "raw_report": str(raw_path),
+        "output": str(report_path),
+        "plan_context": plan_context,
+        "prompt_file": str(Path(__file__).resolve().parent.parent / "prompts" / "polish_report.md"),
+        "instruction": (
+            "Read the raw report at report_raw.md and the plan context above. "
+            "Rewrite the report into a polished, coherent narrative following "
+            "the polish prompt file. Save the polished version to report.md "
+            "(overwrite). Keep SVG charts and source citations intact."
+        ),
+    }
+    print(json.dumps(instructions, indent=2, ensure_ascii=False))
+    return 0
+
+
+def run_report_with_polish(args: argparse.Namespace) -> int:
+    """Generate report and optionally prepare for polishing."""
+    rc = run_report(args)
+    if rc != 0:
+        return rc
+    if getattr(args, "polish", False):
+        return run_polish(args)
+    return 0
+
+
+def run_audit(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    plan_path = workspace / "plan.json"
+    findings_dir = workspace / "findings"
+    output = _artifacts_dir(workspace) / "audit_report.json"
+
+    if not plan_path.exists():
+        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        return 1
+
+    return run_script("audit.py", [
+        "--plan", str(plan_path),
+        "--findings-dir", str(findings_dir),
+        "--output", str(output),
+    ])
+
+
+def run_package(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("package.py", ["--workspace", str(workspace)])
+
+
+def run_provenance(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("provenance.py", [
+        "--workspace", str(workspace),
+        "--format", args.format,
+    ])
+
+
+def run_status(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("orchestrate.py", [
+        "status", "--workspace", str(workspace),
+    ])
+
+
+def run_pipeline(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    extra_args = ["run-all", "--workspace", str(workspace)]
+    if args.resume:
+        extra_args.append("--resume")
+    elif args.query:
+        extra_args.extend(["--query", args.query])
+        if args.template:
+            extra_args.extend(["--template", args.template])
+    else:
+        print("Error: --query or --resume required", file=sys.stderr)
+        return 1
+    if getattr(args, "skip_pre_research", False):
+        extra_args.append("--skip-pre-research")
+    return run_script("orchestrate.py", extra_args)
+
+
+def run_scan(args: argparse.Namespace) -> int:
+    """Run pre-research landscape scan."""
+    workspace = resolve_workspace(args)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    extra_args = ["init", "-q", args.query, "-w", str(workspace)]
+    if args.max_loops:
+        extra_args.extend(["--max-loops", str(args.max_loops)])
+    rc = run_script("pre_research.py", extra_args)
+    if rc != 0:
+        return rc
+
+    print(
+        f"\nPre-research initialized. Now:\n"
+        f"1. Run `deep_research.py scan-next --workspace {workspace}` to get the next search task\n"
+        f"2. Do the web search and write findings to {workspace}/pre_findings/\n"
+        f"3. Run `deep_research.py scan-complete <task_id> --workspace {workspace}`\n"
+        f"4. Run `deep_research.py scan-evaluate --workspace {workspace}`\n"
+        f"5. Repeat from step 1 until evaluate says should_continue=false\n"
+        f"6. Run `deep_research.py scan-finalize --workspace {workspace}`\n"
+        f"7. Run `deep_research.py plan --query '{args.query}' --workspace {workspace}`\n"
+    )
+    return 0
+
+
+def run_scan_next(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("pre_research.py", ["next", "-w", str(workspace)])
+
+
+def run_scan_complete(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    extra_args = ["complete", args.task_id, "-w", str(workspace)]
+    if args.result:
+        extra_args.extend(["--result", args.result])
+    return run_script("pre_research.py", extra_args)
+
+
+def run_scan_evaluate(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("pre_research.py", ["evaluate", "-w", str(workspace)])
+
+
+def run_scan_finalize(args: argparse.Namespace) -> int:
+    workspace = resolve_workspace(args)
+    return run_script("pre_research.py", ["finalize", "-w", str(workspace)])
+
+
+def run_all(args: argparse.Namespace) -> int:
+    """Plan + prompt for research."""
+    workspace = resolve_workspace(args)
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    rc = run_plan(args)
+    if rc != 0:
+        return rc
+
+    print(
+        "\nPlan created. Now run your web/github/codebase subagents and write "
+        f"findings to {workspace / 'findings'}/. Then run:\n\n"
+        f"  deep_research.py gaps --workspace {workspace}\n"
+        f"  deep_research.py merge --workspace {workspace}\n"
+        f"  deep_research.py report --workspace {workspace}\n"
+    )
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="deep_research",
+        description="OpenCode Deep Research unified CLI",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # plan
+    plan_parser = subparsers.add_parser("plan", help="Generate a research plan")
+    plan_parser.add_argument("--query", "-q", required=True, help="Research query")
+    plan_parser.add_argument("--context", "-c", default="", help="Additional research context")
+    plan_parser.add_argument("--template", "-t", default="survey", choices=["comparison", "survey", "technical", "custom"],
+                            help="Report template (default: survey)")
+    plan_parser.add_argument("--workspace", "-w", help="Working directory (default: current directory)")
+    plan_parser.add_argument("--pre-research", help="Path to pre_research.json for generating items from landscape scan")
+    plan_parser.add_argument("--max-loops", type=int, help="Override max_research_loops")
+    plan_parser.add_argument("--batch-size", type=int, help="Override batch_size")
+    plan_parser.add_argument("--search-tools", help="Comma-separated search tools (websearch,github,codegraph)")
+    plan_parser.add_argument("--language", help="Report language (auto, en, zh, ja, ko)")
+    plan_parser.set_defaults(func=run_plan)
+
+    # add-items
+    add_items_parser = subparsers.add_parser("add-items", help="Add research items to an existing plan")
+    add_items_parser.add_argument("--items-json", required=True, help="JSON list of items to add")
+    add_items_parser.add_argument("--workspace", "-w", help="Working directory")
+    add_items_parser.set_defaults(func=run_add_items)
+
+    # add-fields
+    add_fields_parser = subparsers.add_parser("add-fields", help="Add research fields to an existing plan")
+    add_fields_parser.add_argument("--fields-json", required=True, help="JSON list of fields to add")
+    add_fields_parser.add_argument("--workspace", "-w", help="Working directory")
+    add_fields_parser.set_defaults(func=run_add_fields)
+
+    # merge
+    merge_parser = subparsers.add_parser("merge", help="Merge findings into a single view")
+    merge_parser.add_argument("--workspace", "-w", help="Working directory")
+    merge_parser.set_defaults(func=run_merge)
+
+    # gaps
+    gaps_parser = subparsers.add_parser("gaps", help="Detect coverage gaps and propose new tasks")
+    gaps_parser.add_argument("--workspace", "-w", help="Working directory")
+    gaps_parser.set_defaults(func=run_gaps)
+
+    # validate
+    validate_parser = subparsers.add_parser("validate", help="Validate a findings file against the plan")
+    validate_parser.add_argument("--task-id", required=True, help="Task ID whose findings to validate")
+    validate_parser.add_argument("--workspace", "-w", help="Working directory")
+    validate_parser.set_defaults(func=run_validate)
+
+    # report
+    report_parser = subparsers.add_parser("report", help="Generate the Markdown report from findings")
+    report_parser.add_argument("--workspace", "-w", help="Working directory")
+    report_parser.add_argument("--plan", "-p", help="Path to a custom plan.json")
+    report_parser.add_argument("--polish", action="store_true",
+                               help="After generating, prepare for LLM polishing (backup raw, output instructions)")
+    report_parser.set_defaults(func=run_report_with_polish)
+
+    # polish
+    polish_parser = subparsers.add_parser("polish", help="Prepare existing report for LLM polishing")
+    polish_parser.add_argument("--workspace", "-w", help="Working directory")
+    polish_parser.set_defaults(func=run_polish)
+
+    # audit
+    audit_parser = subparsers.add_parser("audit", help="Run integrity audit on findings")
+    audit_parser.add_argument("--workspace", "-w", help="Working directory")
+    audit_parser.set_defaults(func=run_audit)
+
+    # package
+    package_parser = subparsers.add_parser("package", help="Generate artifact package manifest")
+    package_parser.add_argument("--workspace", "-w", help="Working directory")
+    package_parser.set_defaults(func=run_package)
+
+    # provenance
+    provenance_parser = subparsers.add_parser("provenance", help="View provenance log")
+    provenance_parser.add_argument("--workspace", "-w", help="Working directory")
+    provenance_parser.add_argument("--format", "-f", default="summary",
+                                  choices=["summary", "json", "timeline"])
+    provenance_parser.set_defaults(func=run_provenance)
+
+    # status
+    status_parser = subparsers.add_parser("status", help="Check orchestration status")
+    status_parser.add_argument("--workspace", "-w", help="Working directory")
+    status_parser.set_defaults(func=run_status)
+
+    # run-all
+    runall_parser = subparsers.add_parser("run-all", help="Run full research pipeline (with pause/resume)")
+    runall_parser.add_argument("--query", "-q", help="Research query (required for first run)")
+    runall_parser.add_argument("--template", "-t", default="survey",
+                              choices=["comparison", "survey", "technical", "custom"])
+    runall_parser.add_argument("--workspace", "-w", help="Working directory")
+    runall_parser.add_argument("--resume", action="store_true", help="Resume from last checkpoint")
+    runall_parser.add_argument("--skip-pre-research", action="store_true",
+                              help="Skip pre-research landscape scan phase")
+    runall_parser.set_defaults(func=run_pipeline)
+
+    # scan (pre-research)
+    scan_parser = subparsers.add_parser("scan", help="Initialize pre-research landscape scan")
+    scan_parser.add_argument("--query", "-q", required=True, help="Research query")
+    scan_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_parser.add_argument("--max-loops", type=int, default=2, help="Max pre-research loops")
+    scan_parser.set_defaults(func=run_scan)
+
+    # scan-next
+    scan_next_parser = subparsers.add_parser("scan-next", help="Get next pre-research task")
+    scan_next_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_next_parser.set_defaults(func=run_scan_next)
+
+    # scan-complete
+    scan_complete_parser = subparsers.add_parser("scan-complete", help="Complete a pre-research task")
+    scan_complete_parser.add_argument("task_id", help="Task ID to complete")
+    scan_complete_parser.add_argument("--result", "-r", default="", help="Completion result")
+    scan_complete_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_complete_parser.set_defaults(func=run_scan_complete)
+
+    # scan-evaluate
+    scan_eval_parser = subparsers.add_parser("scan-evaluate", help="Evaluate pre-research coverage")
+    scan_eval_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_eval_parser.set_defaults(func=run_scan_evaluate)
+
+    # scan-finalize
+    scan_finalize_parser = subparsers.add_parser("scan-finalize", help="Finalize pre-research into pre_research.json")
+    scan_finalize_parser.add_argument("--workspace", "-w", help="Working directory")
+    scan_finalize_parser.set_defaults(func=run_scan_finalize)
+
+    # run
+    run_parser = subparsers.add_parser("run", help="Create plan and prompt for research")
+    run_parser.add_argument("--query", "-q", required=True, help="Research query")
+    run_parser.add_argument("--context", "-c", default="", help="Additional research context")
+    run_parser.add_argument("--template", "-t", default="survey", choices=["comparison", "survey", "technical", "custom"],
+                           help="Report template (default: survey)")
+    run_parser.add_argument("--workspace", "-w", help="Working directory")
+    run_parser.set_defaults(func=run_all)
+
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

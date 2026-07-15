@@ -241,12 +241,12 @@ def output_pre_research_instructions(task_data: dict[str, Any], workspace: Path)
         "task": task_data,
         "instruction": (
             f"Current date: {date_str}. "
-            "Use websearch_web_search_exa to search for the MOST RECENT information about the research topic. "
+            "Use {{tool:websearch}} to search for the MOST RECENT information about the research topic. "
             f"Include '{year_str}' or '{date_str}' in your search queries to get current results. "
             "Do NOT rely on your training data - it may be outdated. "
             "Extract key entities (models, frameworks, projects, etc.) with their latest versions, "
             "vendors, and source URLs. "
-            f"Write findings to {workspace}/pre_findings/{task_id}.json using bash. "
+            f"Write findings to {workspace}/pre_findings/{task_id}.json using {{tool:bash}}. "
             f"After writing findings, run: deep_research.py run-all --resume --workspace {workspace}"
         ),
         "output_schema": {

@@ -196,16 +196,48 @@ test("generated skills contain no unresolved tool placeholders", () => {
     })
 
     for (const skillName of skillDirs) {
-      const skillMd = path.join(skillsDir, skillName, "SKILL.md")
-      if (!fs.existsSync(skillMd)) continue
-      const content = fs.readFileSync(skillMd, "utf-8")
+      const skillDir = path.join(skillsDir, skillName)
+      for (const file of walkSync(skillDir)) {
+        const content = fs.readFileSync(file, "utf-8")
+        assert.ok(!content.includes("{{tool:"), `${file} contains unresolved tool placeholder`)
+      }
+    }
+  }
+})
+
+test("sync script copies skill subdirectories (scripts, templates, agents)", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const generatedSkillDir = path.join(ROOT, `.${platform}-plugin`, "skills", "deep-research")
+
+    for (const subdir of ["scripts", "templates", "agents"]) {
+      const fullPath = path.join(generatedSkillDir, subdir)
       assert.ok(
-        !content.includes("{{tool:"),
-        `.${platform}-plugin/skills/${skillName}/SKILL.md contains unresolved tool placeholder`
+        fs.existsSync(fullPath),
+        `.${platform}-plugin/skills/deep-research/${subdir} should exist`
+      )
+      assert.ok(
+        fs.readdirSync(fullPath).length > 0,
+        `.${platform}-plugin/skills/deep-research/${subdir} should not be empty`
       )
     }
   }
 })
+
+function walkSync(dir) {
+  const results = []
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      results.push(...walkSync(full))
+    } else if (entry.isFile()) {
+      results.push(full)
+    }
+  }
+  return results
+}
 
 test("sync script generates .mcp.json for claude and codex", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })

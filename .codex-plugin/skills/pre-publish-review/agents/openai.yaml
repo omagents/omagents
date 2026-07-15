@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pre-Publish Review"
+  short_description: "Pre-publish release gate checklist"
+  default_prompt: "Use $pre-publish-review to verify everything is ready before publishing."

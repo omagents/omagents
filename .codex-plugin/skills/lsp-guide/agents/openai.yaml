@@ -1,0 +1,4 @@
+interface:
+  display_name: "LSP Guide"
+  short_description: "Choose the right code intelligence tool"
+  default_prompt: "Use $lsp-guide to decide between LSP, codegraph, grep, and ast-grep for code navigation tasks."
