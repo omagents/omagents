@@ -2,6 +2,7 @@
 set -e
 
 AGENT_VENV="${HOME}/.venvs/omagents"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "[omagents] Python 3 is not installed. Please install Python 3.11+." >&2
@@ -14,5 +15,16 @@ if [ ! -d "$AGENT_VENV" ]; then
 fi
 
 "$AGENT_VENV/bin/pip" install -q jinja2 || true
+
+# Copy skill helper scripts into the venv so wrapper scripts can invoke them.
+SKILL_SCRIPTS_DIR="$SCRIPT_DIR/../skills"
+if [ -d "$SKILL_SCRIPTS_DIR" ]; then
+  mkdir -p "$AGENT_VENV/scripts"
+  for src_dir in "$SKILL_SCRIPTS_DIR/_shared/scripts" "$SKILL_SCRIPTS_DIR/deep-research/scripts" "$SKILL_SCRIPTS_DIR/markitdown-converter/scripts"; do
+    if [ -d "$src_dir" ]; then
+      cp -R "$src_dir"/* "$AGENT_VENV/scripts/"
+    fi
+  done
+fi
 
 echo "[omagents] venv ready at $AGENT_VENV"

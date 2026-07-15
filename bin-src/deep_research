@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec "$HOME/.venvs/omagents/bin/python" "$HOME/.venvs/omagents/scripts/deep_research.py" "$@"

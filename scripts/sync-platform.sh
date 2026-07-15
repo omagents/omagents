@@ -19,6 +19,12 @@ cp "$ROOT_DIR/scripts/templates/hooks.$PLATFORM.json" "$ROOT_DIR/.$PLATFORM-plug
 cp "$ROOT_DIR/hooks/setup-venv.sh" "$ROOT_DIR/.$PLATFORM-plugin/hooks/setup-venv.sh"
 chmod +x "$ROOT_DIR/.$PLATFORM-plugin/hooks/setup-venv.sh"
 
+# Copy wrapper scripts into the Claude plugin's bin directory. Codex does not use bin/.
+if [[ "$PLATFORM" == "claude" && -d "$ROOT_DIR/bin-src" ]]; then
+  cp -R "$ROOT_DIR/bin-src/"* "$ROOT_DIR/.$PLATFORM-plugin/bin/"
+  chmod +x "$ROOT_DIR/.$PLATFORM-plugin/bin/"*
+fi
+
 NAME="omagents"
 VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
 DESCRIPTION="$(node -p "require('$ROOT_DIR/package.json').description")"

@@ -35,6 +35,38 @@ function parseToolMapping() {
   return mapping
 }
 
+test("sync script copies wrapper scripts to claude bin directory", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+
+  const binDir = path.join(ROOT, ".claude-plugin", "bin")
+  assert.ok(fs.existsSync(binDir), ".claude-plugin/bin should exist")
+
+  const expectedWrappers = ["loop_engine", "deep_research", "markitdown"]
+  for (const wrapper of expectedWrappers) {
+    const wrapperPath = path.join(binDir, wrapper)
+    assert.ok(fs.existsSync(wrapperPath), `.claude-plugin/bin/${wrapper} should exist`)
+
+    try {
+      fs.accessSync(wrapperPath, fs.constants.X_OK)
+    } catch {
+      assert.fail(`.claude-plugin/bin/${wrapper} should be executable`)
+    }
+
+    const content = fs.readFileSync(wrapperPath, "utf-8")
+    assert.ok(
+      content.includes(".venvs/omagents/bin/python"),
+      `.claude-plugin/bin/${wrapper} should reference the omagents venv Python`
+    )
+  }
+
+  for (const wrapper of expectedWrappers) {
+    assert.ok(
+      !fs.existsSync(path.join(ROOT, ".codex-plugin", "bin", wrapper)),
+      `.codex-plugin/bin/${wrapper} should not be copied for Codex`
+    )
+  }
+})
+
 test("sync script generates claude and codex directories", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
   execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
