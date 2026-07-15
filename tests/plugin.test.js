@@ -21,12 +21,9 @@ test("index.js exports OmagentsPlugin", async () => {
   assert.strictEqual(typeof mod.default, "function")
 })
 
-test("BUILTIN_MCPS contains expected servers", async () => {
+test("index.js imports MCP definitions from base.json", async () => {
   const indexSource = fs.readFileSync(path.join(PLUGINS_DIR, "index.js"), "utf-8")
-  const expectedMcps = ["agentmemory", "codegraph", "context7", "websearch"]
-  for (const mcp of expectedMcps) {
-    assert.ok(indexSource.includes(mcp), `Missing MCP: ${mcp}`)
-  }
+  assert.ok(indexSource.includes("base.json"), "index.js should import base.json")
 })
 
 test("SKILL_SCRIPT_DIRS includes _shared/scripts", () => {
@@ -54,4 +51,13 @@ test("superpowers dependency is pinned to a commit", () => {
   const dep = pkg.dependencies.superpowers
   assert.ok(dep.includes("#"), "superpowers should be pinned with #<commit-sha>")
   assert.ok(!dep.endsWith(".git"), "superpowers should not be unpinned (missing #commit)")
+})
+
+test("mcp-servers/base.json exists and contains expected servers", () => {
+  const basePath = path.join(ROOT, "mcp-servers", "base.json")
+  assert.ok(fs.existsSync(basePath), "mcp-servers/base.json should exist")
+  const data = JSON.parse(fs.readFileSync(basePath, "utf-8"))
+  for (const name of ["agentmemory", "codegraph", "context7", "websearch"]) {
+    assert.ok(data[name], `Missing MCP server: ${name}`)
+  }
 })

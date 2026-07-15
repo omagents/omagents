@@ -11,6 +11,7 @@ import fs from "fs"
 import { fileURLToPath } from "url"
 import os from "os"
 import { createParallelHooks } from "./parallel.js"
+import baseMcps from "../../mcp-servers/base.json" with { type: "json" }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const OMAGENTS_DIR = path.resolve(__dirname, "../..")
@@ -30,25 +31,9 @@ const SKILL_SCRIPT_DIRS = [
 ]
 
 // Built-in MCP servers bundled by this plugin
-const BUILTIN_MCPS = {
-  agentmemory: {
-    type: "local",
-    command: ["npx", "-y", "@agentmemory/mcp"],
-    enabled: true,
-  },
-  codegraph: {
-    type: "local",
-    command: ["npx", "-y", "@colbymchenry/codegraph", "serve", "--mcp"],
-    enabled: true,
-  },
-  context7: {
-    type: "remote",
-    url: "https://mcp.context7.com/mcp",
-  },
-  websearch: {
-    type: "remote",
-    url: "https://mcp.exa.ai/mcp",
-  },
+const BUILTIN_MCPS = {}
+for (const [name, def] of Object.entries(baseMcps)) {
+  BUILTIN_MCPS[name] = { ...def, enabled: true }
 }
 
 // GitHub code search: use the full GitHub Copilot MCP when a token is

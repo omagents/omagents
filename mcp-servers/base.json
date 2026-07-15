@@ -1,0 +1,22 @@
+{
+  "agentmemory": {
+    "type": "local",
+    "command": ["npx", "-y", "@agentmemory/mcp"]
+  },
+  "codegraph": {
+    "type": "local",
+    "command": ["npx", "-y", "@colbymchenry/codegraph", "serve", "--mcp"]
+  },
+  "context7": {
+    "type": "remote",
+    "url": "https://mcp.context7.com/mcp"
+  },
+  "websearch": {
+    "type": "remote",
+    "url": "https://mcp.exa.ai/mcp"
+  },
+  "grep_app": {
+    "type": "remote",
+    "url": "https://mcp.grep.app"
+  }
+}
