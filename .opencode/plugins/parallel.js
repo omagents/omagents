@@ -88,6 +88,12 @@ const ENV_NAME = "OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS"
 const START_MARKER = "# >>> omagents background subagents >>>"
 const END_MARKER = "# <<< omagents background subagents <<<"
 
+function warnIfDebug(...args) {
+  if (process.env.OMAGENTS_DEBUG === "1") {
+    console.warn(...args)
+  }
+}
+
 function isBackgroundSubagentsEnabled() {
   const val = process.env[ENV_NAME]
   if (!val) return false
@@ -112,7 +118,7 @@ function ensureBackgroundSubagentsEnv() {
 
   const targetPath = detectShellConfigPath()
   if (!targetPath) {
-    console.warn(
+    warnIfDebug(
       "[omagents] Could not detect shell config file. Set OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true manually."
     )
     return
@@ -138,11 +144,8 @@ function ensureBackgroundSubagentsEnv() {
     const newContent = `${content}${prefix}${block}\n`
     fs.mkdirSync(path.dirname(targetPath), { recursive: true })
     fs.writeFileSync(targetPath, newContent)
-    console.log(
-      `[omagents] Added ${ENV_NAME}=true to ${targetPath}. Restart your shell or OpenCode for background subagents.`
-    )
   } catch (err) {
-    console.warn(`[omagents] Could not write to shell config: ${err.message}`)
+    warnIfDebug(`[omagents] Could not write to shell config: ${err.message}`)
   }
 }
 
@@ -184,9 +187,6 @@ function loadJobBoard() {
         job.terminalUnreconciled = false
       }
       jobBoard.set(job.taskID, job)
-    }
-    if (data.length > 0) {
-      console.log(`[omagents] Restored ${data.length} jobs from disk`)
     }
   } catch {
     // best-effort

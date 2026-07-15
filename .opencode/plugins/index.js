@@ -58,6 +58,12 @@ if (process.env.GITHUB_TOKEN) {
 // Python packages required by bundled skills
 const REQUIRED_PYTHON_PACKAGES = ["jinja2"]
 
+function warnIfDebug(...args) {
+  if (process.env.OMAGENTS_DEBUG === "1") {
+    console.warn(...args)
+  }
+}
+
 /**
  * Ensure the dedicated agent venv exists and has the required Python packages.
  * If Python 3 is not found, logs a clear warning with install instructions.
@@ -66,7 +72,7 @@ async function ensurePythonDependencies({ $ }) {
   try {
     const pythonCheck = await $`python3 --version`.nothrow().quiet()
     if (pythonCheck.exitCode !== 0) {
-      console.warn(
+      warnIfDebug(
         "[omagents] Python 3 is not installed or not on PATH.\n" +
           "  OmAgents requires Python 3.11+ for the following features:\n" +
           "    - Deep Research (Jinja2 report templates)\n" +
@@ -81,7 +87,6 @@ async function ensurePythonDependencies({ $ }) {
 
     const venvExists = fs.existsSync(AGENT_PYTHON)
     if (!venvExists) {
-      console.log(`[omagents] Creating agent venv at ${AGENT_VENV}`)
       await $`python3 -m venv "${AGENT_VENV}"`.quiet()
     }
 
@@ -93,11 +98,11 @@ async function ensurePythonDependencies({ $ }) {
       try {
         await $`"${AGENT_PIP}" install "${pkg}"`.quiet()
       } catch (installError) {
-        console.warn(`[omagents] Could not install ${pkg}:`, installError.message)
+        warnIfDebug(`[omagents] Could not install ${pkg}:`, installError.message)
       }
     }
   } catch (error) {
-    console.warn("[omagents] Python dependency check failed:", error.message)
+    warnIfDebug("[omagents] Python dependency check failed:", error.message)
   }
 }
 
@@ -111,11 +116,11 @@ async function loadSuperpowers() {
     const mod = await import("superpowers")
     _superpowersPlugin = mod.default || mod.SuperpowersPlugin || null
     if (!_superpowersPlugin) {
-      console.warn("[omagents] superpowers module found but no plugin export")
+      warnIfDebug("[omagents] superpowers module found but no plugin export")
     }
   } catch {
     _superpowersPlugin = false // mark as tried-and-failed (distinct from null=not-tried)
-    console.warn(
+    warnIfDebug(
       "[omagents] superpowers not available, skipping (install with: bun add superpowers)"
     )
   }
@@ -134,7 +139,7 @@ export const OmagentsPlugin = async (ctx) => {
     try {
       superHooks = (await sp(ctx)) || {}
     } catch (err) {
-      console.warn("[omagents] superpowers plugin failed to initialize:", err.message)
+      warnIfDebug("[omagents] superpowers plugin failed to initialize:", err.message)
     }
   }
 
