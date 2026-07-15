@@ -22,9 +22,16 @@ test("sync script generates claude and codex directories", () => {
     assert.ok(fs.existsSync(pluginJsonPath), `.${platform}-plugin/plugin.json should exist`)
 
     const plugin = JSON.parse(fs.readFileSync(pluginJsonPath, "utf-8"))
-    assert.ok(plugin && typeof plugin === "object", `.${platform}-plugin/plugin.json should be valid JSON`)
+    assert.ok(
+      plugin && typeof plugin === "object",
+      `.${platform}-plugin/plugin.json should be valid JSON`
+    )
 
-    assert.strictEqual(plugin.name, "omagents", `.${platform}-plugin/plugin.json name should be omagents`)
+    assert.strictEqual(
+      plugin.name,
+      "omagents",
+      `.${platform}-plugin/plugin.json name should be omagents`
+    )
     assert.ok(plugin.version, `.${platform}-plugin/plugin.json should have a version`)
     assert.ok(plugin.description, `.${platform}-plugin/plugin.json should have a description`)
   }

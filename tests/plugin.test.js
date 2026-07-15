@@ -68,9 +68,18 @@ test("mcp-servers/base.json exists and contains only unconditional servers", () 
 
 test("index.js contains conditional github/grep_app fallback logic", () => {
   const indexSource = fs.readFileSync(path.join(PLUGINS_DIR, "index.js"), "utf-8")
-  assert.ok(indexSource.includes("if (process.env.GITHUB_TOKEN)"), "index.js should check GITHUB_TOKEN")
-  assert.ok(indexSource.includes("BUILTIN_MCPS.github"), "index.js should conditionally register github")
-  assert.ok(indexSource.includes("BUILTIN_MCPS.grep_app"), "index.js should conditionally register grep_app")
+  assert.ok(
+    indexSource.includes("if (process.env.GITHUB_TOKEN)"),
+    "index.js should check GITHUB_TOKEN"
+  )
+  assert.ok(
+    indexSource.includes("BUILTIN_MCPS.github"),
+    "index.js should conditionally register github"
+  )
+  assert.ok(
+    indexSource.includes("BUILTIN_MCPS.grep_app"),
+    "index.js should conditionally register grep_app"
+  )
 })
 
 function getRegisteredMcps(env) {

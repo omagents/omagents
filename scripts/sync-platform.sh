@@ -16,7 +16,7 @@ mkdir -p "$ROOT_DIR/.$PLATFORM-plugin/bin"
 
 NAME="omagents"
 VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
-DESCRIPTION="Agent toolkit: deep research, loop workflows, MCP servers, and Python tooling."
+DESCRIPTION="$(node -p "require('$ROOT_DIR/package.json').description")"
 
 cat > "$ROOT_DIR/.$PLATFORM-plugin/plugin.json" <<EOF
 {

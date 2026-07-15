@@ -1,5 +1,5 @@
 {
   "name": "omagents",
   "version": "0.5.0",
-  "description": "Agent toolkit: deep research, loop workflows, MCP servers, and Python tooling."
+  "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers"
 }
