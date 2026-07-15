@@ -35,6 +35,20 @@ function parseToolMapping() {
   return mapping
 }
 
+function findSessionStartCommand(hooks) {
+  const sessionStart = hooks?.hooks?.SessionStart
+  if (!Array.isArray(sessionStart)) return null
+  for (const entry of sessionStart) {
+    if (!Array.isArray(entry?.hooks)) continue
+    for (const hook of entry.hooks) {
+      if (hook?.command && hook.command.includes("setup-venv.sh")) {
+        return hook.command
+      }
+    }
+  }
+  return null
+}
+
 test("sync script copies wrapper scripts to claude bin directory", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
 
@@ -515,9 +529,9 @@ test("sync script generates hooks referencing setup-venv.sh", () => {
       `.${platform}-plugin/hooks/hooks.json should contain SessionStart hooks`
     )
 
-    const command = hooks.hooks.SessionStart[0]?.hooks?.[0]?.command
+    const command = findSessionStartCommand(hooks)
     assert.ok(
-      command && command.includes("setup-venv.sh"),
+      command,
       `.${platform}-plugin/hooks/hooks.json SessionStart should reference setup-venv.sh`
     )
 
@@ -571,11 +585,23 @@ test("integration checklist pre-conditions are satisfied", () => {
       `.${platform}-plugin/hooks/hooks.json should contain SessionStart hooks`
     )
 
-    const command = hooks.hooks.SessionStart[0]?.hooks?.[0]?.command
+    const command = findSessionStartCommand(hooks)
     assert.ok(
-      command && command.includes("setup-venv.sh"),
+      command,
       `.${platform}-plugin/hooks/hooks.json SessionStart should reference setup-venv.sh`
     )
+
+    const setupScriptPath = path.join(ROOT, `.${platform}-plugin`, "hooks", "setup-venv.sh")
+    assert.ok(
+      fs.existsSync(setupScriptPath),
+      `.${platform}-plugin/hooks/setup-venv.sh should exist`
+    )
+
+    try {
+      fs.accessSync(setupScriptPath, fs.constants.X_OK)
+    } catch {
+      assert.fail(`.${platform}-plugin/hooks/setup-venv.sh should be executable`)
+    }
   }
 })
 

@@ -5,7 +5,7 @@ This checklist is used to verify that the OmAgents plugin works correctly across
 ## Pre-requisites
 
 - [ ] **Node.js**: Version 24 or later is installed.
-- [ ] **Python**: Python 3 is installed and available as `python3`.
+- [ ] **Python**: Python 3.11 or later is installed and available as `python3`.
 - [ ] **Git**: Repository is cloned locally.
   ```bash
   git clone https://github.com/omagents/omagents.git
@@ -32,14 +32,19 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
    ```bash
    npm run sync
    ```
-2. [ ] Verify `.claude-plugin/plugin.json` exists and is valid JSON.
-3. [ ] Verify `.claude-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
-4. [ ] Verify `.claude-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
-5. [ ] Start a Claude Code session pointing at the local plugin directory:
+2. [ ] Verify the generated `.claude-plugin/` and `.codex-plugin/` directories are tracked in git:
+   ```bash
+   git status --short
+   ```
+   Neither `.claude-plugin/` nor `.codex-plugin/` should appear as untracked.
+3. [ ] Verify `.claude-plugin/plugin.json` exists and is valid JSON.
+4. [ ] Verify `.claude-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
+5. [ ] Verify `.claude-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
+6. [ ] Start a Claude Code session pointing at the local plugin directory:
    ```bash
    claude --plugin-dir /path/to/omagents/.claude-plugin
    ```
-6. [ ] In the session, send:
+7. [ ] In the session, send:
    ```text
    Let's make a react todo list
    ```
@@ -51,11 +56,16 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
    ```bash
    npm run sync
    ```
-2. [ ] Verify `.codex-plugin/plugin.json` exists and is valid JSON.
-3. [ ] Verify `.codex-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
-4. [ ] Verify `.codex-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
-5. [ ] Add the plugin in Codex and verify skill discovery completes without errors.
-6. [ ] In a chat session, send:
+2. [ ] Verify the generated `.claude-plugin/` and `.codex-plugin/` directories are tracked in git:
+   ```bash
+   git status --short
+   ```
+   Neither `.claude-plugin/` nor `.codex-plugin/` should appear as untracked.
+3. [ ] Verify `.codex-plugin/plugin.json` exists and is valid JSON.
+4. [ ] Verify `.codex-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
+5. [ ] Verify `.codex-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
+6. [ ] Add the plugin in Codex and verify skill discovery completes without errors.
+7. [ ] In a chat session, send:
    ```text
    Let's make a react todo list
    ```
@@ -79,3 +89,12 @@ npm run format:check
   - `.claude-plugin/hooks/hooks.json`
   - `.codex-plugin/plugin.json`
   - `.codex-plugin/hooks/hooks.json`
+
+## Global Constraints
+
+Keep the following constraints in mind when maintaining the cross-platform integration:
+
+- **OpenCode plugin unchanged**: The OpenCode plugin entry point at `.opencode/plugins/index.js` must not be altered to support Claude Code or Codex. The generated `.claude-plugin/` and `.codex-plugin/` directories contain the platform-specific adaptations.
+- **Superpowers pinned**: The `superpowers` dependency is pinned to a specific commit in `package.json`. Do not unpin it unless the change is tested across all platforms.
+- **Only jinja2 is auto-installed**: The agent venv setup installs `jinja2` automatically. Any other Python tooling required by a skill must be installed on-demand by that skill.
+- **README changes mirrored**: Any change to `README.md` must also be reflected in `README.zh-cn.md`, `README.ja.md`, and `README.ko.md` in the same commit.
