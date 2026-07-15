@@ -139,6 +139,35 @@ if [[ -d "$SKILL_SOURCE_DIR/_shared" ]]; then
   done
 fi
 
+# Bundle superpowers skills so they are available in Claude/Codex plugins
+SUPERPOWERS_SOURCE_DIR="$ROOT_DIR/node_modules/superpowers/skills"
+SUPERPOWERS_TARGET_DIR="$SKILL_TARGET_DIR/superpowers"
+
+if [[ -d "$SUPERPOWERS_SOURCE_DIR" ]]; then
+  mkdir -p "$SUPERPOWERS_TARGET_DIR"
+  for super_skill_dir in "$SUPERPOWERS_SOURCE_DIR"/*/; do
+    super_skill_name=$(basename "$super_skill_dir")
+
+    if [[ "$super_skill_name" == _* || "$super_skill_name" == .* ]]; then
+      continue
+    fi
+
+    super_target_dir="$SUPERPOWERS_TARGET_DIR/$super_skill_name"
+    rm -rf "$super_target_dir"
+    mkdir -p "$super_target_dir"
+    cp -R "$super_skill_dir/"* "$super_target_dir/"
+
+    find "$super_target_dir" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+    find "$super_target_dir" -type f -not -path '*/__pycache__/*' -not -name '.DS_Store' -name '*.md' -print0 | while IFS= read -r -d '' file; do
+      tmp=$(mktemp)
+      perl "$PL_SCRIPT" "$file" > "$tmp"
+      mv "$tmp" "$file"
+    done
+  done
+else
+  echo "[sync] warning: superpowers skills not found at $SUPERPOWERS_SOURCE_DIR" >&2
+fi
+
 rm "$PL_SCRIPT"
 
 echo "[sync] generated skeleton for $PLATFORM"

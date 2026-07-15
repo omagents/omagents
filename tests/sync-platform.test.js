@@ -375,6 +375,28 @@ test("sync script copies skills/_shared", () => {
   }
 })
 
+test("sync script bundles superpowers skills into generated plugins", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const superpowersDir = path.join(ROOT, `.${platform}-plugin`, "skills", "superpowers")
+    assert.ok(fs.existsSync(superpowersDir), `.${platform}-plugin/skills/superpowers should exist`)
+
+    const brainstormingPath = path.join(superpowersDir, "brainstorming", "SKILL.md")
+    assert.ok(
+      fs.existsSync(brainstormingPath),
+      `.${platform}-plugin/skills/superpowers/brainstorming/SKILL.md should exist`
+    )
+
+    const content = fs.readFileSync(brainstormingPath, "utf-8")
+    assert.ok(
+      content.length > 0,
+      `.${platform}-plugin superpowers brainstorming skill should not be empty`
+    )
+  }
+})
+
 test("sync script generates .mcp.json for claude and codex", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
   execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
