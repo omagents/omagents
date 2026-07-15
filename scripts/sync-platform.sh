@@ -15,6 +15,10 @@ mkdir -p "$ROOT_DIR/.$PLATFORM-plugin/skills"
 mkdir -p "$ROOT_DIR/.$PLATFORM-plugin/hooks"
 mkdir -p "$ROOT_DIR/.$PLATFORM-plugin/bin"
 
+cp "$ROOT_DIR/scripts/templates/hooks.$PLATFORM.json" "$ROOT_DIR/.$PLATFORM-plugin/hooks/hooks.json"
+cp "$ROOT_DIR/hooks/setup-venv.sh" "$ROOT_DIR/.$PLATFORM-plugin/hooks/setup-venv.sh"
+chmod +x "$ROOT_DIR/.$PLATFORM-plugin/hooks/setup-venv.sh"
+
 NAME="omagents"
 VERSION="$(node -p "require('$ROOT_DIR/package.json').version")"
 DESCRIPTION="$(node -p "require('$ROOT_DIR/package.json').description")"

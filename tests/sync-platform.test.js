@@ -382,6 +382,44 @@ test("sync script generates .mcp.json for claude and codex", () => {
   }
 })
 
+test("sync script generates hooks referencing setup-venv.sh", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const hooksPath = path.join(ROOT, `.${platform}-plugin`, "hooks", "hooks.json")
+    assert.ok(fs.existsSync(hooksPath), `.${platform}-plugin/hooks/hooks.json should exist`)
+
+    const hooks = JSON.parse(fs.readFileSync(hooksPath, "utf-8"))
+    assert.ok(
+      hooks && typeof hooks === "object",
+      `.${platform}-plugin/hooks/hooks.json should be valid JSON`
+    )
+    assert.ok(
+      Array.isArray(hooks.hooks?.SessionStart),
+      `.${platform}-plugin/hooks/hooks.json should contain SessionStart hooks`
+    )
+
+    const command = hooks.hooks.SessionStart[0]?.hooks?.[0]?.command
+    assert.ok(
+      command && command.includes("setup-venv.sh"),
+      `.${platform}-plugin/hooks/hooks.json SessionStart should reference setup-venv.sh`
+    )
+
+    const setupScriptPath = path.join(ROOT, `.${platform}-plugin`, "hooks", "setup-venv.sh")
+    assert.ok(
+      fs.existsSync(setupScriptPath),
+      `.${platform}-plugin/hooks/setup-venv.sh should exist`
+    )
+
+    try {
+      fs.accessSync(setupScriptPath, fs.constants.X_OK)
+    } catch {
+      assert.fail(`.${platform}-plugin/hooks/setup-venv.sh should be executable`)
+    }
+  }
+})
+
 test("sync script generates valid Python files", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
   execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })

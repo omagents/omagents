@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PLUGIN_ROOT}/hooks/setup-venv.sh",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}
