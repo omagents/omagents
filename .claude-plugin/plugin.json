@@ -5,11 +5,5 @@
   "description": "Agent toolkit: deep research, loop workflows, MCP servers, and Python tooling.",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
-  "hooks": "./hooks/hooks.json",
-  "dependencies": [
-    {
-      "name": "superpowers",
-      "version": "~6.1.0"
-    }
-  ]
+  "hooks": "./hooks/hooks.json"
 }

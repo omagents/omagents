@@ -28,13 +28,7 @@ if [[ "$PLATFORM" == "claude" ]]; then
   "description": "$DESCRIPTION",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
-  "hooks": "./hooks/hooks.json",
-  "dependencies": [
-    {
-      "name": "superpowers",
-      "version": "~6.1.0"
-    }
-  ]
+  "hooks": "./hooks/hooks.json"
 }
 EOF
 else
