@@ -1,4 +1,0 @@
-interface:
-  display_name: "Tech Debt Audit"
-  short_description: "Audit codebase for technical debt"
-  default_prompt: "Use $tech-debt-audit to scan the codebase for TODOs, duplication, complexity, and other debt."

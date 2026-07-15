@@ -1,4 +1,0 @@
-interface:
-  display_name: "Remove AI Slops"
-  short_description: "Clean up AI-generated code artifacts"
-  default_prompt: "Use $remove-ai-slops to clean up redundant comments, unused imports, and other AI coding bad habits."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Refactor"
-  short_description: "Systematic code refactoring with loop engine"
-  default_prompt: "Use $refactor to systematically refactor code targets one by one with verification."

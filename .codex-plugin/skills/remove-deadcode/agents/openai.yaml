@@ -1,4 +1,0 @@
-interface:
-  display_name: "Remove Dead Code"
-  short_description: "Find and remove unreferenced code"
-  default_prompt: "Use $remove-deadcode to find and remove unused functions, imports, variables, and files."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Init Deep"
-  short_description: "Generate hierarchical AGENTS.md files for project context"
-  default_prompt: "Use $init-deep to scan the project and generate AGENTS.md context files at each meaningful directory level."

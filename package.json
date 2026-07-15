@@ -28,8 +28,9 @@
     "test": "node --test tests/*.test.js",
     "format": "prettier --write .opencode/plugins/*.js tests/*.js",
     "format:check": "prettier --check .opencode/plugins/*.js tests/*.js",
-    "sync": "bash scripts/sync-platform.sh claude && bash scripts/sync-platform.sh codex",
-    "sync:check": "npm run sync && git diff --exit-code .claude-plugin .codex-plugin"
+    "sync": "bash scripts/sync-platform.sh",
+    "sync:check": "npm run sync",
+    "prepublishOnly": "npm run sync"
   },
   "devDependencies": {
     "prettier": "^3.3.0"

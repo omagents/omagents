@@ -1,4 +1,0 @@
-interface:
-  display_name: "GitHub Triage"
-  short_description: "Triage and categorize GitHub issues"
-  default_prompt: "Use $github-triage to review, categorize, and label open GitHub issues."

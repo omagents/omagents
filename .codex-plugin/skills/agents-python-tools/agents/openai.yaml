@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agents Python Tools"
-  short_description: "Route agents Python tools to ~/.venvs/omagents"
-  default_prompt: "Use $agents-python-tools to install or run Python tools for this task."

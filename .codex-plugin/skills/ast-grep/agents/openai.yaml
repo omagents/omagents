@@ -1,4 +1,0 @@
-interface:
-  display_name: "AST-Grep"
-  short_description: "Structural code search and rewrite"
-  default_prompt: "Use $ast-grep for pattern-aware code search and rewriting across 25+ languages."

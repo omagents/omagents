@@ -23,9 +23,6 @@ jobs:
       - name: Sync platform plugins
         run: npm run sync
 
-      - name: Verify generated plugins are up-to-date
-        run: git diff --exit-code .claude-plugin .codex-plugin
-
       - name: Check JS syntax
         run: |
           node --check .opencode/plugins/index.js

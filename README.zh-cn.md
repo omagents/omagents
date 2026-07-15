@@ -108,19 +108,6 @@ OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
 }
 ```
 
-### Claude Code
-
-**前置条件：** 已安装 [Python 3.11+](https://www.python.org/downloads/) 并在 PATH 中。
-
-1. 添加 OmAgents marketplace 并安装插件：
-
-```bash
-claude plugin marketplace add omagents/omagents
-claude plugin install omagents@omagents
-```
-
-会话开始时，插件会自动发现打包的 skills、MCP servers，并通过 `SessionStart` hooks 设置 Python venv。OpenCode 独有的并行执行引擎（`task(background: true)`、`/ps`）不可用；请使用 Claude Code 原生的 `Agent` 工具进行 subagent 调度。
-
 ### Codex
 
 **前置条件：** 已安装 [Python 3.11+](https://www.python.org/downloads/) 并在 PATH 中。
@@ -134,7 +121,7 @@ codex plugin add omagents@omagents
 
 会话开始时，插件会自动发现打包的 skills、MCP servers，并通过 `SessionStart` hooks 设置 Python venv。OpenCode 独有的并行执行引擎不可用；请使用 Codex 原生的 subagent 工具进行并行调度。
 
-> **开发者须知：** 如果你编辑了 `skills/` 中的源 skill，请运行 `npm run sync` 重新生成 `.claude-plugin/` 和 `.codex-plugin/` 产物并提交。CI 会自动验证生成文件是否为最新。
+> **开发者须知：** 如果你编辑了 `skills/` 中的源 skill，请运行 `npm run sync` 重新生成 `.codex-plugin/` 产物。`prepublishOnly` 脚本会在 `npm publish` 前自动执行 sync。
 
 ---
 

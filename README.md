@@ -108,19 +108,6 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
 }
 ```
 
-### Claude Code
-
-**Prerequisite:** [Python 3.11+](https://www.python.org/downloads/) installed and on PATH.
-
-1. Add the OmAgents marketplace and install the plugin:
-
-```bash
-claude plugin marketplace add omagents/omagents
-claude plugin install omagents@omagents
-```
-
-At session start, the plugin auto-discovers bundled skills, MCP servers, and sets up the Python venv via `SessionStart` hooks. The OpenCode-only parallel execution engine (`task(background: true)`, `/ps`) is not available; use Claude Code's native `Agent` tool for subagent dispatch.
-
 ### Codex
 
 **Prerequisite:** [Python 3.11+](https://www.python.org/downloads/) installed and on PATH.
@@ -134,7 +121,7 @@ codex plugin add omagents@omagents
 
 At session start, the plugin auto-discovers bundled skills, MCP servers, and sets up the Python venv via `SessionStart` hooks. The OpenCode-only parallel execution engine is not available; use Codex's native subagent tools for parallel dispatch.
 
-> **For developers:** If you edit source skills in `skills/`, run `npm run sync` to regenerate the `.claude-plugin/` and `.codex-plugin/` artifacts, then commit them. CI automatically verifies that generated files are up-to-date.
+> **For developers:** If you edit source skills in `skills/`, run `npm run sync` to regenerate the `.codex-plugin/` artifact. The `prepublishOnly` script runs sync automatically before `npm publish`.
 
 ---
 

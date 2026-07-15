@@ -122,6 +122,6 @@ test("Codex marketplace.json exists and is valid", () => {
   assert.ok(data.plugins && data.plugins.length > 0, "marketplace should have at least one plugin")
   const plugin = data.plugins.find((p) => p.name === "omagents")
   assert.ok(plugin, "marketplace should contain an omagents plugin entry")
-  assert.strictEqual(plugin.source.source, "local")
-  assert.strictEqual(plugin.source.path, "./")
+  assert.strictEqual(plugin.source.source, "npm")
+  assert.strictEqual(plugin.source.package, "@omagents/omagents")
 })

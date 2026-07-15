@@ -4,8 +4,8 @@
     {
       "name": "omagents",
       "source": {
-        "source": "local",
-        "path": "./"
+        "source": "npm",
+        "package": "@omagents/omagents"
       },
       "policy": {
         "installation": "AVAILABLE"
