@@ -69,9 +69,14 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
 3. [ ] Verify `.codex-plugin/plugin.json` exists and is valid JSON.
 4. [ ] Verify `.codex-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
 5. [ ] Verify `.codex-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
-6. [ ] Register the marketplace and install the plugin:
+6. [ ] Register the marketplace and install the plugin (development: use local path; production: use GitHub):
    ```bash
+   # Development (local clone)
    codex plugin marketplace add /path/to/omagents
+   codex plugin add omagents@omagents
+
+   # Production (from GitHub)
+   codex plugin marketplace add omagents/omagents
    codex plugin add omagents@omagents
    ```
    Verify skill discovery completes without errors.

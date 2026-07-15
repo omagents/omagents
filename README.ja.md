@@ -141,11 +141,6 @@ npm run sync
 2. OmAgents marketplace を登録してプラグインをインストール：
 
 ```bash
-# ローカルクローンから
-codex plugin marketplace add /path/to/omagents
-codex plugin add omagents@omagents
-
-# または GitHub から
 codex plugin marketplace add omagents/omagents
 codex plugin add omagents@omagents
 ```

@@ -141,11 +141,6 @@ npm run sync
 2. OmAgents marketplace를 등록하고 플러그인을 설치:
 
 ```bash
-# 로컬 클론에서
-codex plugin marketplace add /path/to/omagents
-codex plugin add omagents@omagents
-
-# 또는 GitHub에서
 codex plugin marketplace add omagents/omagents
 codex plugin add omagents@omagents
 ```

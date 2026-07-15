@@ -141,11 +141,6 @@ npm run sync
 2. 注册 OmAgents marketplace 并安装插件：
 
 ```bash
-# 从本地克隆安装
-codex plugin marketplace add /path/to/omagents
-codex plugin add omagents@omagents
-
-# 或从 GitHub 安装
 codex plugin marketplace add omagents/omagents
 codex plugin add omagents@omagents
 ```
