@@ -20,7 +20,7 @@ fi
 SKILL_SCRIPTS_DIR="$SCRIPT_DIR/../skills"
 if [ -d "$SKILL_SCRIPTS_DIR" ]; then
   mkdir -p "$AGENT_VENV/scripts"
-  for src_dir in "$SKILL_SCRIPTS_DIR/_shared/scripts" "$SKILL_SCRIPTS_DIR/deep-research/scripts" "$SKILL_SCRIPTS_DIR/markitdown-converter/scripts"; do
+  for src_dir in "$SKILL_SCRIPTS_DIR"/*/scripts; do
     if [ -d "$src_dir" ]; then
       cp -R "$src_dir"/* "$AGENT_VENV/scripts/"
     fi
