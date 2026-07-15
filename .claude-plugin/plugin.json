@@ -1,5 +1,8 @@
 {
   "name": "omagents",
   "version": "0.5.0",
-  "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers"
+  "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json"
 }
