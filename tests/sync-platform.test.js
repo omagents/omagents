@@ -323,6 +323,13 @@ test("generated skills contain no unresolved tool placeholders", () => {
   }
 })
 
+function getOpenCodeToolNames() {
+  const primitives = new Set(["read", "write", "edit", "bash"])
+  return parseToolMapping()
+    .map(({ opencode }) => opencode)
+    .filter((name) => !primitives.has(name))
+}
+
 test("generated skills contain no mapped OpenCode tool names", () => {
   const mapping = parseToolMapping()
   assert.ok(mapping.length > 0, "tool-mapping.txt should contain mappings")
@@ -346,6 +353,40 @@ test("generated skills contain no mapped OpenCode tool names", () => {
         for (const { opencode } of mapping) {
           const re = new RegExp("\\b" + opencode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b")
           assert.ok(!re.test(content), `${file} contains mapped OpenCode tool name ${opencode}`)
+        }
+      }
+    }
+  }
+})
+
+test("generated Python files contain no OpenCode tool names", () => {
+  const opencodeNames = getOpenCodeToolNames()
+  assert.ok(
+    opencodeNames.length > 0,
+    "tool-mapping.txt should contain non-primitive OpenCode tool names"
+  )
+
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const skillsDir = path.join(ROOT, `.${platform}-plugin`, "skills")
+    if (!fs.existsSync(skillsDir)) continue
+
+    const skillDirs = fs.readdirSync(skillsDir).filter((name) => {
+      const full = path.join(skillsDir, name)
+      return fs.statSync(full).isDirectory()
+    })
+
+    for (const skillName of skillDirs) {
+      if (skillName === "superpowers") continue
+      const skillDir = path.join(skillsDir, skillName)
+      for (const file of walkSync(skillDir)) {
+        if (path.extname(file) !== ".py") continue
+        const content = fs.readFileSync(file, "utf-8")
+        for (const opencode of opencodeNames) {
+          const re = new RegExp("\\b" + opencode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b")
+          assert.ok(!re.test(content), `${file} contains OpenCode tool name ${opencode}`)
         }
       }
     }
