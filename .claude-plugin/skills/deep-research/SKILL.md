@@ -56,7 +56,7 @@ deep_research.py <subcommand> --workspace <workspace>
 
 New subcommands: `audit`, `package`, `provenance`, `status`, `polish`, `run-all`, `scan`, `scan-next`, `scan-complete`, `scan-evaluate`, `scan-finalize`.
 
-<!-- platform-tool-mapping-test: {{tool:websearch}} -->
+<!-- platform-tool-mapping-test: WebSearch -->
 
 ## Workflow
 

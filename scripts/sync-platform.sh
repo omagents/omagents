@@ -38,4 +38,42 @@ for (const [name, defn] of Object.entries(base)) {
 fs.writeFileSync(process.argv[3], JSON.stringify(out, null, 2) + "\n");
 JS
 
+# Copy skills with platform-specific tool mapping and overrides
+SKILL_SOURCE_DIR="$ROOT_DIR/skills"
+SKILL_TARGET_DIR="$ROOT_DIR/.$PLATFORM-plugin/skills"
+MAP_FILE="$SCRIPT_DIR/tool-mapping.txt"
+
+mkdir -p "$SKILL_TARGET_DIR"
+
+SED_SCRIPT=$(mktemp)
+while IFS='|' read -r placeholder claude_val codex_val; do
+  [[ -z "$placeholder" ]] && continue
+  if [[ "$PLATFORM" == "claude" ]]; then
+    val="$claude_val"
+  else
+    val="$codex_val"
+  fi
+  printf 's|%s|%s|g\n' "$placeholder" "$val" >> "$SED_SCRIPT"
+done < "$MAP_FILE"
+
+for skill_dir in "$SKILL_SOURCE_DIR"/*/; do
+  skill_name=$(basename "$skill_dir")
+  src="$skill_dir/SKILL.md"
+
+  if [[ "$skill_name" == _* || "$skill_name" == .* ]]; then
+    continue
+  fi
+
+  if [[ "$PLATFORM" == "claude" && -f "$skill_dir/SKILL.claude.md" ]]; then
+    src="$skill_dir/SKILL.claude.md"
+  elif [[ "$PLATFORM" == "codex" && -f "$skill_dir/SKILL.codex.md" ]]; then
+    src="$skill_dir/SKILL.codex.md"
+  fi
+
+  mkdir -p "$SKILL_TARGET_DIR/$skill_name"
+  sed -f "$SED_SCRIPT" "$src" > "$SKILL_TARGET_DIR/$skill_name/SKILL.md"
+done
+
+rm "$SED_SCRIPT"
+
 echo "[sync] generated skeleton for $PLATFORM"

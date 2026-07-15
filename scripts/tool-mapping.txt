@@ -1,0 +1,7 @@
+{{tool:websearch}}|WebSearch|web_search
+{{tool:webfetch}}|WebFetch|web_fetch
+{{tool:read}}|Read|Read
+{{tool:write}}|Write|Write
+{{tool:edit}}|Edit|Edit
+{{tool:bash}}|Bash|Bash
+{{tool:subagent_parallel}}|Agent|subagent

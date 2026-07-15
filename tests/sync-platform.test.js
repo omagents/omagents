@@ -66,6 +66,78 @@ test("sync script generates claude and codex directories", () => {
   }
 })
 
+test("sync script copies skills and replaces tool placeholders", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const skillPath = path.join(ROOT, `.${platform}-plugin`, "skills", "deep-research", "SKILL.md")
+    assert.ok(
+      fs.existsSync(skillPath),
+      `.${platform}-plugin/skills/deep-research/SKILL.md should exist`
+    )
+
+    const content = fs.readFileSync(skillPath, "utf-8")
+    assert.ok(
+      !content.includes("{{tool:websearch}}"),
+      `.${platform}-plugin deep-research skill should not contain unresolved tool placeholder`
+    )
+
+    const expectedTool = platform === "claude" ? "WebSearch" : "web_search"
+    assert.ok(
+      content.includes(expectedTool),
+      `.${platform}-plugin deep-research skill should contain ${expectedTool}`
+    )
+  }
+})
+
+test("sync script supports SKILL.claude.md and SKILL.codex.md overrides", () => {
+  const testSkillDir = path.join(ROOT, "skills", "zz-test-override")
+  fs.mkdirSync(testSkillDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(testSkillDir, "SKILL.md"),
+    "---\nname: zz-test-override\ndescription: default\n---\n# Default\n"
+  )
+  fs.writeFileSync(
+    path.join(testSkillDir, "SKILL.claude.md"),
+    "---\nname: zz-test-override\ndescription: claude\n---\n# Claude Override\n"
+  )
+  fs.writeFileSync(
+    path.join(testSkillDir, "SKILL.codex.md"),
+    "---\nname: zz-test-override\ndescription: codex\n---\n# Codex Override\n"
+  )
+
+  try {
+    execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+    execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+    const claudeContent = fs.readFileSync(
+      path.join(ROOT, ".claude-plugin", "skills", "zz-test-override", "SKILL.md"),
+      "utf-8"
+    )
+    const codexContent = fs.readFileSync(
+      path.join(ROOT, ".codex-plugin", "skills", "zz-test-override", "SKILL.md"),
+      "utf-8"
+    )
+
+    assert.ok(
+      claudeContent.includes("Claude Override"),
+      "claude should use SKILL.claude.md override"
+    )
+    assert.ok(!claudeContent.includes("Default"), "claude override should replace default skill")
+    assert.ok(codexContent.includes("Codex Override"), "codex should use SKILL.codex.md override")
+    assert.ok(!codexContent.includes("Default"), "codex override should replace default skill")
+  } finally {
+    fs.rmSync(testSkillDir, { recursive: true, force: true })
+    for (const platform of ["claude", "codex"]) {
+      const generatedSkillDir = path.join(ROOT, `.${platform}-plugin`, "skills", "zz-test-override")
+      if (fs.existsSync(generatedSkillDir)) {
+        fs.rmSync(generatedSkillDir, { recursive: true, force: true })
+      }
+    }
+  }
+})
+
 test("sync script generates .mcp.json for claude and codex", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
   execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
