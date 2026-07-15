@@ -31,7 +31,7 @@ Systematically scan a codebase for technical debt using a durable task queue. Ea
 
 Initialize the loop with one task per audit category:
 
-```bash
+```Bash
 loop_engine.py init tech-debt-audit '[
   {"category": "todo-fixme", "description": "Scan for TODO/FIXME/HACK comments"},
   {"category": "duplication", "description": "Find duplicated code blocks"},
@@ -47,7 +47,7 @@ loop_engine.py init tech-debt-audit '[
 Repeat until `next` returns `null`:
 
 **Step 1: Get next task**
-```bash
+```Bash
 loop_engine.py next tech-debt-audit
 ```
 
@@ -57,7 +57,7 @@ If output is `null`, go to Phase 3.
 
 Execute the appropriate scan:
 
-```bash
+```Bash
 # TODO/FIXME
 grep -rn "TODO\|FIXME\|HACK\|XXX\|WORKAROUND" --include="*.py" --include="*.ts" --include="*.js" --include="*.go" --include="*.rs" --include="*.java"
 
@@ -82,18 +82,18 @@ For each finding, record:
 
 **Step 4: Record result**
 
-```bash
+```Bash
 loop_engine.py complete tech-debt-audit <id> "Found 12 TODOs (2 High, 7 Medium, 3 Low), 3 FIXMEs (1 Critical)"
 ```
 
 If the scan fails:
-```bash
+```Bash
 loop_engine.py fail tech-debt-audit <id> "Could not run npm outdated: package.json not found"
 ```
 
 ### Phase 3: Report
 
-```bash
+```Bash
 loop_engine.py summary tech-debt-audit
 ```
 

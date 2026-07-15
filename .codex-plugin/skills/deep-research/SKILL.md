@@ -27,7 +27,7 @@ This skill combines the **structured items × fields approach** (inspired by Rhi
 
 | Source | Tools to Use |
 |--------|--------------|
-| Web | `web_search`, `web_fetch` |
+| Web | `web_search`, `web_fetch`, `web_fetch` |
 | GitHub | `mcp__github__search_code`, `mcp__github__search_issues`, `mcp__github__search_pull_requests`, `mcp__github__list_releases` |
 | Codebase | `mcp__codegraph__explore`, `grep`, `glob`, `Read` |
 
@@ -50,7 +50,7 @@ This skill combines the **structured items × fields approach** (inspired by Rhi
 
 Under the hood these commands map to:
 
-```bash
+```Bash
 deep_research.py <subcommand> --workspace <workspace>
 ```
 
@@ -99,7 +99,7 @@ Generate a `plan.json` with:
 
 Example:
 
-```bash
+```Bash
 deep_research.py plan \
   --query "AI agent frameworks" \
   --template comparison \
@@ -109,7 +109,7 @@ deep_research.py plan \
 If `pre_research.json` exists in the workspace, items are automatically generated from its candidates. You can also explicitly pass `--pre-research <path>`.
 
 Config overrides:
-```bash
+```Bash
 deep_research.py plan \
   --query "..." \
   --template comparison \
@@ -124,7 +124,7 @@ deep_research.py plan \
 
 After generating the plan, initialize the loop engine with the research tasks:
 
-```bash
+```Bash
 loop_engine.py init deep-research '[
   {"task_id": "task-1", "type": "web", "item_id": "item-1", "field_ids": ["field-1"], "focus": "...", "description": "Research LangGraph overview"},
   {"task_id": "task-2", "type": "github", "item_id": "item-2", "field_ids": ["field-2"], "focus": "...", "description": "Research AutoGPT license"}
@@ -135,7 +135,7 @@ loop_engine.py init deep-research '[
 
 Review the generated plan. If items or fields are missing, add them:
 
-```bash
+```Bash
 deep_research.py add-items \
   --workspace agent-frameworks \
   --items-json '[{"name":"LangGraph","type":"framework","description":"LangChain agent framework"}]'
@@ -151,7 +151,7 @@ Managed by the loop engine. Get the next pending task, dispatch it as a subagent
 
 **Step 1: Get next task**
 
-```bash
+```Bash
 loop_engine.py next deep-research
 ```
 
@@ -186,7 +186,7 @@ Workspace: {workspace}
 
 Instructions:
 1. Use web_search to find relevant sources. Include the current year in queries.
-2. For each promising source, use web_fetch to read it.
+2. For each promising source, use web_fetch or web_fetch to Read it.
 3. Extract data for EACH field listed above.
 4. Mark uncertain values with [uncertain].
 5. If information is missing or contradictory, do additional targeted searches (up to 3 iterations).
@@ -227,13 +227,13 @@ GitHub and codebase subagents follow the same structure but use their respective
 
 When a subagent finishes and its findings are written and validated:
 
-```bash
+```Bash
 loop_engine.py complete deep-research <id> "Found 5 sources, coverage: high"
 ```
 
 If the subagent fails (no findings, validation error):
 
-```bash
+```Bash
 loop_engine.py fail deep-research <id> "No web sources found for this item"
 ```
 
@@ -245,7 +245,7 @@ Repeat from Step 1. When `next` returns `null`, all initial tasks are done. Proc
 
 **Step 1: Run gap analysis**
 
-```bash
+```Bash
 deep_research.py gaps --workspace agent-frameworks
 ```
 
@@ -255,7 +255,7 @@ This builds an `item x field` coverage matrix, identifies missing or low-confide
 
 If `should_continue` is true, add each new task from the gap report:
 
-```bash
+```Bash
 loop_engine.py add deep-research '{"task_id": "task-r1-1", "type": "web", "item_id": "item-1", "field_ids": ["field-2"], "focus": "Supplemental research for LangGraph on field License", "description": "Gap fill: LangGraph License"}'
 ```
 
@@ -267,7 +267,7 @@ Return to Phase 3 to execute the new gap-fill tasks. The loop continues until:
 
 **Step 4: Check final status**
 
-```bash
+```Bash
 loop_engine.py summary deep-research
 ```
 
@@ -275,7 +275,7 @@ When the loop is complete, proceed to Phase 5.
 
 ### Phase 5: Synthesize Report (`/research-report`)
 
-```bash
+```Bash
 deep_research.py merge --workspace agent-frameworks
 deep_research.py report --workspace agent-frameworks
 ```
@@ -286,7 +286,7 @@ This produces `report.md` using the selected Jinja2 template (`survey`, `compari
 
 The template-generated report is mechanically assembled and may feel stiff. This phase uses the LLM (the agent itself) to rewrite it into coherent prose.
 
-```bash
+```Bash
 deep_research.py report --polish --workspace agent-frameworks
 # or standalone:
 deep_research.py polish --workspace agent-frameworks
@@ -463,7 +463,7 @@ Provenance is optional and backward-compatible. Old workspaces without provenanc
 
 Run automated checks on research findings:
 
-```bash
+```Bash
 deep_research.py audit --workspace agent-frameworks
 ```
 
@@ -480,7 +480,7 @@ Output: `artifacts/audit_report.json` with overall score (0-100) and recommendat
 
 Generate a complete package manifest:
 
-```bash
+```Bash
 deep_research.py package --workspace agent-frameworks
 ```
 
@@ -511,7 +511,7 @@ Workspace structure:
 
 Run the full pipeline with pause/resume:
 
-```bash
+```Bash
 # First run
 deep_research.py run-all --query "AI agent frameworks" --template comparison --workspace agent-frameworks
 

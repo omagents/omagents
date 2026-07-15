@@ -18,7 +18,7 @@ Pattern-aware code search using the `ast-grep` (`sg`) binary. Matches code by it
 
 Check if ast-grep is installed:
 
-```bash
+```Bash
 sg --version 2>/dev/null || npx ast-grep --version 2>/dev/null
 ```
 
@@ -28,7 +28,7 @@ If not installed, fall back to `grep` with careful regex patterns.
 
 ### Search
 
-```bash
+```Bash
 # Find all console.log calls
 sg -p 'console.log($$$)' --lang javascript
 
@@ -41,7 +41,7 @@ sg -p 'if ($COND) { return $VAL }' --lang typescript
 
 ### Replace
 
-```bash
+```Bash
 # Preview first (ALWAYS dry-run before applying)
 sg -p 'console.log($$$)' -r 'logger.info($$$)' --lang javascript
 
@@ -51,7 +51,7 @@ sg -p 'console.log($$$)' -r 'logger.info($$$)' --lang javascript --update-all
 
 ### Validate Pattern
 
-```bash
+```Bash
 # Check if pattern is valid before searching
 sg -p 'pattern' --lang python --json=compact 2>&1 | head -5
 ```
@@ -82,7 +82,7 @@ $PAT => panic!($$$)
 
 ast-grep auto-detects language from file extension. Override with `--lang`:
 
-```bash
+```Bash
 sg -p 'pattern' --lang python
 sg -p 'pattern' --lang typescript
 sg -p 'pattern' --lang rust
@@ -95,7 +95,7 @@ Supported: python, javascript, typescript, rust, go, java, c, cpp, csharp, ruby,
 
 For project-wide refactoring, use the loop engine to process files one by one:
 
-```bash
+```Bash
 # Phase 1: Find all matching files
 sg -p 'console.log($$$)' --lang javascript --json=compact | jq '.[].path' | sort -u
 
@@ -117,7 +117,7 @@ loop_engine.py init ast-grep-refactor '[
 
 If ast-grep is not installed, use grep with careful patterns:
 
-```bash
+```Bash
 # Instead of sg -p 'console.log($$$)' --lang javascript
 grep -rn "console\.log(" --include="*.js" --include="*.ts"
 

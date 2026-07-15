@@ -20,7 +20,7 @@ Systematically find and remove dead code using a durable task queue. Each candid
 |------|--------------|---------------------------|
 | Unused imports | grep import, verify usage in file | - |
 | Unreferenced functions | codegraph or grep for callers | Entry points, public API, event handlers |
-| Unused variables | Assigned but never read | - |
+| Unused variables | Assigned but never Read | - |
 | Unreferenced files | Not imported anywhere | Entry points, config, test files |
 | Dead CSS classes | Defined but never used in templates | - |
 | Commented-out code | Blocks of commented code | Documentation comments |
@@ -31,7 +31,7 @@ Systematically find and remove dead code using a durable task queue. Each candid
 
 Scan the codebase for dead code candidates:
 
-```bash
+```Bash
 # Find unused imports
 grep -rn "^import\|^from" --include="*.py" --include="*.ts" --include="*.js"
 
@@ -46,7 +46,7 @@ For each candidate, verify it's not an exception before adding to queue.
 
 Initialize the loop:
 
-```bash
+```Bash
 loop_engine.py init remove-deadcode '[
   {"file": "src/utils.py", "line": 12, "type": "unused-import", "name": "os", "description": "Remove unused import os from utils.py"},
   {"file": "src/old_api.py", "line": 1, "type": "unreferenced-file", "name": "old_api.py", "description": "Remove unreferenced old_api.py"},
@@ -59,7 +59,7 @@ loop_engine.py init remove-deadcode '[
 Repeat until `next` returns `null`:
 
 **Step 1: Get next task**
-```bash
+```Bash
 loop_engine.py next remove-deadcode
 ```
 
@@ -68,17 +68,17 @@ If output is `null`, go to Phase 3.
 **Step 2: Verify the candidate is truly dead**
 
 Double-check using grep:
-```bash
+```Bash
 grep -rn "<name>" --include="*.py" --include="*.ts" --include="*.js"
 ```
 
 Check for dynamic references:
-```bash
+```Bash
 grep -rn "import(\|__import__\|require(" --include="*.py" --include="*.ts"
 ```
 
 If references are found, mark complete with "not dead - referenced in X":
-```bash
+```Bash
 loop_engine.py complete remove-deadcode <id> "not dead - referenced in src/main.py:23"
 ```
 
@@ -87,7 +87,7 @@ loop_engine.py complete remove-deadcode <id> "not dead - referenced in src/main.
 Edit the file to remove the import, function, or file.
 
 **Step 4: Verify**
-```bash
+```Bash
 # Run tests
 npm test 2>/dev/null || pytest tests/ 2>/dev/null || true
 
@@ -98,18 +98,18 @@ ruff check <file> 2>/dev/null || npx eslint <file> 2>/dev/null || true
 **Step 5: Record result**
 
 If verification passes:
-```bash
+```Bash
 loop_engine.py complete remove-deadcode <id> "Removed unused import os"
 ```
 
 If tests fail:
-```bash
+```Bash
 loop_engine.py fail remove-deadcode <id> "test_utils.py failed after removal"
 ```
 
 ### Phase 3: Report
 
-```bash
+```Bash
 loop_engine.py summary remove-deadcode
 ```
 

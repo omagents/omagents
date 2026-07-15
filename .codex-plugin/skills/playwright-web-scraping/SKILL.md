@@ -28,7 +28,7 @@ description: >
 
 Run the bundled script to fetch page content as clean text:
 
-```bash
+```Bash
 python scripts/fetch_page.py <URL>
 ```
 
@@ -42,7 +42,7 @@ Options:
 
 ## Writing Custom Playwright Code
 
-When the bundled script is insufficient, write inline Python with Playwright:
+When the bundled script is insufficient, Write inline Python with Playwright:
 
 ```python
 import asyncio
@@ -97,12 +97,12 @@ for item in items:
 
 Playwright runs in the omagents Python venv (see agents-python-tools skill for setup and cross-platform paths):
 
-```bash
+```Bash
 pip install playwright 2>/dev/null
 python -m playwright install chromium 2>/dev/null
 ```
 
 If Playwright and chromium are already installed, skip the install steps. Always check first with:
-```bash
+```Bash
 python -c "from playwright.async_api import async_playwright" 2>/dev/null && echo "OK" || echo "NEED_INSTALL"
 ```

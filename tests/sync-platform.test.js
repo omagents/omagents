@@ -6,6 +6,34 @@ import { execSync } from "child_process"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
 const SCRIPT = path.join(ROOT, "scripts", "sync-platform.sh")
+const MAPPING_FILE = path.join(ROOT, "scripts", "tool-mapping.txt")
+
+function walkSync(dir) {
+  const results = []
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      results.push(...walkSync(full))
+    } else if (entry.isFile()) {
+      results.push(full)
+    }
+  }
+  return results
+}
+
+function parseToolMapping() {
+  const mapping = []
+  const content = fs.readFileSync(MAPPING_FILE, "utf-8")
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith("#")) continue
+    const [opencode, claude, codex] = trimmed.split("|")
+    if (opencode && claude && codex) {
+      mapping.push({ opencode: opencode.trim(), claude: claude.trim(), codex: codex.trim() })
+    }
+  }
+  return mapping
+}
 
 test("sync script generates claude and codex directories", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
@@ -66,7 +94,23 @@ test("sync script generates claude and codex directories", () => {
   }
 })
 
-test("sync script copies skills and replaces tool placeholders", () => {
+test("source skill files contain no unresolved tool placeholders", () => {
+  const skillsDir = path.join(ROOT, "skills")
+  const skillDirs = fs.readdirSync(skillsDir).filter((name) => {
+    const full = path.join(skillsDir, name)
+    return fs.statSync(full).isDirectory()
+  })
+
+  for (const skillName of skillDirs) {
+    const skillDir = path.join(skillsDir, skillName)
+    for (const file of walkSync(skillDir)) {
+      const content = fs.readFileSync(file, "utf-8")
+      assert.ok(!content.includes("{{tool:"), `${file} contains unresolved tool placeholder`)
+    }
+  }
+})
+
+test("sync script applies reverse tool mapping to generated skills", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
   execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
 
@@ -78,15 +122,14 @@ test("sync script copies skills and replaces tool placeholders", () => {
     )
 
     const content = fs.readFileSync(skillPath, "utf-8")
-    assert.ok(
-      !content.includes("{{tool:websearch}}"),
-      `.${platform}-plugin deep-research skill should not contain unresolved tool placeholder`
-    )
-
     const expectedTool = platform === "claude" ? "WebSearch" : "web_search"
     assert.ok(
       content.includes(expectedTool),
       `.${platform}-plugin deep-research skill should contain ${expectedTool}`
+    )
+    assert.ok(
+      !content.includes("websearch_web_search_exa"),
+      `.${platform}-plugin deep-research skill should not contain OpenCode websearch tool name`
     )
   }
 })
@@ -138,12 +181,12 @@ test("sync script supports SKILL.claude.md and SKILL.codex.md overrides", () => 
   }
 })
 
-test("sync script replaces github_search_code and codegraph_explore placeholders", () => {
+test("sync script maps OpenCode tool names to platform-specific names", () => {
   const testSkillDir = path.join(ROOT, "skills", "zz-test-tool-mapping")
   fs.mkdirSync(testSkillDir, { recursive: true })
   fs.writeFileSync(
     path.join(testSkillDir, "SKILL.md"),
-    "---\nname: zz-test-tool-mapping\ndescription: test tool mapping\n---\nUse {{tool:github_search_code}} and {{tool:codegraph_explore}} here.\n"
+    "---\nname: zz-test-tool-mapping\ndescription: test tool mapping\n---\nUse github_search_code and codegraph_codegraph_explore here.\nAlso read, write, edit and bash.\n"
   )
 
   try {
@@ -166,6 +209,35 @@ test("sync script replaces github_search_code and codegraph_explore placeholders
       assert.ok(
         !content.includes("{{tool:"),
         `.${platform}-plugin zz-test-tool-mapping should not contain unresolved tool placeholders`
+      )
+      assert.ok(
+        !content.includes("github_search_code"),
+        `.${platform}-plugin zz-test-tool-mapping should not contain OpenCode github_search_code`
+      )
+      assert.ok(
+        !content.includes("codegraph_codegraph_explore"),
+        `.${platform}-plugin zz-test-tool-mapping should not contain OpenCode codegraph_codegraph_explore`
+      )
+
+      const expectedRead = platform === "claude" ? "Read" : "Read"
+      const expectedWrite = platform === "claude" ? "Write" : "Write"
+      const expectedEdit = platform === "claude" ? "Edit" : "Edit"
+      const expectedBash = platform === "claude" ? "Bash" : "Bash"
+      assert.ok(
+        content.includes(expectedRead),
+        `.${platform}-plugin should map read to ${expectedRead}`
+      )
+      assert.ok(
+        content.includes(expectedWrite),
+        `.${platform}-plugin should map write to ${expectedWrite}`
+      )
+      assert.ok(
+        content.includes(expectedEdit),
+        `.${platform}-plugin should map edit to ${expectedEdit}`
+      )
+      assert.ok(
+        content.includes(expectedBash),
+        `.${platform}-plugin should map bash to ${expectedBash}`
       )
     }
   } finally {
@@ -192,7 +264,7 @@ test("generated skills contain no unresolved tool placeholders", () => {
     const skillsDir = path.join(ROOT, `.${platform}-plugin`, "skills")
     const skillDirs = fs.readdirSync(skillsDir).filter((name) => {
       const full = path.join(skillsDir, name)
-      return fs.statSync(full).isDirectory() && !name.startsWith("_") && !name.startsWith(".")
+      return fs.statSync(full).isDirectory()
     })
 
     for (const skillName of skillDirs) {
@@ -200,6 +272,33 @@ test("generated skills contain no unresolved tool placeholders", () => {
       for (const file of walkSync(skillDir)) {
         const content = fs.readFileSync(file, "utf-8")
         assert.ok(!content.includes("{{tool:"), `${file} contains unresolved tool placeholder`)
+      }
+    }
+  }
+})
+
+test("generated skills contain no mapped OpenCode tool names", () => {
+  const mapping = parseToolMapping()
+  assert.ok(mapping.length > 0, "tool-mapping.txt should contain mappings")
+
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const skillsDir = path.join(ROOT, `.${platform}-plugin`, "skills")
+    const skillDirs = fs.readdirSync(skillsDir).filter((name) => {
+      const full = path.join(skillsDir, name)
+      return fs.statSync(full).isDirectory()
+    })
+
+    for (const skillName of skillDirs) {
+      const skillDir = path.join(skillsDir, skillName)
+      for (const file of walkSync(skillDir)) {
+        const content = fs.readFileSync(file, "utf-8")
+        for (const { opencode } of mapping) {
+          const re = new RegExp("\\b" + opencode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b")
+          assert.ok(!re.test(content), `${file} contains mapped OpenCode tool name ${opencode}`)
+        }
       }
     }
   }
@@ -226,18 +325,22 @@ test("sync script copies skill subdirectories (scripts, templates, agents)", () 
   }
 })
 
-function walkSync(dir) {
-  const results = []
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      results.push(...walkSync(full))
-    } else if (entry.isFile()) {
-      results.push(full)
-    }
+test("sync script copies skills/_shared", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const sharedDir = path.join(ROOT, `.${platform}-plugin`, "skills", "_shared")
+    assert.ok(fs.existsSync(sharedDir), `.${platform}-plugin/skills/_shared should exist`)
+
+    const scriptsDir = path.join(sharedDir, "scripts")
+    assert.ok(fs.existsSync(scriptsDir), `.${platform}-plugin/skills/_shared/scripts should exist`)
+    assert.ok(
+      fs.existsSync(path.join(scriptsDir, "loop_engine.py")),
+      `.${platform}-plugin/skills/_shared/scripts/loop_engine.py should exist`
+    )
   }
-  return results
-}
+})
 
 test("sync script generates .mcp.json for claude and codex", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })

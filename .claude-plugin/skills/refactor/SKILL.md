@@ -26,7 +26,7 @@ Systematically refactor code targets one by one, with verification after each ch
 
 Scan the codebase for refactoring opportunities:
 
-```bash
+```Bash
 # Long functions (> 50 lines)
 grep -rn "def \|function \|const .* = " --include="*.py" --include="*.ts" --include="*.js" | head -50
 
@@ -41,7 +41,7 @@ grep -rn "duplicate pattern" --include="*.py"
 
 ### Phase 2: Build Task Queue
 
-```bash
+```Bash
 loop_engine.py init refactor '[
   {"file": "src/auth.py", "target": "split authenticate() into validate_credentials() + create_session()", "description": "Refactor auth.py: split authenticate()"},
   {"file": "src/cache.py", "target": "replace manual caching with functools.lru_cache", "description": "Refactor cache.py: use lru_cache"},
@@ -54,7 +54,7 @@ loop_engine.py init refactor '[
 Repeat until `next` returns `null`:
 
 **Step 1: Get next task**
-```bash
+```Bash
 loop_engine.py next refactor
 ```
 
@@ -66,18 +66,18 @@ Read the file, understand what it does currently, and plan the specific changes.
 
 **Step 3: Apply the refactoring**
 
-Use edit tools to make the changes. If using LSP-enabled OpenCode:
+Use Edit tools to make the changes. If using LSP-enabled OpenCode:
 - Use `lsp` tool for `prepare_rename` and `rename` operations
 - Use `lsp` tool for `findReferences` to ensure all callers are updated
 
 If using ast-grep:
-```bash
+```Bash
 sg -p 'old_pattern' -r 'new_pattern' --lang python --update-all <file>
 ```
 
 **Step 4: Verify**
 
-```bash
+```Bash
 # Run tests
 npm test 2>/dev/null || pytest tests/ 2>/dev/null || true
 
@@ -91,18 +91,18 @@ ruff check <file> 2>/dev/null || npx eslint <file> 2>/dev/null || true
 **Step 5: Record result**
 
 If verification passes:
-```bash
+```Bash
 loop_engine.py complete refactor <id> "Split authenticate() into 2 functions, all tests pass"
 ```
 
 If tests fail:
-```bash
+```Bash
 loop_engine.py fail refactor <id> "test_auth.py failed after split"
 ```
 
 ### Phase 4: Report
 
-```bash
+```Bash
 loop_engine.py summary refactor
 ```
 

@@ -296,7 +296,7 @@ def run_scan(args: argparse.Namespace) -> int:
     print(
         f"\nPre-research initialized. Now:\n"
         f"1. Run `deep_research.py scan-next --workspace {workspace}` to get the next search task\n"
-        f"2. Do the web search and write findings to {workspace}/pre_findings/\n"
+        f"2. Do the web search and Write findings to {workspace}/pre_findings/\n"
         f"3. Run `deep_research.py scan-complete <task_id> --workspace {workspace}`\n"
         f"4. Run `deep_research.py scan-evaluate --workspace {workspace}`\n"
         f"5. Repeat from step 1 until evaluate says should_continue=false\n"
@@ -339,7 +339,7 @@ def run_all(args: argparse.Namespace) -> int:
         return rc
 
     print(
-        "\nPlan created. Now run your web/github/codebase subagents and write "
+        "\nPlan created. Now run your web/github/codebase subagents and Write "
         f"findings to {workspace / 'findings'}/. Then run:\n\n"
         f"  deep_research.py gaps --workspace {workspace}\n"
         f"  deep_research.py merge --workspace {workspace}\n"

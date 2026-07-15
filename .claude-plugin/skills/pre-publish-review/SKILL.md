@@ -18,7 +18,7 @@ A durable checklist that verifies everything is ready before publishing. Each ch
 
 ### Phase 1: Build Task Queue
 
-```bash
+```Bash
 loop_engine.py init pre-publish-review '[
   {"check": "version", "description": "Verify package.json version is correct and not already published"},
   {"check": "changelog", "description": "Verify CHANGELOG.md has entry for current version"},
@@ -35,7 +35,7 @@ loop_engine.py init pre-publish-review '[
 Repeat until `next` returns `null`:
 
 **Step 1: Get next task**
-```bash
+```Bash
 loop_engine.py next pre-publish-review
 ```
 
@@ -54,18 +54,18 @@ loop_engine.py next pre-publish-review
 **Step 3: Record result**
 
 If check passes:
-```bash
+```Bash
 loop_engine.py complete pre-publish-review <id> "PASS: all 26 tests passed"
 ```
 
 If check fails:
-```bash
+```Bash
 loop_engine.py fail pre-publish-review <id> "FAIL: 2 tests failed"
 ```
 
 ### Phase 3: Report
 
-```bash
+```Bash
 loop_engine.py summary pre-publish-review
 ```
 

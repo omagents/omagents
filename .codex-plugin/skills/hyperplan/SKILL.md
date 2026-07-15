@@ -18,7 +18,7 @@ Dispatch 3 parallel critic subagents, each attacking a plan from a different per
 
 ### Phase 1: Build Task Queue
 
-```bash
+```Bash
 loop_engine.py init hyperplan '[
   {"critic": "security", "description": "Security critic: vulnerabilities, input validation, auth bypass, data exposure"},
   {"critic": "architecture", "description": "Architecture critic: coupling, scalability, design patterns, maintainability"},
@@ -84,12 +84,12 @@ Output: List of findings with severity (CRITICAL/HIGH/MEDIUM/LOW) and specific s
 
 As each background task completes, record the result:
 
-```bash
+```Bash
 loop_engine.py complete hyperplan <id> "Found 3 issues: 1 CRITICAL, 2 MEDIUM"
 ```
 
 If a critic fails to produce results:
-```bash
+```Bash
 loop_engine.py fail hyperplan <id> "Critic timed out"
 ```
 
@@ -97,7 +97,7 @@ loop_engine.py fail hyperplan <id> "Critic timed out"
 
 When all critics are done:
 
-```bash
+```Bash
 loop_engine.py summary hyperplan
 ```
 

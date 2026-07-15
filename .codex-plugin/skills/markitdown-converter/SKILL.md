@@ -35,7 +35,7 @@ Use MarkItDown to convert documents to Markdown for reading and text extraction.
 
 The simplest way: run markitdown directly on a file.
 
-```bash
+```Bash
 markitdown input.pdf
 markitdown input.docx -o output.md
 ```
@@ -73,7 +73,7 @@ print(result.text_content)
 
 MarkItDown runs in the omagents Python venv (see agents-python-tools skill for setup and cross-platform paths):
 
-```bash
+```Bash
 # Check installation
 python -c "from markitdown import MarkItDown; print('OK')"
 

@@ -33,14 +33,14 @@ Keep comments that explain **why**, not **what**.
 
 Scan the codebase for files to process:
 
-```bash
+```Bash
 # Find all source files in the changed area (adjust extensions as needed)
 glob "**/*.{py,ts,js,go,rs,java}"
 ```
 
 Initialize the loop:
 
-```bash
+```Bash
 loop_engine.py init remove-ai-slops '[
   {"file": "src/auth.py", "description": "Clean AI slops in auth module"},
   {"file": "src/cache.py", "description": "Clean AI slops in cache module"},
@@ -53,7 +53,7 @@ loop_engine.py init remove-ai-slops '[
 Repeat until `next` returns `null`:
 
 **Step 1: Get next task**
-```bash
+```Bash
 loop_engine.py next remove-ai-slops
 ```
 
@@ -68,7 +68,7 @@ Read the file, scan for the 7 patterns listed above. For each found slop, note t
 Edit the file to remove the identified slops.
 
 **Step 4: Verify**
-```bash
+```Bash
 # Run linter (adjust for project)
 ruff check <file>          # Python
 npx eslint <file>          # JS/TS
@@ -80,12 +80,12 @@ npm test 2>/dev/null || pytest tests/ 2>/dev/null || true
 **Step 5: Record result**
 
 If verification passes:
-```bash
+```Bash
 loop_engine.py complete remove-ai-slops <id> "Removed N slops: 2 comments, 1 unused import"
 ```
 
 If verification fails (tests broke):
-```bash
+```Bash
 loop_engine.py fail remove-ai-slops <id> "Test failure in test_auth.py"
 ```
 
@@ -93,7 +93,7 @@ The engine will allow up to 3 retries before marking the task as blocked.
 
 ### Phase 3: Report
 
-```bash
+```Bash
 loop_engine.py summary remove-ai-slops
 ```
 

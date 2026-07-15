@@ -32,7 +32,7 @@ mcp__github__list_issues(owner="<owner>", repo="<repo>", state="OPEN", perPage=5
 
 Initialize the loop with one task per issue:
 
-```bash
+```Bash
 loop_engine.py init github-triage '[
   {"issue_number": 42, "title": "Login fails on Safari", "description": "Triage issue #42: Login fails on Safari"},
   {"issue_number": 43, "title": "Add dark mode", "description": "Triage issue #43: Add dark mode"},
@@ -45,7 +45,7 @@ loop_engine.py init github-triage '[
 Repeat until `next` returns `null`:
 
 **Step 1: Get next task**
-```bash
+```Bash
 loop_engine.py next github-triage
 ```
 
@@ -94,18 +94,18 @@ mcp__github__issue_write(method="update", owner="<owner>", repo="<repo>", issue_
 
 **Step 6: Record result**
 
-```bash
+```Bash
 loop_engine.py complete github-triage <id> "Labeled: bug, priority:high, effort:medium"
 ```
 
 If labeling fails (permissions, etc.):
-```bash
+```Bash
 loop_engine.py fail github-triage <id> "Permission denied: cannot label issues"
 ```
 
 ### Phase 3: Report
 
-```bash
+```Bash
 loop_engine.py summary github-triage
 ```
 

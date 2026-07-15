@@ -5,7 +5,7 @@ description: "Auto-generate hierarchical AGENTS.md files throughout a project. T
 
 # Init-Deep: Hierarchical AGENTS.md Generation
 
-Generate hierarchical `AGENTS.md` files so agents auto-read relevant context per directory, reducing token usage and improving accuracy.
+Generate hierarchical `AGENTS.md` files so agents auto-Read relevant context per directory, reducing token usage and improving accuracy.
 
 ## When to Use
 
@@ -24,7 +24,7 @@ project/
 │       └── AGENTS.md      ← component-specific context
 ```
 
-Each `AGENTS.md` is scoped to its directory. Agents entering a subdirectory read only that context plus the root.
+Each `AGENTS.md` is scoped to its directory. Agents entering a subdirectory Read only that context plus the root.
 
 ## Workflow
 

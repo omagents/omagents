@@ -24,7 +24,7 @@ LSP must be enabled in the project:
 ```
 
 The `lsp` tool is experimental. Set this environment variable:
-```bash
+```Bash
 export OPENCODE_EXPERIMENTAL_LSP_TOOL=true
 ```
 
@@ -54,7 +54,7 @@ What do you need?
 │
 └─ Diagnostics (errors/warnings)
    └─ Use `lsp` tool with lsp_diagnostics
-      OR run the project's linter directly via bash
+      OR run the project's linter directly via Bash
 ```
 
 ## Language Mapping
@@ -74,7 +74,7 @@ OpenCode auto-detects LSP servers by file extension:
 | C# | csharp | .cs |
 | Swift | sourcekit-lsp | .swift |
 | Lua | lua-ls | .lua |
-| Bash | bash-language-server | .sh .bash .zsh |
+| Bash | Bash-language-server | .sh .Bash .zsh |
 | YAML | yaml-ls | .yaml .yml |
 
 Full list: https://opencode.ai/docs/lsp/
@@ -92,4 +92,4 @@ Full list: https://opencode.ai/docs/lsp/
 - LSP servers start on demand when a matching file extension is detected
 - LSP can be memory-intensive; for quick tasks, grep may be more efficient
 - If LSP is not enabled, fall back to grep + codegraph
-- For project-wide diagnostics, run the linter via bash instead of per-file LSP
+- For project-wide diagnostics, run the linter via Bash instead of per-file LSP

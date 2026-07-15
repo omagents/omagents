@@ -20,7 +20,7 @@ Manage pull requests from creation to merge using the github MCP tools.
 
 Verify the branch is ready:
 
-```bash
+```Bash
 # Check current branch
 git branch --show-current
 

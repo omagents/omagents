@@ -27,9 +27,9 @@ This skill combines the **structured items × fields approach** (inspired by Rhi
 
 | Source | Tools to Use |
 |--------|--------------|
-| Web | `{{tool:websearch}}`, `{{tool:webfetch}}` |
-| GitHub | `{{tool:github_search_code}}`, `{{tool:github_search_issues}}`, `{{tool:github_search_pull_requests}}`, `{{tool:github_list_releases}}` |
-| Codebase | `{{tool:codegraph_explore}}`, `grep`, `glob`, `{{tool:read}}` |
+| Web | `websearch_web_search_exa`, `webfetch`, `websearch_web_fetch_exa` |
+| GitHub | `github_search_code`, `github_search_issues`, `github_search_pull_requests`, `github_list_releases` |
+| Codebase | `codegraph_codegraph_explore`, `grep`, `glob`, `read` |
 
 ## Commands
 
@@ -164,7 +164,7 @@ For each task returned, launch a subagent using `task(background: true)`. Multip
 1. Searches the appropriate source (web, GitHub, or codebase).
 2. Reads key sources.
 3. Extracts data into `field_data` keyed by field IDs.
-4. Writes findings to `<workspace>/findings/<task_id>.json` **using {{tool:bash}}** (e.g. `cat > <path> << 'EOF' ... EOF`), not the `{{tool:write}}` tool — subagent sessions run in a temporary working directory, so the `{{tool:write}}` tool may trigger a confirmation dialog for paths outside it.
+4. Writes findings to `<workspace>/findings/<task_id>.json` **using bash** (e.g. `cat > <path> << 'EOF' ... EOF`), not the `write` tool — subagent sessions run in a temporary working directory, so the `write` tool may trigger a confirmation dialog for paths outside it.
 5. Runs validation.
 
 Do not wait for all subagents to return before proceeding. Background task completions are automatically injected via the Background Job Board. When all tasks are done, proceed to Phase 4.
@@ -185,16 +185,16 @@ Focus: {task_focus}
 Workspace: {workspace}
 
 Instructions:
-1. Use {{tool:websearch}} to find relevant sources. Include the current year in queries.
-2. For each promising source, use {{tool:webfetch}} to read it.
+1. Use websearch_web_search_exa to find relevant sources. Include the current year in queries.
+2. For each promising source, use webfetch or websearch_web_fetch_exa to read it.
 3. Extract data for EACH field listed above.
 4. Mark uncertain values with [uncertain].
 5. If information is missing or contradictory, do additional targeted searches (up to 3 iterations).
 6. For each finding, record the publication date if available.
-7. Write findings to {workspace}/findings/{task_id}.json. IMPORTANT: Use a {{tool:bash}}
+7. Write findings to {workspace}/findings/{task_id}.json. IMPORTANT: Use a bash
    command (e.g. `cat > {workspace}/findings/{task_id}.json << 'ENDOFFILE' ... ENDOFILE`)
-   instead of the `{{tool:write}}` tool - subagent sessions run in a temporary directory, so
-   the `{{tool:write}}` tool may trigger a confirmation dialog for paths outside it.
+   instead of the `write` tool - subagent sessions run in a temporary directory, so
+   the `write` tool may trigger a confirmation dialog for paths outside it.
    Use this JSON schema:
    {
      "type": "web",

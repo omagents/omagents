@@ -522,7 +522,7 @@ def _recommend_next_action(phase: str) -> str:
         "gap_analysis": "Run: run-all --resume (will process gaps automatically)",
         "merging": "Run: run-all --resume (will merge automatically)",
         "reporting": "Run: run-all --resume (will generate report automatically)",
-        "polishing": "Polish the report (read report_raw.md, rewrite, save to report.md), then run: run-all --resume",
+        "polishing": "Polish the report (Read report_raw.md, rewrite, save to report.md), then run: run-all --resume",
         "auditing": "Run: run-all --resume (will audit automatically)",
         "packaging": "Run: run-all --resume (will package automatically)",
         "done": "Research complete. No further action needed.",

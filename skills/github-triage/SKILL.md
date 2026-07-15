@@ -27,7 +27,7 @@ Systematically review, categorize, and label GitHub issues using a durable task 
 Fetch open issues using the github MCP:
 
 ```
-{{tool:github_list_issues}}(owner="<owner>", repo="<repo>", state="OPEN", perPage=50)
+github_list_issues(owner="<owner>", repo="<repo>", state="OPEN", perPage=50)
 ```
 
 Initialize the loop with one task per issue:
@@ -54,7 +54,7 @@ If output is `null`, go to Phase 3.
 **Step 2: Read the full issue**
 
 ```
-{{tool:github_issue_read}}(method="get", owner="<owner>", repo="<repo>", issue_number=<N>)
+github_issue_read(method="get", owner="<owner>", repo="<repo>", issue_number=<N>)
 ```
 
 Read the title, body, and existing labels. Read comments if needed.
@@ -66,7 +66,7 @@ Determine type, priority, and effort based on the classification reference above
 **Step 4: Check for duplicates**
 
 ```
-{{tool:github_search_issues}}(query="repo:<owner>/<repo> is:issue <keywords from title>")
+github_search_issues(query="repo:<owner>/<repo> is:issue <keywords from title>")
 ```
 
 If a duplicate is found, note the original issue number.
@@ -74,7 +74,7 @@ If a duplicate is found, note the original issue number.
 **Step 5: Apply labels**
 
 ```
-{{tool:github_issue_write}}(
+github_issue_write(
   method="update",
   owner="<owner>",
   repo="<repo>",
@@ -85,11 +85,11 @@ If a duplicate is found, note the original issue number.
 
 For duplicates, close with a comment:
 ```
-{{tool:github_add_issue_comment}}(
+github_add_issue_comment(
   owner="<owner>", repo="<repo>", issue_number=<N>,
   body="Closing as duplicate of #<original>. Please follow the original issue for updates."
 )
-{{tool:github_issue_write}}(method="update", owner="<owner>", repo="<repo>", issue_number=<N>, state="closed", state_reason="duplicate")
+github_issue_write(method="update", owner="<owner>", repo="<repo>", issue_number=<N>, state="closed", state_reason="duplicate")
 ```
 
 **Step 6: Record result**

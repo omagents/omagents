@@ -32,7 +32,7 @@ grep -rn "def \|function \|const .* = " --include="*.py" --include="*.ts" --incl
 
 # High complexity (deep nesting)
 # Use codegraph to find complex call paths
-{{tool:codegraph_explore}} query="complex functions with deep nesting"
+codegraph_codegraph_explore query="complex functions with deep nesting"
 
 # Code duplication
 # Use grep to find repeated patterns

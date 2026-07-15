@@ -23,7 +23,7 @@ Run each check in order. Report PASS/FAIL for each with a one-line explanation.
 
 Check that `@omagents/omagents` is in the OpenCode plugin config:
 
-```bash
+```Bash
 cat ~/.config/opencode/opencode.json
 ```
 
@@ -46,7 +46,7 @@ Report which MCPs are configured and whether the token/key is present.
 
 ### 3. Python Venv
 
-```bash
+```Bash
 ls ~/.venvs/omagents/bin/python
 ~/.venvs/omagents/bin/python -c "import jinja2; print(jinja2.__version__)"
 ```
@@ -58,7 +58,7 @@ ls ~/.venvs/omagents/bin/python
 
 Verify the skills directory exists and contains SKILL.md files:
 
-```bash
+```Bash
 ls skills/*/SKILL.md
 ```
 
@@ -69,7 +69,7 @@ ls skills/*/SKILL.md
 
 Verify the shell.env hook is prepending venv and skill scripts:
 
-```bash
+```Bash
 echo $PATH | tr ':' '\n' | head -10
 ```
 
@@ -78,7 +78,7 @@ echo $PATH | tr ':' '\n' | head -10
 
 ### 6. Background Subagents
 
-```bash
+```Bash
 echo $OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS
 ```
 
@@ -93,7 +93,7 @@ Check if superpowers was loaded successfully by looking for superpowers skills i
 
 Check that the user has at least one model configured:
 
-```bash
+```Bash
 cat ~/.config/opencode/opencode.json
 ```
 

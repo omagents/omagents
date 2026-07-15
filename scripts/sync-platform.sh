@@ -46,20 +46,42 @@ MAP_FILE="$SCRIPT_DIR/tool-mapping.txt"
 
 mkdir -p "$SKILL_TARGET_DIR"
 
-SED_SCRIPT=$(mktemp)
-while IFS='|' read -r placeholder claude_val codex_val; do
-  [[ -z "$placeholder" ]] && continue
-  if [[ "$PLATFORM" == "claude" ]]; then
-    val="$claude_val"
-  else
-    val="$codex_val"
-  fi
-  # Escape sed replacement metacharacters in the value
-  val_escaped="${val//\\/\\\\}"
-  val_escaped="${val_escaped//|/\\|}"
-  val_escaped="${val_escaped//&/\\&}"
-  printf 's|%s|%s|g\n' "$placeholder" "$val_escaped" >> "$SED_SCRIPT"
-done < "$MAP_FILE"
+# Build a Perl script that performs word-boundary replacements for all mapped tools.
+# Perl gives us consistent \b semantics across macOS and Linux.
+PL_SCRIPT=$(mktemp)
+{
+  cat <<'PL_HEADER'
+use strict;
+use warnings;
+my %map = (
+PL_HEADER
+  while IFS='|' read -r opencode_tool claude_val codex_val; do
+    # Trim surrounding whitespace
+    opencode_tool="${opencode_tool#"${opencode_tool%%[![:space:]]*}"}"
+    opencode_tool="${opencode_tool%"${opencode_tool##*[![:space:]]}"}"
+    # Skip comments and blank lines
+    [[ -z "$opencode_tool" || "$opencode_tool" == \#* ]] && continue
+    if [[ "$PLATFORM" == "claude" ]]; then
+      val="$claude_val"
+    else
+      val="$codex_val"
+    fi
+    # Escape characters that would break a Perl double-quoted string
+    key_escaped=$(printf '%s' "$opencode_tool" | sed 's/["$@\\]/\\&/g')
+    val_escaped=$(printf '%s' "$val" | sed 's/["$@\\]/\\&/g')
+    printf '  "%s" => "%s",\n' "$key_escaped" "$val_escaped"
+  done < "$MAP_FILE"
+  cat <<'PL_FOOTER'
+);
+my @keys = sort { length($b) <=> length($a) } keys %map;
+while (<>) {
+  for my $k (@keys) {
+    s/\b\Q$k\E\b/$map{$k}/g;
+  }
+  print;
+}
+PL_FOOTER
+} > "$PL_SCRIPT"
 
 for skill_dir in "$SKILL_SOURCE_DIR"/*/; do
   skill_name=$(basename "$skill_dir")
@@ -76,7 +98,7 @@ for skill_dir in "$SKILL_SOURCE_DIR"/*/; do
   fi
 
   mkdir -p "$SKILL_TARGET_DIR/$skill_name"
-  sed -f "$SED_SCRIPT" "$src" > "$SKILL_TARGET_DIR/$skill_name/SKILL.md"
+  perl "$PL_SCRIPT" "$src" > "$SKILL_TARGET_DIR/$skill_name/SKILL.md"
 
   # Copy optional skill subdirectories and apply tool mapping to their files
   for subdir in scripts templates agents; do
@@ -84,15 +106,29 @@ for skill_dir in "$SKILL_SOURCE_DIR"/*/; do
       target_subdir="$SKILL_TARGET_DIR/$skill_name/$subdir"
       mkdir -p "$target_subdir"
       cp -R "$skill_dir/$subdir/"* "$target_subdir/"
-      find "$target_subdir" -type f -print0 | while IFS= read -r -d '' file; do
+      find "$target_subdir" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+      find "$target_subdir" -type f -not -path '*/__pycache__/*' -not -name '.DS_Store' -print0 | while IFS= read -r -d '' file; do
         tmp=$(mktemp)
-        sed -f "$SED_SCRIPT" "$file" > "$tmp"
+        perl "$PL_SCRIPT" "$file" > "$tmp"
         mv "$tmp" "$file"
       done
     fi
   done
 done
 
-rm "$SED_SCRIPT"
+# Copy shared scripts and apply tool mapping
+if [[ -d "$SKILL_SOURCE_DIR/_shared" ]]; then
+  target_shared="$SKILL_TARGET_DIR/_shared"
+  rm -rf "$target_shared"
+  cp -R "$SKILL_SOURCE_DIR/_shared" "$target_shared"
+  find "$target_shared" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$target_shared" -type f -not -path '*/__pycache__/*' -not -name '.DS_Store' -print0 | while IFS= read -r -d '' file; do
+    tmp=$(mktemp)
+    perl "$PL_SCRIPT" "$file" > "$tmp"
+    mv "$tmp" "$file"
+  done
+fi
+
+rm "$PL_SCRIPT"
 
 echo "[sync] generated skeleton for $PLATFORM"

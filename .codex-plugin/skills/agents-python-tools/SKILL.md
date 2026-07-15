@@ -18,19 +18,19 @@ Install every Python tool the agent itself needs into `~/.venvs/omagents`. Never
 
 If `~/.venvs/omagents` does not exist yet, create it automatically — do not ask the user for permission, this is an expected one-time setup:
 
-```bash
+```Bash
 python3 -m venv ~/.venvs/omagents
 ```
 
 Install a tool:
 
-```bash
+```Bash
 ~/.venvs/omagents/bin/pip install <package>
 ```
 
 Run a tool — always invoke the interpreter or entry point from the venv so the import resolves there:
 
-```bash
+```Bash
 ~/.venvs/omagents/bin/python -c "import openpyxl; ..."
 # or, for console scripts:
 ~/.venvs/omagents/bin/<script> ...
