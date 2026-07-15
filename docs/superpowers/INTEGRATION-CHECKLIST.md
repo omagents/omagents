@@ -47,7 +47,7 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
 5. [ ] Verify `.claude-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
 6. [ ] Start a Claude Code session pointing at the local plugin directory:
    ```bash
-   claude --plugin-dir /path/to/omagents/.claude-plugin
+   claude --plugin-dir /path/to/omagents
    ```
 7. [ ] In the session, send:
    ```text
@@ -69,12 +69,28 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
 3. [ ] Verify `.codex-plugin/plugin.json` exists and is valid JSON.
 4. [ ] Verify `.codex-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
 5. [ ] Verify `.codex-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
-6. [ ] Add the plugin in Codex and verify skill discovery completes without errors.
+6. [ ] Add the plugin in Codex pointing at the repo root and verify skill discovery completes without errors:
+   ```bash
+   codex plugin add /path/to/omagents
+   ```
 7. [ ] In a chat session, send:
    ```text
    Let's make a react todo list
    ```
    Verify that the `brainstorming` skill is triggered and begins the design process.
+
+## Post-Session Environment Verification
+
+After running a Claude Code or Codex session, verify the agent venv was provisioned and can import the expected Python packages:
+
+- [ ] Check that the venv Python executable exists:
+  ```bash
+  ~/.venvs/omagents/bin/python --version
+  ```
+- [ ] Verify `jinja2` can be imported from the venv:
+  ```bash
+  ~/.venvs/omagents/bin/python -c "import jinja2; print(jinja2.__version__)"
+  ```
 
 ## Local Automated Verification
 
