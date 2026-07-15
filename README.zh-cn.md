@@ -106,12 +106,13 @@ OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
     "@devcxl/opencode-spec"
   ]
 }
+```
 
-### Claude Code
+### 使用插件目录运行
 
 **前置条件：** 仓库根目录必须包含 `.claude-plugin/plugin.json`（由 `npm run sync` 生成）。
 
-你可以将 OmAgents 作为本地 [Claude Code](https://claude.ai/code) 插件从仓库直接安装：
+使用插件目录运行 OmAgents：
 
 ```bash
 claude --plugin-dir /path/to/omagents
