@@ -1,4 +1,6 @@
 {{tool:websearch}}|WebSearch|web_search
+{{tool:github_search_code}}|mcp__github__search_code|mcp__github__search_code
+{{tool:codegraph_explore}}|mcp__codegraph__explore|mcp__codegraph__explore
 {{tool:webfetch}}|WebFetch|web_fetch
 {{tool:read}}|Read|Read
 {{tool:write}}|Write|Write

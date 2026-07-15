@@ -56,8 +56,6 @@ deep_research.py <subcommand> --workspace <workspace>
 
 New subcommands: `audit`, `package`, `provenance`, `status`, `polish`, `run-all`, `scan`, `scan-next`, `scan-complete`, `scan-evaluate`, `scan-finalize`.
 
-<!-- platform-tool-mapping-test: {{tool:websearch}} -->
-
 ## Workflow
 
 ### Phase 0: Landscape Scan (Pre-Research)
@@ -187,7 +185,7 @@ Focus: {task_focus}
 Workspace: {workspace}
 
 Instructions:
-1. Use websearch_web_search_exa to find relevant sources. Include the current year in queries.
+1. Use {{tool:websearch}} to find relevant sources. Include the current year in queries.
 2. For each promising source, use webfetch or websearch_web_fetch_exa to read it.
 3. Extract data for EACH field listed above.
 4. Mark uncertain values with [uncertain].

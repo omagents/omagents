@@ -53,7 +53,11 @@ while IFS='|' read -r placeholder claude_val codex_val; do
   else
     val="$codex_val"
   fi
-  printf 's|%s|%s|g\n' "$placeholder" "$val" >> "$SED_SCRIPT"
+  # Escape sed replacement metacharacters in the value
+  val_escaped="${val//\\/\\\\}"
+  val_escaped="${val_escaped//|/\\|}"
+  val_escaped="${val_escaped//&/\\&}"
+  printf 's|%s|%s|g\n' "$placeholder" "$val_escaped" >> "$SED_SCRIPT"
 done < "$MAP_FILE"
 
 for skill_dir in "$SKILL_SOURCE_DIR"/*/; do

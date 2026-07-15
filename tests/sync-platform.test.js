@@ -138,6 +138,75 @@ test("sync script supports SKILL.claude.md and SKILL.codex.md overrides", () => 
   }
 })
 
+test("sync script replaces github_search_code and codegraph_explore placeholders", () => {
+  const testSkillDir = path.join(ROOT, "skills", "zz-test-tool-mapping")
+  fs.mkdirSync(testSkillDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(testSkillDir, "SKILL.md"),
+    "---\nname: zz-test-tool-mapping\ndescription: test tool mapping\n---\nUse {{tool:github_search_code}} and {{tool:codegraph_explore}} here.\n"
+  )
+
+  try {
+    execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+    execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+    for (const platform of ["claude", "codex"]) {
+      const content = fs.readFileSync(
+        path.join(ROOT, `.${platform}-plugin`, "skills", "zz-test-tool-mapping", "SKILL.md"),
+        "utf-8"
+      )
+      assert.ok(
+        content.includes("mcp__github__search_code"),
+        `.${platform}-plugin zz-test-tool-mapping should contain mcp__github__search_code`
+      )
+      assert.ok(
+        content.includes("mcp__codegraph__explore"),
+        `.${platform}-plugin zz-test-tool-mapping should contain mcp__codegraph__explore`
+      )
+      assert.ok(
+        !content.includes("{{tool:"),
+        `.${platform}-plugin zz-test-tool-mapping should not contain unresolved tool placeholders`
+      )
+    }
+  } finally {
+    fs.rmSync(testSkillDir, { recursive: true, force: true })
+    for (const platform of ["claude", "codex"]) {
+      const generatedSkillDir = path.join(
+        ROOT,
+        `.${platform}-plugin`,
+        "skills",
+        "zz-test-tool-mapping"
+      )
+      if (fs.existsSync(generatedSkillDir)) {
+        fs.rmSync(generatedSkillDir, { recursive: true, force: true })
+      }
+    }
+  }
+})
+
+test("generated skills contain no unresolved tool placeholders", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const skillsDir = path.join(ROOT, `.${platform}-plugin`, "skills")
+    const skillDirs = fs.readdirSync(skillsDir).filter((name) => {
+      const full = path.join(skillsDir, name)
+      return fs.statSync(full).isDirectory() && !name.startsWith("_") && !name.startsWith(".")
+    })
+
+    for (const skillName of skillDirs) {
+      const skillMd = path.join(skillsDir, skillName, "SKILL.md")
+      if (!fs.existsSync(skillMd)) continue
+      const content = fs.readFileSync(skillMd, "utf-8")
+      assert.ok(
+        !content.includes("{{tool:"),
+        `.${platform}-plugin/skills/${skillName}/SKILL.md contains unresolved tool placeholder`
+      )
+    }
+  }
+})
+
 test("sync script generates .mcp.json for claude and codex", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
   execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
