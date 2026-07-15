@@ -1,0 +1,16 @@
+{
+  "name": "omagents",
+  "version": "0.5.0",
+  "description": "Agent toolkit: deep research, loop workflows, MCP servers, and Python tooling.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "OmAgents",
+    "shortDescription": "Agent toolkit for research, loops, and tooling.",
+    "longDescription": "Agent toolkit: deep research, loop workflows, MCP servers, and Python tooling.",
+    "developerName": "OmAgents",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"]
+  }
+}
