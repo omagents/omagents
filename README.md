@@ -108,44 +108,33 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
 }
 ```
 
-### Claude Code (plugin directory)
+### Claude Code
 
-**Prerequisite:** The plugin JSON files (`.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`) are generated from source skills by `npm run sync` and are committed to the repository. Run `npm run sync` after editing source skills to regenerate them.
+**Prerequisite:** [Python 3.11+](https://www.python.org/downloads/) installed and on PATH.
 
-1. Generate the platform-specific plugin files:
-
-```bash
-npm run sync
-```
-
-2. Run OmAgents with the plugin directory:
+1. Add the OmAgents marketplace and install the plugin:
 
 ```bash
-claude --plugin-dir /path/to/omagents
+claude plugin marketplace add omagents/omagents
+claude plugin install omagents@omagents
 ```
 
-At session start, the plugin discovers and enables the bundled skills and MCP servers. Claude Code uses `SessionStart` hooks and `bin/` wrappers instead of the OpenCode-only `shell.env` PATH injection and parallel execution engine, so background task dispatch (`task(background: true)`) and the `/ps` command are not available.
-
-If you edit the source skills in the `skills/` directory, rerun `npm run sync` to regenerate the generated plugin artifacts.
+At session start, the plugin auto-discovers bundled skills, MCP servers, and sets up the Python venv via `SessionStart` hooks. The OpenCode-only parallel execution engine (`task(background: true)`, `/ps`) is not available; use Claude Code's native `Agent` tool for subagent dispatch.
 
 ### Codex
 
-**Prerequisite:** The plugin JSON files (`.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`) are generated from source skills by `npm run sync` and are committed to the repository. Run `npm run sync` after editing source skills to regenerate them.
+**Prerequisite:** [Python 3.11+](https://www.python.org/downloads/) installed and on PATH.
 
-1. Generate the platform-specific plugin files:
-
-```bash
-npm run sync
-```
-
-2. Register the OmAgents marketplace and install the plugin:
+1. Add the OmAgents marketplace and install the plugin:
 
 ```bash
 codex plugin marketplace add omagents/omagents
 codex plugin add omagents@omagents
 ```
 
-At session start, the plugin discovers and enables the bundled skills and MCP servers. Codex uses `SessionStart` hooks and helper scripts invoked via the venv path or session hooks, not `bin/` wrappers, and does not use the OpenCode-only `shell.env` PATH injection and parallel execution engine, so background task dispatch and `/ps` are not available. Run `npm run sync` after editing source skills to regenerate the `.claude-plugin/` and `.codex-plugin/` artifacts.
+At session start, the plugin auto-discovers bundled skills, MCP servers, and sets up the Python venv via `SessionStart` hooks. The OpenCode-only parallel execution engine is not available; use Codex's native subagent tools for parallel dispatch.
+
+> **For developers:** If you edit source skills in `skills/`, run `npm run sync` to regenerate the `.claude-plugin/` and `.codex-plugin/` artifacts, then commit them. CI automatically verifies that generated files are up-to-date.
 
 ---
 
@@ -160,6 +149,7 @@ At session start, the plugin discovers and enables the bundled skills and MCP se
 | 📚 | **Built-in MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app - all auto-registered |
 | 🐍 | **Python Tooling** | Dedicated venv at `~/.venvs/omagents`, auto-installs jinja2 and skill dependencies |
 | 📄 | **MarkItDown** | Convert PDF, DOCX, XLSX, PPTX, HTML to Markdown |
+| 📊 | **OfficeCLI** | Create, analyze, proofread, and modify .docx/.xlsx/.pptx via officecli |
 | 🌐 | **Web Scraping** | Playwright-based page fetching and scraping |
 | 🔗 | **GitHub** | Full GitHub API when `GITHUB_TOKEN` is set; falls back to `mcp.grep.app` without token |
 | 🏗️ | **Refactor** | Systematic code refactoring with loop engine verification |
@@ -229,6 +219,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 | `parallel-execution` | OmAgents | - | Background parallel task dispatch with Job Board tracking |
 | `agents-python-tools` | OmAgents | - | Routes Python tooling to the dedicated `~/.venvs/omagents` venv |
 | `markitdown-converter` | OmAgents | - | Convert documents (PDF, DOCX, XLSX, etc.) to Markdown |
+| `officecli` | OmAgents | - | Create, analyze, proofread, and modify Office documents (.docx, .xlsx, .pptx) via officecli |
 | `playwright-web-scraping` | OmAgents | - | Web scraping and page fetching with Playwright |
 | `init-deep` | OmAgents | - | Auto-generate hierarchical AGENTS.md files |
 | `doctor` | OmAgents | - | Diagnose OmAgents installation and configuration |
@@ -326,7 +317,7 @@ omagents/
 ├── .opencode/plugins/
 │   ├── index.js              # Plugin entry point (merges superpowers + omagents hooks)
 │   └── parallel.js           # Parallel execution engine
-├── skills/                   # Bundled OpenCode skills (17 skills)
+├── skills/                   # Bundled OpenCode skills (18 skills)
 │   ├── _shared/scripts/      # Shared scripts (loop_engine.py)
 │   ├── deep-research/        # Research workflow with gap detection
 │   └── ...                   # 16 more skills

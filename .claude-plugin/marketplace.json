@@ -1,0 +1,10 @@
+{
+  "name": "omagents",
+  "plugins": [
+    {
+      "name": "omagents",
+      "source": "./",
+      "description": "Agent toolkit: deep research, loop workflows, MCP servers, and Python tooling."
+    }
+  ]
+}

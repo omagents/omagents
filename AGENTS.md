@@ -59,6 +59,8 @@ omagents/
 │   ├── markitdown-converter/   # Document to Markdown conversion
 │   │   ├── SKILL.md
 │   │   └── scripts/
+│   ├── officecli/              # Create and edit Office documents (.docx, .xlsx, .pptx)
+│   │   └── SKILL.md
 │   └── playwright-web-scraping/# Web scraping with Playwright
 │       ├── SKILL.md
 │       └── scripts/
@@ -122,7 +124,7 @@ Registered automatically via `config` hook. User config takes precedence (won't 
 
 ## Skills
 
-### OmAgents Skills (17)
+### OmAgents Skills (18)
 
 | Skill | Description | Has scripts? | Has agents/? | Loop? |
 |-------|-------------|-------------|-------------|-------|
@@ -130,6 +132,7 @@ Registered automatically via `config` hook. User config takes precedence (won't 
 | `parallel-execution` | Background task dispatch with Job Board tracking | No | No | No |
 | `agents-python-tools` | Route Python tooling to `~/.venvs/omagents` | No | Yes | No |
 | `markitdown-converter` | Convert documents (PDF/DOCX/XLSX/...) to Markdown | Yes | Yes | No |
+| `officecli` | Create, analyze, proofread, and modify Office documents (.docx, .xlsx, .pptx) via officecli | No | No | No |
 | `playwright-web-scraping` | Web scraping with Playwright headless browser | Yes | Yes | No |
 | `init-deep` | Auto-generate hierarchical AGENTS.md files | No | Yes | No |
 | `doctor` | Diagnose OmAgents installation and configuration | No | Yes | No |
@@ -267,6 +270,6 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 4. **Don't unpin superpowers.** It's pinned to a commit for stability.
 5. **Don't add `templates/` to project structure diagrams.** It doesn't exist at root.
 6. **Don't forget `.opencode/` has its own `.gitignore`** that excludes `node_modules`, `package.json`, etc. Those are not committed.
-7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 17; superpowers has 14. They're registered separately.
+7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 18; superpowers has 14. They're registered separately.
 8. **Don't change README.md without updating all language versions.** README exists in 4 languages (EN, ZH-CN, JA, KO). All must be updated in the same commit.
 9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.

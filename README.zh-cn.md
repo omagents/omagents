@@ -108,44 +108,33 @@ OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
 }
 ```
 
-### Claude Code（插件目录）
+### Claude Code
 
-**前置条件：** 插件 JSON 文件（`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json`）由 `npm run sync` 从源 skill 生成，并已提交到仓库。编辑源 skill 后，请运行 `npm run sync` 以重新生成它们。
+**前置条件：** 已安装 [Python 3.11+](https://www.python.org/downloads/) 并在 PATH 中。
 
-1. 生成平台特定的插件文件：
-
-```bash
-npm run sync
-```
-
-2. 使用插件目录运行 OmAgents：
+1. 添加 OmAgents marketplace 并安装插件：
 
 ```bash
-claude --plugin-dir /path/to/omagents
+claude plugin marketplace add omagents/omagents
+claude plugin install omagents@omagents
 ```
 
-会话开始时，插件会发现并启用打包的 skills 和 MCP servers。Claude Code 使用 `SessionStart` hooks 和 `bin/` wrappers，而不是 OpenCode 独有的 `shell.env` PATH 注入和并行执行引擎，因此后台任务分发（`task(background: true)`）和 `/ps` 命令不可用。
-
-如果你在 `skills/` 目录中编辑了源 skill，请重新运行 `npm run sync` 以重新生成插件产物。
+会话开始时，插件会自动发现打包的 skills、MCP servers，并通过 `SessionStart` hooks 设置 Python venv。OpenCode 独有的并行执行引擎（`task(background: true)`、`/ps`）不可用；请使用 Claude Code 原生的 `Agent` 工具进行 subagent 调度。
 
 ### Codex
 
-**前置条件：** 插件 JSON 文件（`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json`）由 `npm run sync` 从源 skill 生成，并已提交到仓库。编辑源 skill 后，请运行 `npm run sync` 以重新生成它们。
+**前置条件：** 已安装 [Python 3.11+](https://www.python.org/downloads/) 并在 PATH 中。
 
-1. 生成平台特定的插件文件：
-
-```bash
-npm run sync
-```
-
-2. 注册 OmAgents marketplace 并安装插件：
+1. 添加 OmAgents marketplace 并安装插件：
 
 ```bash
 codex plugin marketplace add omagents/omagents
 codex plugin add omagents@omagents
 ```
 
-会话开始时，插件会发现并启用打包的 skills 和 MCP servers。Codex 使用 `SessionStart` hooks 和通过 venv 路径或 session hooks 调用的 helper scripts，而非 `bin/` wrappers，也不使用 OpenCode 独有的 `shell.env` PATH 注入和并行执行引擎，因此后台任务分发和 `/ps` 不可用。编辑源 skill 后请运行 `npm run sync` 以重新生成 `.claude-plugin/` 和 `.codex-plugin/` 产物。
+会话开始时，插件会自动发现打包的 skills、MCP servers，并通过 `SessionStart` hooks 设置 Python venv。OpenCode 独有的并行执行引擎不可用；请使用 Codex 原生的 subagent 工具进行并行调度。
+
+> **开发者须知：** 如果你编辑了 `skills/` 中的源 skill，请运行 `npm run sync` 重新生成 `.claude-plugin/` 和 `.codex-plugin/` 产物并提交。CI 会自动验证生成文件是否为最新。
 
 ---
 
@@ -160,6 +149,7 @@ codex plugin add omagents@omagents
 | 📚 | **内置 MCPs** | agentmemory、codegraph、context7、websearch、github/grep_app —— 全部自动注册 |
 | 🐍 | **Python 工具链** | 专用 venv 于 `~/.venvs/omagents`，自动安装 jinja2 和 skill 依赖 |
 | 📄 | **MarkItDown** | 将 PDF、DOCX、XLSX、PPTX、HTML 转换为 Markdown |
+| 📊 | **OfficeCLI** | 通过 officecli 创建、分析、校对和修改 .docx/.xlsx/.pptx |
 | 🌐 | **Web Scraping** | 基于 Playwright 的页面抓取和数据采集 |
 | 🔗 | **GitHub** | 设置 `GITHUB_TOKEN` 后可使用完整 GitHub API；未设置时回退到 `mcp.grep.app` |
 | 🏗️ | **Refactor** | 通过 loop engine 验证进行系统性代码重构 |
@@ -229,6 +219,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 | `parallel-execution` | OmAgents | - | 通过 Job Board 跟踪的后台并行任务分发 |
 | `agents-python-tools` | OmAgents | - | 将 Python 工具链路由到专用 `~/.venvs/omagents` venv |
 | `markitdown-converter` | OmAgents | - | 将文档（PDF、DOCX、XLSX 等）转换为 Markdown |
+| `officecli` | OmAgents | - | 使用 officecli 创建、分析、校对和修改 Office 文档（.docx、.xlsx、.pptx）|
 | `playwright-web-scraping` | OmAgents | - | 使用 Playwright 进行 web scraping 和页面抓取 |
 | `init-deep` | OmAgents | - | 自动生成层级化 AGENTS.md 文件 |
 | `doctor` | OmAgents | - | 诊断 OmAgents 安装和配置 |
@@ -326,7 +317,7 @@ omagents/
 ├── .opencode/plugins/
 │   ├── index.js              # Plugin entry point (merges superpowers + omagents hooks)
 │   └── parallel.js           # Parallel execution engine
-├── skills/                   # Bundled OpenCode skills (17 skills)
+├── skills/                   # Bundled OpenCode skills (18 skills)
 │   ├── _shared/scripts/      # Shared scripts (loop_engine.py)
 │   ├── deep-research/        # Research workflow with gap detection
 │   └── ...                   # 16 more skills

@@ -160,6 +160,7 @@ codex plugin add omagents@omagents
 | 📚 | **내장 MCP** | agentmemory, codegraph, context7, websearch, github/grep_app - 모두 자동 등록 |
 | 🐍 | **Python Tooling** | `~/.venvs/omagents` 전용 venv, jinja2 및 skill 의존성 자동 설치 |
 | 📄 | **MarkItDown** | PDF, DOCX, XLSX, PPTX, HTML을 Markdown으로 변환 |
+| 📊 | **OfficeCLI** | officecli로 .docx/.xlsx/.pptx 생성/분석/교정/편집 |
 | 🌐 | **Web Scraping** | Playwright 기반 페이지 가져오기 및 스크래핑 |
 | 🔗 | **GitHub** | `GITHUB_TOKEN` 설정 시 전체 GitHub API; 토큰 없으면 `mcp.grep.app`으로 대체 |
 | 🏗️ | **Refactor** | loop engine 검증을 통한 체계적 코드 리팩토링 |
@@ -229,6 +230,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 | `parallel-execution` | OmAgents | - | Job Board 추적을 통한 background 병렬 task 분배 |
 | `agents-python-tools` | OmAgents | - | Python tooling을 전용 `~/.venvs/omagents` venv로 라우팅 |
 | `markitdown-converter` | OmAgents | - | 문서(PDF, DOCX, XLSX 등)를 Markdown으로 변환 |
+| `officecli` | OmAgents | - | officecli CLI로 Office 문서(.docx, .xlsx, .pptx) 생성/분석/교정/편집 |
 | `playwright-web-scraping` | OmAgents | - | Playwright를 활용한 web scraping 및 페이지 가져오기 |
 | `init-deep` | OmAgents | - | 계층적 AGENTS.md 파일 자동 생성 |
 | `doctor` | OmAgents | - | OmAgents 설치 및 설정 진단 |
@@ -326,7 +328,7 @@ omagents/
 ├── .opencode/plugins/
 │   ├── index.js              # Plugin entry point (merges superpowers + omagents hooks)
 │   └── parallel.js           # Parallel execution engine
-├── skills/                   # Bundled OpenCode skills (17 skills)
+├── skills/                   # Bundled OpenCode skills (18 skills)
 │   ├── _shared/scripts/      # Shared scripts (loop_engine.py)
 │   ├── deep-research/        # Research workflow with gap detection
 │   └── ...                   # 16 more skills
