@@ -3,7 +3,6 @@
 
 # Web search/fetch
 websearch_web_search_exa|WebSearch|web_search
-websearch_web_fetch_exa|WebFetch|web_fetch
 webfetch|WebFetch|web_fetch
 
 # File/shell primitives

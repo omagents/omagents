@@ -241,12 +241,12 @@ def output_pre_research_instructions(task_data: dict[str, Any], workspace: Path)
         "task": task_data,
         "instruction": (
             f"Current date: {date_str}. "
-            "Use WebSearch to search for the MOST RECENT information about the research topic. "
+            "Use websearch_web_search_exa to search for the MOST RECENT information about the research topic. "
             f"Include '{year_str}' or '{date_str}' in your search queries to get current results. "
             "Do NOT rely on your training data - it may be outdated. "
             "Extract key entities (models, frameworks, projects, etc.) with their latest versions, "
             "vendors, and source URLs. "
-            f"Write findings to {workspace}/pre_findings/{task_id}.json using Bash. "
+            f"Write findings to {workspace}/pre_findings/{task_id}.json using bash. "
             f"After writing findings, run: deep_research.py run-all --resume --workspace {workspace}"
         ),
         "output_schema": {
@@ -522,7 +522,7 @@ def _recommend_next_action(phase: str) -> str:
         "gap_analysis": "Run: run-all --resume (will process gaps automatically)",
         "merging": "Run: run-all --resume (will merge automatically)",
         "reporting": "Run: run-all --resume (will generate report automatically)",
-        "polishing": "Polish the report (Read report_raw.md, rewrite, save to report.md), then run: run-all --resume",
+        "polishing": "Polish the report (read report_raw.md, rewrite, save to report.md), then run: run-all --resume",
         "auditing": "Run: run-all --resume (will audit automatically)",
         "packaging": "Run: run-all --resume (will package automatically)",
         "done": "Research complete. No further action needed.",

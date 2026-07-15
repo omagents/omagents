@@ -294,6 +294,7 @@ test("generated skills contain no mapped OpenCode tool names", () => {
     for (const skillName of skillDirs) {
       const skillDir = path.join(skillsDir, skillName)
       for (const file of walkSync(skillDir)) {
+        if (path.extname(file) !== ".md") continue
         const content = fs.readFileSync(file, "utf-8")
         for (const { opencode } of mapping) {
           const re = new RegExp("\\b" + opencode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b")
@@ -378,5 +379,21 @@ test("sync script generates .mcp.json for claude and codex", () => {
       `.${platform}-plugin/.mcp.json context7 should be remote`
     )
     assert.ok(mcp.context7.url, `.${platform}-plugin/.mcp.json context7 should have a url`)
+  }
+})
+
+test("sync script generates valid Python files", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const skillsDir = path.join(ROOT, `.${platform}-plugin`, "skills")
+    if (!fs.existsSync(skillsDir)) continue
+
+    for (const file of walkSync(skillsDir)) {
+      if (path.extname(file) === ".py") {
+        execSync(`python3 -m py_compile "${file}"`, { cwd: ROOT, stdio: "ignore" })
+      }
+    }
   }
 })

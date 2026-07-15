@@ -34,7 +34,7 @@ def log_event(workspace: Path, event_type: str, **details: Any) -> None:
     provenance_path = _provenance_path(workspace)
     provenance_path.parent.mkdir(parents=True, exist_ok=True)
     with provenance_path.open("a", encoding="utf-8") as f:
-        f.Write(json.dumps(event, ensure_ascii=False) + "\n")
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
 def load_events(workspace: Path) -> list[dict[str, Any]]:

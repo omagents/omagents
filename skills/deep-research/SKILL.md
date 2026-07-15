@@ -27,7 +27,7 @@ This skill combines the **structured items × fields approach** (inspired by Rhi
 
 | Source | Tools to Use |
 |--------|--------------|
-| Web | `websearch_web_search_exa`, `webfetch`, `websearch_web_fetch_exa` |
+| Web | `websearch_web_search_exa`, `webfetch` |
 | GitHub | `github_search_code`, `github_search_issues`, `github_search_pull_requests`, `github_list_releases` |
 | Codebase | `codegraph_codegraph_explore`, `grep`, `glob`, `read` |
 
@@ -186,7 +186,7 @@ Workspace: {workspace}
 
 Instructions:
 1. Use websearch_web_search_exa to find relevant sources. Include the current year in queries.
-2. For each promising source, use webfetch or websearch_web_fetch_exa to read it.
+2. For each promising source, use webfetch to read it.
 3. Extract data for EACH field listed above.
 4. Mark uncertain values with [uncertain].
 5. If information is missing or contradictory, do additional targeted searches (up to 3 iterations).

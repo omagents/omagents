@@ -100,14 +100,14 @@ for skill_dir in "$SKILL_SOURCE_DIR"/*/; do
   mkdir -p "$SKILL_TARGET_DIR/$skill_name"
   perl "$PL_SCRIPT" "$src" > "$SKILL_TARGET_DIR/$skill_name/SKILL.md"
 
-  # Copy optional skill subdirectories and apply tool mapping to their files
+  # Copy optional skill subdirectories and apply tool mapping only to Markdown files
   for subdir in scripts templates agents; do
     if [[ -d "$skill_dir/$subdir" ]]; then
       target_subdir="$SKILL_TARGET_DIR/$skill_name/$subdir"
       mkdir -p "$target_subdir"
       cp -R "$skill_dir/$subdir/"* "$target_subdir/"
       find "$target_subdir" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
-      find "$target_subdir" -type f -not -path '*/__pycache__/*' -not -name '.DS_Store' -print0 | while IFS= read -r -d '' file; do
+      find "$target_subdir" -type f -not -path '*/__pycache__/*' -not -name '.DS_Store' -name '*.md' -print0 | while IFS= read -r -d '' file; do
         tmp=$(mktemp)
         perl "$PL_SCRIPT" "$file" > "$tmp"
         mv "$tmp" "$file"
@@ -116,13 +116,13 @@ for skill_dir in "$SKILL_SOURCE_DIR"/*/; do
   done
 done
 
-# Copy shared scripts and apply tool mapping
+# Copy shared scripts and apply tool mapping only to Markdown files
 if [[ -d "$SKILL_SOURCE_DIR/_shared" ]]; then
   target_shared="$SKILL_TARGET_DIR/_shared"
   rm -rf "$target_shared"
   cp -R "$SKILL_SOURCE_DIR/_shared" "$target_shared"
   find "$target_shared" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
-  find "$target_shared" -type f -not -path '*/__pycache__/*' -not -name '.DS_Store' -print0 | while IFS= read -r -d '' file; do
+  find "$target_shared" -type f -not -path '*/__pycache__/*' -not -name '.DS_Store' -name '*.md' -print0 | while IFS= read -r -d '' file; do
     tmp=$(mktemp)
     perl "$PL_SCRIPT" "$file" > "$tmp"
     mv "$tmp" "$file"
