@@ -6,5 +6,6 @@ __pycache__/
 *.tgz
 .omagents/
 
-# Codex plugin is a generated artifact, distributed via npm
+# Generated plugin artifacts, distributed via npm
+.claude-plugin/
 .codex-plugin/
