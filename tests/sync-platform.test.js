@@ -10,20 +10,22 @@ const SCRIPT = path.join(ROOT, "scripts", "sync-platform.sh")
 test("sync script generates claude and codex directories", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
   execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
-  assert.ok(fs.existsSync(path.join(ROOT, ".claude-plugin", "plugin.json")))
-  assert.ok(fs.existsSync(path.join(ROOT, ".codex-plugin", "plugin.json")))
-})
 
-test("sync script copies mcp servers for claude and codex", () => {
   for (const platform of ["claude", "codex"]) {
-    const mcpPath = path.join(ROOT, `.${platform}-plugin`, ".mcp.json")
-    assert.ok(fs.existsSync(mcpPath), `.${platform}-plugin/.mcp.json should exist`)
+    const base = path.join(ROOT, `.${platform}-plugin`)
 
-    const mcp = JSON.parse(fs.readFileSync(mcpPath, "utf-8"))
-    assert.ok(mcp && typeof mcp === "object", `.${platform}-plugin/.mcp.json should be valid JSON`)
-
-    for (const name of ["agentmemory", "codegraph", "context7", "websearch"]) {
-      assert.ok(name in mcp, `.${platform}-plugin/.mcp.json should contain ${name}`)
+    for (const dir of ["skills", "hooks", "bin"]) {
+      assert.ok(fs.existsSync(path.join(base, dir)), `.${platform}-plugin/${dir} should exist`)
     }
+
+    const pluginJsonPath = path.join(base, "plugin.json")
+    assert.ok(fs.existsSync(pluginJsonPath), `.${platform}-plugin/plugin.json should exist`)
+
+    const plugin = JSON.parse(fs.readFileSync(pluginJsonPath, "utf-8"))
+    assert.ok(plugin && typeof plugin === "object", `.${platform}-plugin/plugin.json should be valid JSON`)
+
+    assert.strictEqual(plugin.name, "omagents", `.${platform}-plugin/plugin.json name should be omagents`)
+    assert.ok(plugin.version, `.${platform}-plugin/plugin.json should have a version`)
+    assert.ok(plugin.description, `.${platform}-plugin/plugin.json should have a description`)
   }
 })
