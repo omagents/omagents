@@ -4,7 +4,7 @@ This checklist is used to verify that the OmAgents plugin works correctly across
 
 ## Pre-requisites
 
-- [ ] **Node.js**: Version 24 or later is installed.
+- [ ] **Node.js**: Version 24 is installed.
 - [ ] **Python**: Python 3.11 or later is installed and available as `python3`.
 - [ ] **Git**: Repository is cloned locally.
   ```bash
@@ -25,6 +25,11 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
   npm test
   ```
 - [ ] Confirm all tests pass.
+- [ ] Confirm `.opencode/plugins/index.js` has no uncommitted modifications:
+  ```bash
+  git diff -- .opencode/plugins/index.js
+  ```
+  The command should produce no output.
 
 ## Claude Code Verification Steps
 
@@ -34,9 +39,9 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
    ```
 2. [ ] Verify the generated `.claude-plugin/` and `.codex-plugin/` directories are tracked in git:
    ```bash
-   git status --short
+   git ls-files .claude-plugin/ .codex-plugin/ | head
    ```
-   Neither `.claude-plugin/` nor `.codex-plugin/` should appear as untracked.
+   The command should list files from both directories, confirming they are tracked.
 3. [ ] Verify `.claude-plugin/plugin.json` exists and is valid JSON.
 4. [ ] Verify `.claude-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
 5. [ ] Verify `.claude-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
@@ -58,9 +63,9 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
    ```
 2. [ ] Verify the generated `.claude-plugin/` and `.codex-plugin/` directories are tracked in git:
    ```bash
-   git status --short
+   git ls-files .claude-plugin/ .codex-plugin/ | head
    ```
-   Neither `.claude-plugin/` nor `.codex-plugin/` should appear as untracked.
+   The command should list files from both directories, confirming they are tracked.
 3. [ ] Verify `.codex-plugin/plugin.json` exists and is valid JSON.
 4. [ ] Verify `.codex-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
 5. [ ] Verify `.codex-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.

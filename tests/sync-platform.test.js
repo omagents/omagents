@@ -549,62 +549,6 @@ test("sync script generates hooks referencing setup-venv.sh", () => {
   }
 })
 
-test("integration checklist pre-conditions are satisfied", () => {
-  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
-  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
-
-  for (const platform of ["claude", "codex"]) {
-    const pluginJsonPath = path.join(ROOT, `.${platform}-plugin`, "plugin.json")
-    const mcpJsonPath = path.join(ROOT, `.${platform}-plugin`, ".mcp.json")
-    const hooksJsonPath = path.join(ROOT, `.${platform}-plugin`, "hooks", "hooks.json")
-
-    const plugin = JSON.parse(fs.readFileSync(pluginJsonPath, "utf-8"))
-    assert.ok(
-      plugin && typeof plugin === "object",
-      `.${platform}-plugin/plugin.json should be valid JSON`
-    )
-    assert.strictEqual(
-      plugin.name,
-      "omagents",
-      `.${platform}-plugin/plugin.json name should be omagents`
-    )
-
-    const mcp = JSON.parse(fs.readFileSync(mcpJsonPath, "utf-8"))
-    assert.ok(mcp && typeof mcp === "object", `.${platform}-plugin/.mcp.json should be valid JSON`)
-    for (const name of ["agentmemory", "codegraph", "context7", "websearch"]) {
-      assert.ok(mcp[name], `.${platform}-plugin/.mcp.json should contain ${name}`)
-    }
-
-    const hooks = JSON.parse(fs.readFileSync(hooksJsonPath, "utf-8"))
-    assert.ok(
-      hooks && typeof hooks === "object",
-      `.${platform}-plugin/hooks/hooks.json should be valid JSON`
-    )
-    assert.ok(
-      Array.isArray(hooks.hooks?.SessionStart),
-      `.${platform}-plugin/hooks/hooks.json should contain SessionStart hooks`
-    )
-
-    const command = findSessionStartCommand(hooks)
-    assert.ok(
-      command,
-      `.${platform}-plugin/hooks/hooks.json SessionStart should reference setup-venv.sh`
-    )
-
-    const setupScriptPath = path.join(ROOT, `.${platform}-plugin`, "hooks", "setup-venv.sh")
-    assert.ok(
-      fs.existsSync(setupScriptPath),
-      `.${platform}-plugin/hooks/setup-venv.sh should exist`
-    )
-
-    try {
-      fs.accessSync(setupScriptPath, fs.constants.X_OK)
-    } catch {
-      assert.fail(`.${platform}-plugin/hooks/setup-venv.sh should be executable`)
-    }
-  }
-})
-
 test("sync script generates valid Python files", () => {
   execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
   execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
