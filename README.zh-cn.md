@@ -108,11 +108,17 @@ OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
 }
 ```
 
-### 使用插件目录运行
+### Claude Code（插件目录）
 
-**前置条件：** 仓库根目录必须包含 `.claude-plugin/plugin.json`（由 `npm run sync` 生成）。
+**前置条件：** 插件 JSON 文件（`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json`）由 `npm run sync` 从源 skill 生成；它们不会被提交到仓库。
 
-使用插件目录运行 OmAgents：
+1. 生成平台特定的插件文件：
+
+```bash
+npm run sync
+```
+
+2. 使用插件目录运行 OmAgents：
 
 ```bash
 claude --plugin-dir /path/to/omagents
@@ -120,17 +126,19 @@ claude --plugin-dir /path/to/omagents
 
 会话开始时，插件会发现并启用打包的 skills 和 MCP servers。Claude Code 使用 `SessionStart` hooks 和 `bin/` wrappers，而不是 OpenCode 独有的 `shell.env` PATH 注入和并行执行引擎，因此后台任务分发（`task(background: true)`）和 `/ps` 命令不可用。
 
-如果你在 `skills/` 目录中编辑了源 skill，请运行以下命令重新生成生成的插件产物：
+如果你在 `skills/` 目录中编辑了源 skill，请重新运行 `npm run sync` 以重新生成插件产物。
+
+### Codex
+
+**前置条件：** 插件 JSON 文件（`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json`）由 `npm run sync` 从源 skill 生成；它们不会被提交到仓库。
+
+1. 生成平台特定的插件文件：
 
 ```bash
 npm run sync
 ```
 
-### Codex
-
-**前置条件：** 仓库根目录必须包含 `.codex-plugin/plugin.json`（由 `npm run sync` 生成）。
-
-你可以将 OmAgents 作为本地 [Codex](https://github.com/openai/codex) 插件从仓库直接安装：
+2. 将 OmAgents 作为本地 [Codex](https://github.com/openai/codex) 插件从仓库直接安装：
 
 ```bash
 codex plugin add /path/to/omagents
