@@ -52,4 +52,6 @@ else
 EOF
 fi
 
+cp "$ROOT_DIR/mcp-servers/base.json" "$ROOT_DIR/.$PLATFORM-plugin/.mcp.json"
+
 echo "[sync] generated skeleton for $PLATFORM"
