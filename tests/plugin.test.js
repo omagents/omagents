@@ -113,3 +113,15 @@ test("with GITHUB_TOKEN, plugin registers github (not grep_app)", () => {
   assert.ok(mcps.github, "github should be registered when GITHUB_TOKEN is present")
   assert.ok(!mcps.grep_app, "grep_app should not be registered when GITHUB_TOKEN is present")
 })
+
+test("Codex marketplace.json exists and is valid", () => {
+  const marketplacePath = path.join(ROOT, ".agents", "plugins", "marketplace.json")
+  assert.ok(fs.existsSync(marketplacePath), ".agents/plugins/marketplace.json should exist")
+  const data = JSON.parse(fs.readFileSync(marketplacePath, "utf-8"))
+  assert.strictEqual(data.name, "omagents", "marketplace name should be omagents")
+  assert.ok(data.plugins && data.plugins.length > 0, "marketplace should have at least one plugin")
+  const plugin = data.plugins.find((p) => p.name === "omagents")
+  assert.ok(plugin, "marketplace should contain an omagents plugin entry")
+  assert.strictEqual(plugin.source.source, "local")
+  assert.strictEqual(plugin.source.path, "./")
+})

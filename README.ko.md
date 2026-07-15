@@ -138,10 +138,16 @@ claude --plugin-dir /path/to/omagents
 npm run sync
 ```
 
-2. OmAgents를 로컬 [Codex](https://github.com/openai/codex) 플러그인으로 저장소에서 바로 설치:
+2. OmAgents marketplace를 등록하고 플러그인을 설치:
 
 ```bash
-codex plugin add /path/to/omagents
+# 로컬 클론에서
+codex plugin marketplace add /path/to/omagents
+codex plugin add omagents@omagents
+
+# 또는 GitHub에서
+codex plugin marketplace add omagents/omagents
+codex plugin add omagents@omagents
 ```
 
 세션 시작 시 플러그인이 번들된 skills와 MCP servers를 검색하고 활성화합니다. Codex는 `SessionStart` hooks와 venv 경로 또는 session hooks를 통해 호출되는 helper scripts를 사용하고, `bin/` wrappers는 사용하지 않으며, OpenCode 전용 `shell.env` PATH injection과 병렬 실행 엔진을 사용하지 않으므로 background task dispatch와 `/ps`를 사용할 수 없습니다. 소스 skill을 편집한 후에는 `npm run sync`를 실행하여 `.claude-plugin/`과 `.codex-plugin/` 산출물을 재생성하세요.

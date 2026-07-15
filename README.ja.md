@@ -138,10 +138,16 @@ claude --plugin-dir /path/to/omagents
 npm run sync
 ```
 
-2. OmAgents をローカルの [Codex](https://github.com/openai/codex) プラグインとして、リポジトリから直接インストール：
+2. OmAgents marketplace を登録してプラグインをインストール：
 
 ```bash
-codex plugin add /path/to/omagents
+# ローカルクローンから
+codex plugin marketplace add /path/to/omagents
+codex plugin add omagents@omagents
+
+# または GitHub から
+codex plugin marketplace add omagents/omagents
+codex plugin add omagents@omagents
 ```
 
 セッション開始時に、プラグインはバンドルされた skills および MCP servers を検出して有効化します。Codex は `SessionStart` hooks と venv パスまたは session hooks 経由で呼び出される helper scripts を使用し、`bin/` wrappers は使用せず、OpenCode 独自の `shell.env` PATH 注入と並列実行エンジンにも依存しないため、background task の dispatch や `/ps` は利用できません。ソース skill を編集した後は `npm run sync` を実行して `.claude-plugin/` および `.codex-plugin/` 産物を再生成してください。

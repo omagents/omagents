@@ -138,10 +138,16 @@ If you edit the source skills in the `skills/` directory, rerun `npm run sync` t
 npm run sync
 ```
 
-2. Install OmAgents as a local [Codex](https://github.com/openai/codex) plugin directly from the repository:
+2. Register the OmAgents marketplace and install the plugin:
 
 ```bash
-codex plugin add /path/to/omagents
+# From a local clone
+codex plugin marketplace add /path/to/omagents
+codex plugin add omagents@omagents
+
+# Or from GitHub
+codex plugin marketplace add omagents/omagents
+codex plugin add omagents@omagents
 ```
 
 At session start, the plugin discovers and enables the bundled skills and MCP servers. Codex uses `SessionStart` hooks and helper scripts invoked via the venv path or session hooks, not `bin/` wrappers, and does not use the OpenCode-only `shell.env` PATH injection and parallel execution engine, so background task dispatch and `/ps` are not available. Run `npm run sync` after editing source skills to regenerate the `.claude-plugin/` and `.codex-plugin/` artifacts.

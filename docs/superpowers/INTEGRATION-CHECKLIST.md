@@ -69,10 +69,12 @@ The OpenCode plugin entry point lives at `.opencode/plugins/index.js`.
 3. [ ] Verify `.codex-plugin/plugin.json` exists and is valid JSON.
 4. [ ] Verify `.codex-plugin/hooks/hooks.json` exists and references `setup-venv.sh` in a `SessionStart` hook.
 5. [ ] Verify `.codex-plugin/.mcp.json` exists and contains the expected MCP servers: `agentmemory`, `codegraph`, `context7`, `websearch`.
-6. [ ] Add the plugin in Codex pointing at the repo root and verify skill discovery completes without errors:
+6. [ ] Register the marketplace and install the plugin:
    ```bash
-   codex plugin add /path/to/omagents
+   codex plugin marketplace add /path/to/omagents
+   codex plugin add omagents@omagents
    ```
+   Verify skill discovery completes without errors.
 7. [ ] In a chat session, send:
    ```text
    Let's make a react todo list

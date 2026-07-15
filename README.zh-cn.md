@@ -138,10 +138,16 @@ claude --plugin-dir /path/to/omagents
 npm run sync
 ```
 
-2. 将 OmAgents 作为本地 [Codex](https://github.com/openai/codex) 插件从仓库直接安装：
+2. 注册 OmAgents marketplace 并安装插件：
 
 ```bash
-codex plugin add /path/to/omagents
+# 从本地克隆安装
+codex plugin marketplace add /path/to/omagents
+codex plugin add omagents@omagents
+
+# 或从 GitHub 安装
+codex plugin marketplace add omagents/omagents
+codex plugin add omagents@omagents
 ```
 
 会话开始时，插件会发现并启用打包的 skills 和 MCP servers。Codex 使用 `SessionStart` hooks 和通过 venv 路径或 session hooks 调用的 helper scripts，而非 `bin/` wrappers，也不使用 OpenCode 独有的 `shell.env` PATH 注入和并行执行引擎，因此后台任务分发和 `/ps` 不可用。编辑源 skill 后请运行 `npm run sync` 以重新生成 `.claude-plugin/` 和 `.codex-plugin/` 产物。
