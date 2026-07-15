@@ -110,7 +110,7 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
 
 ### Claude Code (plugin directory)
 
-**Prerequisite:** The plugin JSON files (`.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`) are generated from source skills by `npm run sync`; they are not committed to the repository.
+**Prerequisite:** The plugin JSON files (`.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`) are generated from source skills by `npm run sync` and are committed to the repository. Run `npm run sync` after editing source skills to regenerate them.
 
 1. Generate the platform-specific plugin files:
 
@@ -130,7 +130,7 @@ If you edit the source skills in the `skills/` directory, rerun `npm run sync` t
 
 ### Codex
 
-**Prerequisite:** The plugin JSON files (`.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`) are generated from source skills by `npm run sync`; they are not committed to the repository.
+**Prerequisite:** The plugin JSON files (`.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`) are generated from source skills by `npm run sync` and are committed to the repository. Run `npm run sync` after editing source skills to regenerate them.
 
 1. Generate the platform-specific plugin files:
 
@@ -147,7 +147,6 @@ codex plugin add /path/to/omagents
 At session start, the plugin discovers and enables the bundled skills and MCP servers. Codex uses `SessionStart` hooks and helper scripts invoked via the venv path or session hooks, not `bin/` wrappers, and does not use the OpenCode-only `shell.env` PATH injection and parallel execution engine, so background task dispatch and `/ps` are not available. Run `npm run sync` after editing source skills to regenerate the `.claude-plugin/` and `.codex-plugin/` artifacts.
 
 ---
-
 
 ## Highlights
 

@@ -110,7 +110,7 @@ OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
 
 ### Claude Code（插件目录）
 
-**前置条件：** 插件 JSON 文件（`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json`）由 `npm run sync` 从源 skill 生成；它们不会被提交到仓库。
+**前置条件：** 插件 JSON 文件（`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json`）由 `npm run sync` 从源 skill 生成，并已提交到仓库。编辑源 skill 后，请运行 `npm run sync` 以重新生成它们。
 
 1. 生成平台特定的插件文件：
 
@@ -130,7 +130,7 @@ claude --plugin-dir /path/to/omagents
 
 ### Codex
 
-**前置条件：** 插件 JSON 文件（`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json`）由 `npm run sync` 从源 skill 生成；它们不会被提交到仓库。
+**前置条件：** 插件 JSON 文件（`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json`）由 `npm run sync` 从源 skill 生成，并已提交到仓库。编辑源 skill 后，请运行 `npm run sync` 以重新生成它们。
 
 1. 生成平台特定的插件文件：
 
@@ -147,7 +147,6 @@ codex plugin add /path/to/omagents
 会话开始时，插件会发现并启用打包的 skills 和 MCP servers。Codex 使用 `SessionStart` hooks 和通过 venv 路径或 session hooks 调用的 helper scripts，而非 `bin/` wrappers，也不使用 OpenCode 独有的 `shell.env` PATH 注入和并行执行引擎，因此后台任务分发和 `/ps` 不可用。编辑源 skill 后请运行 `npm run sync` 以重新生成 `.claude-plugin/` 和 `.codex-plugin/` 产物。
 
 ---
-
 
 ## 核心特性
 
