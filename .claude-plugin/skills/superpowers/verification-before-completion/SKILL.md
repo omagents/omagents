@@ -95,7 +95,7 @@ Skip any step = lying, not verifying
 
 **Requirements:**
 ```
-✅ Re-Read plan → Create checklist → Verify each → Report gaps or completion
+✅ Re-read plan → Create checklist → Verify each → Report gaps or completion
 ❌ "Tests pass, phase complete"
 ```
 

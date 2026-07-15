@@ -17,7 +17,7 @@ Ensure work happens in an isolated workspace. Prefer your platform's native work
 
 **Before creating anything, check if you are already in an isolated workspace.**
 
-```Bash
+```bash
 GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
 GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
 BRANCH=$(git branch --show-current)
@@ -25,7 +25,7 @@ BRANCH=$(git branch --show-current)
 
 **Submodule guard:** `GIT_DIR != GIT_COMMON` is also true inside git submodules. Before concluding "already in a worktree," verify you are not in a submodule:
 
-```Bash
+```bash
 # If this returns a path, you're in a submodule, not a worktree — treat as normal repo
 git rev-parse --show-superproject-working-tree 2>/dev/null
 ```
@@ -67,7 +67,7 @@ Follow this priority order. Explicit user preference always beats observed files
 1. **Check your instructions for a declared worktree directory preference.** If the user has already specified one, use it without asking.
 
 2. **Check for an existing project-local worktree directory:**
-   ```Bash
+   ```bash
    ls -d .worktrees 2>/dev/null     # Preferred (hidden)
    ls -d worktrees 2>/dev/null      # Alternative
    ```
@@ -79,7 +79,7 @@ Follow this priority order. Explicit user preference always beats observed files
 
 **MUST verify directory is ignored before creating worktree:**
 
-```Bash
+```bash
 git check-ignore -q .worktrees 2>/dev/null || git check-ignore -q worktrees 2>/dev/null
 ```
 
@@ -89,7 +89,7 @@ git check-ignore -q .worktrees 2>/dev/null || git check-ignore -q worktrees 2>/d
 
 #### Create the Worktree
 
-```Bash
+```bash
 # Determine path based on chosen location
 path="$LOCATION/$BRANCH_NAME"
 
@@ -103,7 +103,7 @@ cd "$path"
 
 Auto-detect and run appropriate setup:
 
-```Bash
+```bash
 # Node.js
 if [ -f package.json ]; then npm install; fi
 
@@ -122,7 +122,7 @@ if [ -f go.mod ]; then go mod download; fi
 
 Run tests to ensure workspace starts clean:
 
-```Bash
+```bash
 # Use project-appropriate command
 npm test / cargo test / pytest / go test ./...
 ```

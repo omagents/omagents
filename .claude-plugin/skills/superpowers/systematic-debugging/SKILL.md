@@ -87,7 +87,7 @@ You MUST complete each phase before proceeding to the next.
    ```
 
    **Example (multi-layer system):**
-   ```Bash
+   ```bash
    # Layer 1: Workflow
    echo "=== Secrets available in workflow: ==="
    echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
@@ -128,8 +128,8 @@ You MUST complete each phase before proceeding to the next.
    - What works that's similar to what's broken?
 
 2. **Compare Against References**
-   - If implementing pattern, Read reference implementation COMPLETELY
-   - Don't skim - Read every line
+   - If implementing pattern, read reference implementation COMPLETELY
+   - Don't skim - read every line
    - Understand the pattern fully before applying
 
 3. **Identify Differences**
@@ -249,7 +249,7 @@ If you catch yourself thinking:
 | "Issue is simple, don't need process" | Simple issues have root causes too. Process is fast for simple bugs. |
 | "Emergency, no time for process" | Systematic debugging is FASTER than guess-and-check thrashing. |
 | "Just try this first, then investigate" | First fix sets the pattern. Do it right from the start. |
-| "I'll Write test after confirming fix works" | Untested fixes don't stick. Test first proves it. |
+| "I'll write test after confirming fix works" | Untested fixes don't stick. Test first proves it. |
 | "Multiple fixes at once saves time" | Can't isolate what worked. Causes new bugs. |
 | "Reference too long, I'll adapt the pattern" | Partial understanding guarantees bugs. Read it completely. |
 | "I see the problem, let me fix it" | Seeing symptoms ≠ understanding root cause. |

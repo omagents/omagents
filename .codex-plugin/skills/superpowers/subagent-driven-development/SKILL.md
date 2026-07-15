@@ -120,7 +120,7 @@ most expensive — which silently defeats this section.
 many turns a subagent takes, and the cheapest models routinely take 2-3× the
 turns on multi-step work — costing more overall. Use a mid-tier model as the
 floor for reviewers and for implementers working from prose descriptions.
-When the task's plan text contains the complete code to Write, the
+When the task's plan text contains the complete code to write, the
 implementation is transcription plus testing: use the cheapest tier for
 that implementer. Single-file mechanical fixes also take the cheapest tier.
 
@@ -180,7 +180,7 @@ final whole-branch review. When you fill a reviewer template:
   project's spec demands.
 - Hand the reviewer its diff as a file: run this skill's
   `scripts/review-package BASE HEAD` and pass the reviewer the file path
-  it prints (or, without Bash: `git log --oneline`, `git diff --stat`,
+  it prints (or, without bash: `git log --oneline`, `git diff --stat`,
   and `git diff -U10` for the range, redirected to one uniquely named
   file). The output never enters your own context, and the reviewer sees
   the commit list, stat summary, and full diff with context in one Read
@@ -220,14 +220,14 @@ final whole-branch review. When you fill a reviewer template:
 
 Everything you paste into a dispatch prompt — and everything a subagent
 prints back — stays resident in your context for the rest of the session
-and is re-Read on every later turn. Hand artifacts over as files:
+and is re-read on every later turn. Hand artifacts over as files:
 
 - **Task brief:** before dispatching an implementer, run this skill's
   `scripts/task-brief PLAN_FILE N` — it extracts the task's full text to a
   uniquely named file and prints the path. Compose the dispatch so the
   brief stays the single source of requirements. Your dispatch should
   contain: (1) one line on where this task fits in the project; (2) the
-  brief path, introduced as "Read this first — it is your requirements,
+  brief path, introduced as "read this first — it is your requirements,
   with the exact values to use verbatim"; (3) interfaces and decisions
   from earlier tasks that the brief cannot know; (4) your resolution of
   any ambiguity you noticed in the brief; (5) the report-file path and
@@ -241,7 +241,7 @@ and is re-Read on every later turn. Hand artifacts over as files:
   file, the report file, and the review package — plus the global
   constraints that bind the task.
 - Fix dispatches append their fix report (with test results) to the same
-  report file and return a short summary; re-reviews Read the updated file.
+  report file and return a short summary; re-reviews read the updated file.
 
 ## Durable Progress
 
@@ -371,7 +371,7 @@ Done!
 - Skip task review, or accept a report missing either verdict (spec compliance AND task quality are both required)
 - Proceed with unfixed issues
 - Dispatch multiple implementation subagents in parallel (conflicts)
-- Make a subagent Read the whole plan file (hand it its task brief —
+- Make a subagent read the whole plan file (hand it its task brief —
   `scripts/task-brief` — instead)
 - Skip scene-setting context (subagent needs to understand where task fits)
 - Ignore subagent questions (answer before letting them proceed)

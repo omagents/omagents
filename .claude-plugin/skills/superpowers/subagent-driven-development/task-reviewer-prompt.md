@@ -49,7 +49,7 @@ Subagent (general-purpose):
     lock ordering, a function or API contract, or shared mutable state,
     checking the call sites is the right method.
 
-    Your review is Read-only on this checkout. Do not mutate the working
+    Your review is read-only on this checkout. Do not mutate the working
     tree, the index, HEAD, or branch state in any way.
 
     ## Do Not Trust the Report

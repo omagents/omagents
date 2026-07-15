@@ -1,6 +1,6 @@
 # Pi Tool Mapping
 
-Skills speak in actions ("dispatch a subagent", "create a todo", "Read a file"). On Pi these resolve to the tools below.
+Skills speak in actions ("dispatch a subagent", "create a todo", "read a file"). On Pi these resolve to the tools below.
 
 | Action skills request | Pi equivalent |
 | --- | --- |

@@ -93,15 +93,11 @@ Claude plugins use `.claude-plugin/plugin.json` and auto-discover:
   "description": "Agent toolkit: deep research, loop workflows, MCP servers, and Python tooling.",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
-  "hooks": "./hooks/hooks.json",
-  "dependencies": [
-    {
-      "name": "superpowers",
-      "version": "~6.1.0"
-    }
-  ]
+  "hooks": "./hooks/hooks.json"
 }
 ```
+
+Superpowers skills are bundled into `.claude-plugin/skills/superpowers/` rather than declared as a plugin dependency.
 
 **MCP configuration (`.mcp.json`):**
 
@@ -175,7 +171,7 @@ Codex has no `bin/` auto-PATH feature, so skill instructions must reference tool
 }
 ```
 
-Codex plugin manifests do not clearly support a `dependencies` field for other plugins. Therefore, superpowers skills must be bundled into `.codex-plugin/skills/` or users must install the superpowers plugin separately.
+Superpowers skills are bundled into `.codex-plugin/skills/superpowers/` so that users do not need to install the superpowers plugin separately.
 
 **Hooks:**
 
@@ -274,11 +270,11 @@ The sync script prefers the override file if it exists; otherwise it transforms 
 
 ## 7. Superpowers Bundling
 
-- **Claude Code:** Declare `superpowers` in `plugin.json` `dependencies`. The Claude plugin system should load it.
-- **Codex:** No confirmed plugin dependency mechanism. Bundle superpowers skills into `.codex-plugin/skills/` during sync.
+- **Claude Code:** Bundle superpowers skills into `.claude-plugin/skills/superpowers/` during sync. Do not declare `superpowers` as a plugin dependency.
+- **Codex:** Bundle superpowers skills into `.codex-plugin/skills/superpowers/` during sync.
 - **OpenCode:** Continue using `import("superpowers")` in `.opencode/plugins/index.js`.
 
-The sync script should be able to pull `node_modules/superpowers/skills/` into generated Codex skills directory.
+The sync script pulls `node_modules/superpowers/skills/` into both generated platform skills directories. Bundled superpowers skills are copied verbatim and are not run through the OmAgents OpenCode-to-platform tool-name mapping, so they retain their original tool references.
 
 ## 8. Release & Versioning
 

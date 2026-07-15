@@ -85,7 +85,7 @@ async function gitInit(directory: string) {
 **Critical:** Use `console.error()` in tests (not logger - may not show)
 
 **Run and capture:**
-```Bash
+```bash
 npm test 2>&1 | grep 'DEBUG git init'
 ```
 
@@ -100,7 +100,7 @@ If something appears during tests but you don't know which test:
 
 Use the bisection script `find-polluter.sh` in this directory:
 
-```Bash
+```bash
 ./find-polluter.sh '.git' 'src/**/*.test.ts'
 ```
 

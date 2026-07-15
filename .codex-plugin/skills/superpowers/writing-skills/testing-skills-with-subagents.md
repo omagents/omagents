@@ -6,7 +6,7 @@
 
 **Testing skills is just TDD applied to process documentation.**
 
-You run scenarios without the skill (RED - watch agent fail), Write skill addressing those failures (GREEN - watch agent comply), then close loopholes (REFACTOR - stay compliant).
+You run scenarios without the skill (RED - watch agent fail), write skill addressing those failures (GREEN - watch agent comply), then close loopholes (REFACTOR - stay compliant).
 
 **Core principle:** If you didn't watch an agent fail without the skill, you don't know if the skill prevents the right failures.
 
@@ -44,7 +44,7 @@ Same cycle as code TDD, different test format.
 
 **Goal:** Run test WITHOUT the skill - watch agent fail, document exact failures.
 
-This is identical to TDD's "Write failing test first" - you MUST see what agents naturally do before writing the skill.
+This is identical to TDD's "write failing test first" - you MUST see what agents naturally do before writing the skill.
 
 **Process:**
 
@@ -61,11 +61,11 @@ IMPORTANT: This is a real scenario. Choose and act.
 
 You spent 4 hours implementing a feature. It's working perfectly.
 You manually tested all edge cases. It's 6pm, dinner at 6:30pm.
-Code review tomorrow at 9am. You just realized you didn't Write tests.
+Code review tomorrow at 9am. You just realized you didn't write tests.
 
 Options:
 A) Delete code, start over with TDD tomorrow
-B) Commit now, Write tests tomorrow
+B) Commit now, write tests tomorrow
 C) Write tests now (30 min delay)
 
 Choose A, B, or C.
@@ -81,7 +81,7 @@ Run this WITHOUT a TDD skill. Agent chooses B or C and rationalizes:
 
 ## GREEN Phase: Write Minimal Skill (Make It Pass)
 
-Write skill addressing the specific baseline failures you documented. Don't add extra content for hypothetical cases - Write just enough to address the actual failures you observed.
+Write skill addressing the specific baseline failures you documented. Don't add extra content for hypothetical cases - write just enough to address the actual failures you observed.
 
 Run same scenarios WITH skill. Agent should now comply.
 
@@ -204,7 +204,7 @@ Write code before test? Delete it. Start over.
 ```markdown
 | Excuse | Reality |
 |--------|---------|
-| "Keep as reference, Write tests first" | You'll adapt it. That's testing after. Delete means delete. |
+| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
 ```
 
 ### 3. Red Flag Entry
@@ -242,7 +242,7 @@ Agent should now:
 **After agent chooses wrong option, ask:**
 
 ```markdown
-your human partner: You Read the skill and chose Option C anyway.
+your human partner: You read the skill and chose Option C anyway.
 
 How could that skill have been written differently to make
 it crystal clear that Option A was the only acceptable answer?
@@ -284,7 +284,7 @@ it crystal clear that Option A was the only acceptable answer?
 ### Initial Test (Failed)
 ```markdown
 Scenario: 200 lines done, forgot TDD, exhausted, dinner plans
-Agent chose: C (Write tests after)
+Agent chose: C (write tests after)
 Rationalization: "Tests after achieve same goals"
 ```
 
@@ -370,7 +370,7 @@ Tests pass once ≠ bulletproof.
 
 **Skill creation IS TDD. Same principles, same cycle, same benefits.**
 
-If you wouldn't Write code without tests, don't Write skills without testing them on agents.
+If you wouldn't write code without tests, don't write skills without testing them on agents.
 
 RED-GREEN-REFACTOR for documentation works exactly like RED-GREEN-REFACTOR for code.
 

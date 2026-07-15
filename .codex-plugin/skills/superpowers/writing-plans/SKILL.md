@@ -119,7 +119,7 @@ Expected: PASS
 
 - [ ] **Step 5: Commit**
 
-```Bash
+```bash
 git add tests/path/test.py src/path/file.py
 git commit -m "feat: add specific feature"
 ```
@@ -127,7 +127,7 @@ git commit -m "feat: add specific feature"
 
 ## No Placeholders
 
-Every step must contain the actual content an engineer needs. These are **plan failures** — never Write them:
+Every step must contain the actual content an engineer needs. These are **plan failures** — never write them:
 - "TBD", "TODO", "implement later", "fill in details"
 - "Add appropriate error handling" / "add validation" / "handle edge cases"
 - "Write tests for the above" (without actual test code)

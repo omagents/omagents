@@ -11,7 +11,7 @@ description: Use when creating new skills, editing existing skills, or verifying
 
 **Personal skills live in your runtime's skills directory** 
 
-You Write test cases (pressure scenarios with subagents), watch them fail (baseline behavior), Write the skill (documentation), watch tests pass (agents comply), and refactor (close loopholes).
+You write test cases (pressure scenarios with subagents), watch them fail (baseline behavior), write the skill (documentation), watch tests pass (agents comply), and refactor (close loopholes).
 
 **Core principle:** If you didn't watch an agent fail without the skill, you don't know if the skill teaches the right thing.
 
@@ -143,7 +143,7 @@ Concrete results
 
 ### 1. Rich Description Field
 
-**Purpose:** Your agent reads the description to decide which skills to load for a given task. Make it answer: "Should I Read this skill right now?"
+**Purpose:** Your agent reads the description to decide which skills to load for a given task. Make it answer: "Should I read this skill right now?"
 
 **Format:** Start with "Use when..." to focus on triggering conditions
 
@@ -153,7 +153,7 @@ The description should ONLY describe triggering conditions. Do NOT summarize the
 
 **Why this matters:** Testing revealed that when a description summarizes the skill's workflow, an agent may follow the description instead of reading the full skill content. A description saying "code review between tasks" caused an agent to do ONE review, even though the skill's flowchart clearly showed TWO reviews (spec compliance then code quality).
 
-When the description was changed to just "Use when executing implementation plans with independent tasks" (no workflow summary), the agent correctly Read the flowchart and followed the two-stage review process.
+When the description was changed to just "Use when executing implementation plans with independent tasks" (no workflow summary), the agent correctly read the flowchart and followed the two-stage review process.
 
 **The trap:** Descriptions that summarize workflow create a shortcut agents will take. The skill body becomes documentation agents skip.
 
@@ -162,7 +162,7 @@ When the description was changed to just "Use when executing implementation plan
 description: Use when executing plans - dispatches subagent per task with code review between tasks
 
 # ❌ BAD: Too much process detail
-description: Use for TDD - Write test first, watch it fail, Write minimal code, refactor
+description: Use for TDD - write test first, watch it fail, write minimal code, refactor
 
 # ✅ GOOD: Just triggering conditions, no workflow summary
 description: Use when executing implementation plans with independent tasks in the current session
@@ -222,7 +222,7 @@ Use words an agent would search for:
 **Techniques:**
 
 **Move details to tool help:**
-```Bash
+```bash
 # ❌ BAD: Document all flags in SKILL.md
 search-conversations supports --text, --both, --after DATE, --before DATE, --limit N
 
@@ -259,7 +259,7 @@ You: Searching...
 - Don't include multiple examples of same pattern
 
 **Verification:**
-```Bash
+```bash
 wc -w skills/path/SKILL.md
 # getting-started workflows: aim for <150 each
 # Other frequently-loaded: aim for <200 total
@@ -316,7 +316,7 @@ digraph when_flowchart {
 See `graphviz-conventions.dot` in this directory for graphviz style rules.
 
 **Visualizing for your human partner:** Use `render-graphs.js` in this directory to render a skill's flowcharts to SVG:
-```Bash
+```bash
 ./render-graphs.js ../some-skill           # Each diagram separately
 ./render-graphs.js ../some-skill --combine # All diagrams in one SVG
 ```
@@ -579,13 +579,13 @@ Full pressure-scenario runs are the final gate, but they are slow and expensive 
 1. **One fresh-context sample per call** — a raw API call, or a single-shot subagent if you don't have API access. System prompt = the realistic context the guidance will live in (the full skill or prompt template, not the guidance in isolation); user message = a task that tempts the failure.
 2. **Always include a no-guidance control.** If the control doesn't exhibit the failure, there is nothing to fix — stop, don't author the guidance.
 3. **5+ reps per variant.** Single samples lie.
-4. **Manually Read every flagged match.** Score programmatically if you like, but template echoes and quoted counter-examples masquerade as hits; automated counts alone overstate both failure and success.
+4. **Manually read every flagged match.** Score programmatically if you like, but template echoes and quoted counter-examples masquerade as hits; automated counts alone overstate both failure and success.
 5. **Variance is a metric.** When guidance lands, reps converge on the same shape. Five different interpretations across five reps means the wording isn't binding — tighten the form before adding words.
 
 Micro-tests verify wording; they do not replace pressure scenarios for discipline skills.
 
 **Testing methodology:** See [testing-skills-with-subagents.md](testing-skills-with-subagents.md) for the complete testing methodology:
-- How to Write pressure scenarios
+- How to write pressure scenarios
 - Pressure types (time, sunk cost, authority, exhaustion)
 - Plugging holes systematically
 - Meta-testing techniques
@@ -603,9 +603,9 @@ example-js.js, example-py.py, example-go.go
 ### ❌ Code in Flowcharts
 ```dot
 step1 [label="import fs"];
-step2 [label="Read file"];
+step2 [label="read file"];
 ```
-**Why bad:** Can't copy-paste, hard to Read
+**Why bad:** Can't copy-paste, hard to read
 
 ### ❌ Generic Labels
 helper1, helper2, step3, pattern4
@@ -642,7 +642,7 @@ Deploying untested skills = deploying untested code. It's a violation of quality
 - [ ] Clear overview with core principle
 - [ ] Address specific baseline failures identified in RED
 - [ ] Guidance form matches the failure type (see Match the Form to the Failure)
-- [ ] For behavior-shaping guidance: wording micro-tested against a no-guidance control (5+ reps, every flagged match Read manually) — N/A for pure reference skills
+- [ ] For behavior-shaping guidance: wording micro-tested against a no-guidance control (5+ reps, every flagged match read manually) — N/A for pure reference skills
 - [ ] Code inline OR link to separate file
 - [ ] One excellent example (not multi-language)
 - [ ] Run scenarios WITH skill - verify agents now comply
@@ -683,7 +683,7 @@ How future agents find your skill:
 **Creating skills IS TDD for process documentation.**
 
 Same Iron Law: No skill without failing test first.
-Same cycle: RED (baseline) → GREEN (Write skill) → REFACTOR (close loopholes).
+Same cycle: RED (baseline) → GREEN (write skill) → REFACTOR (close loopholes).
 Same benefits: Better quality, fewer surprises, bulletproof results.
 
 If you follow TDD for code, follow it for skills. It's the same discipline applied to documentation.

@@ -19,7 +19,7 @@ Guide completion of development work by presenting clear options and handling ch
 
 **Before presenting options, verify tests pass:**
 
-```Bash
+```bash
 # Run project's test suite
 npm test / cargo test / pytest / go test ./...
 ```
@@ -41,7 +41,7 @@ Stop. Don't proceed to Step 2.
 
 **Determine workspace state before presenting options:**
 
-```Bash
+```bash
 GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
 GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
 ```
@@ -56,7 +56,7 @@ This determines which menu to show and how cleanup works:
 
 ### Step 3: Determine Base Branch
 
-```Bash
+```bash
 # Try common base branches
 git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null
 ```
@@ -96,7 +96,7 @@ Which option?
 
 #### Option 1: Merge Locally
 
-```Bash
+```bash
 # Get main repo root for CWD safety
 MAIN_ROOT=$(git -C "$(git rev-parse --git-common-dir)/.." rev-parse --show-toplevel)
 cd "$MAIN_ROOT"
@@ -114,13 +114,13 @@ git merge <feature-branch>
 
 Then: Cleanup worktree (Step 6), then delete branch:
 
-```Bash
+```bash
 git branch -d <feature-branch>
 ```
 
 #### Option 2: Push and Create PR
 
-```Bash
+```bash
 # Push branch
 git push -u origin <feature-branch>
 ```
@@ -148,13 +148,13 @@ Type 'discard' to confirm.
 Wait for exact confirmation.
 
 If confirmed:
-```Bash
+```bash
 MAIN_ROOT=$(git -C "$(git rev-parse --git-common-dir)/.." rev-parse --show-toplevel)
 cd "$MAIN_ROOT"
 ```
 
 Then: Cleanup worktree (Step 6), then force-delete branch:
-```Bash
+```bash
 git branch -D <feature-branch>
 ```
 
@@ -162,7 +162,7 @@ git branch -D <feature-branch>
 
 **Only runs for Options 1 and 4.** Options 2 and 3 always preserve the worktree.
 
-```Bash
+```bash
 GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
 GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
 WORKTREE_PATH=$(git rev-parse --show-toplevel)
@@ -172,7 +172,7 @@ WORKTREE_PATH=$(git rev-parse --show-toplevel)
 
 **If worktree path is under `.worktrees/` or `worktrees/`:** Superpowers created this worktree — we own cleanup.
 
-```Bash
+```bash
 MAIN_ROOT=$(git -C "$(git rev-parse --git-common-dir)/.." rev-parse --show-toplevel)
 cd "$MAIN_ROOT"
 git worktree remove "$WORKTREE_PATH"

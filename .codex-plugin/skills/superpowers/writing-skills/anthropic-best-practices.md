@@ -1,8 +1,8 @@
 # Skill authoring best practices
 
-> Learn how to Write effective Skills that agents can discover and use successfully.
+> Learn how to write effective Skills that agents can discover and use successfully.
 
-Good Skills are concise, well-structured, and tested with real usage. This guide provides practical authoring decisions to help you Write Skills that agents can discover and use effectively.
+Good Skills are concise, well-structured, and tested with real usage. This guide provides practical authoring decisions to help you write Skills that agents can discover and use effectively.
 
 For conceptual background on how Skills work, see the [Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview).
 
@@ -17,7 +17,7 @@ The [context window](https://platform.claude.com/docs/en/build-with-claude/conte
 * Other Skills' metadata
 * Your actual request
 
-Not every token in your Skill has an immediate cost. At startup, only the metadata (name and description) from all Skills is pre-loaded. Agents Read SKILL.md only when the Skill becomes relevant, and Read additional files only as needed. However, being concise in SKILL.md still matters: once an agent loads it, every token competes with conversation history and other context.
+Not every token in your Skill has an immediate cost. At startup, only the metadata (name and description) from all Skills is pre-loaded. Agents read SKILL.md only when the Skill becomes relevant, and read additional files only as needed. However, being concise in SKILL.md still matters: once an agent loads it, every token competes with conversation history and other context.
 
 **Default assumption**: Agents are already very smart
 
@@ -117,7 +117,7 @@ Example:
 
 Run exactly this script:
 
-```Bash
+```bash
 python scripts/migrate.py --verify --backup
 ```
 
@@ -187,7 +187,7 @@ Consistent naming makes it easier to:
 The `description` field enables Skill discovery and should include both what the Skill does and when to use it.
 
 <Warning>
-  **Always Write in third person**. The description is injected into the system prompt, and inconsistent point-of-view can cause discovery problems.
+  **Always write in third person**. The description is injected into the system prompt, and inconsistent point-of-view can cause discovery problems.
 
   * **Good:** "Processes Excel files and generates reports"
   * **Avoid:** "I can help you process Excel files"
@@ -296,7 +296,7 @@ Agents load FORMS.md, REFERENCE.md, or EXAMPLES.md only when needed.
 
 #### Pattern 2: Domain-specific organization
 
-For Skills with multiple domains, organize content by domain to avoid loading irrelevant context. When a user asks about sales metrics, the agent only needs to Read sales-related schemas, not finance or marketing data. This keeps token usage low and context focused.
+For Skills with multiple domains, organize content by domain to avoid loading irrelevant context. When a user asks about sales metrics, the agent only needs to read sales-related schemas, not finance or marketing data. This keeps token usage low and context focused.
 
 ```
 bigquery-skill/
@@ -322,7 +322,7 @@ bigquery-skill/
 
 Find specific metrics using grep:
 
-```Bash
+```bash
 grep -i "revenue" reference/finance.md
 grep -i "pipeline" reference/sales.md
 grep -i "api usage" reference/product.md
@@ -348,13 +348,13 @@ For simple edits, modify the XML directly.
 **For OOXML details**: See [OOXML.md](OOXML.md)
 ```
 
-Agents Read REDLINING.md or OOXML.md only when the user needs those features.
+Agents read REDLINING.md or OOXML.md only when the user needs those features.
 
 ### Avoid deeply nested references
 
-Agents may partially Read files when they're referenced from other referenced files. When encountering nested references, an agent might use commands like `head -100` to preview content rather than reading entire files, resulting in incomplete information.
+Agents may partially read files when they're referenced from other referenced files. When encountering nested references, an agent might use commands like `head -100` to preview content rather than reading entire files, resulting in incomplete information.
 
-**Keep references one level deep from SKILL.md**. All reference files should link directly from SKILL.md to ensure agents Read complete files when needed.
+**Keep references one level deep from SKILL.md**. All reference files should link directly from SKILL.md to ensure agents read complete files when needed.
 
 **Bad example: Too deep**:
 
@@ -391,7 +391,7 @@ For reference files longer than 100 lines, include a table of contents at the to
 
 ## Contents
 - Authentication and setup
-- Core methods (create, Read, update, delete)
+- Core methods (create, read, update, delete)
 - Advanced features (batch operations, webhooks)
 - Error handling patterns
 - Code examples
@@ -403,7 +403,7 @@ For reference files longer than 100 lines, include a table of contents at the to
 ...
 ```
 
-Agents can then Read the complete file or jump to specific sections as needed.
+Agents can then read the complete file or jump to specific sections as needed.
 
 For details on how this filesystem-based architecture enables progressive disclosure, see the [Runtime environment](#runtime-environment) section in the Advanced section below.
 
@@ -465,7 +465,7 @@ Copy this checklist and check off items as you complete them:
 ```
 Task Progress:
 - [ ] Step 1: Analyze the form (run analyze_form.py)
-- [ ] Step 2: Create field mapping (Edit fields.json)
+- [ ] Step 2: Create field mapping (edit fields.json)
 - [ ] Step 3: Validate mapping (run validate_fields.py)
 - [ ] Step 4: Fill the form (run fill_form.py)
 - [ ] Step 5: Verify output (run verify_output.py)
@@ -715,7 +715,7 @@ Guide agents through decision points:
 ```
 
 <Tip>
-  If workflows become large or complicated with many steps, consider pushing them into separate files and tell the agent to Read the appropriate file based on the task at hand.
+  If workflows become large or complicated with many steps, consider pushing them into separate files and tell the agent to read the appropriate file based on the task at hand.
 </Tip>
 
 ## Evaluation and iteration
@@ -755,7 +755,7 @@ This approach ensures you're solving actual problems rather than anticipating re
 
 ### Develop Skills iteratively with the agent
 
-The most effective Skill development process involves the agent itself. Work with one instance ("Agent A") to create a Skill that will be used by other instances ("Agent B"). Agent A helps you design and refine instructions, while Agent B tests them in real tasks. This works because the underlying models understand both how to Write effective agent instructions and what information agents need.
+The most effective Skill development process involves the agent itself. Work with one instance ("Agent A") to create a Skill that will be used by other instances ("Agent B"). Agent A helps you design and refine instructions, while Agent B tests them in real tasks. This works because the underlying models understand both how to write effective agent instructions and what information agents need.
 
 **Creating a new Skill:**
 
@@ -813,7 +813,7 @@ The same hierarchical pattern continues when improving Skills. You alternate bet
 
 As you iterate on Skills, pay attention to how agents actually use them in practice. Watch for:
 
-* **Unexpected exploration paths**: Does the agent Read files in an order you didn't anticipate? This might indicate your structure isn't as intuitive as you thought
+* **Unexpected exploration paths**: Does the agent read files in an order you didn't anticipate? This might indicate your structure isn't as intuitive as you thought
 * **Missed connections**: Does the agent fail to follow references to important files? Your links might need to be more explicit or prominent
 * **Overreliance on certain sections**: If the agent repeatedly reads the same file, consider whether that content should be in the main SKILL.md instead
 * **Ignored content**: If the agent never accesses a bundled file, it might be unnecessary or poorly signaled in the main instructions
@@ -863,12 +863,12 @@ def process_file(path):
     """Process a file, creating it if it doesn't exist."""
     try:
         with open(path) as f:
-            return f.Read()
+            return f.read()
     except FileNotFoundError:
         # Create file with default content instead of failing
         print(f"File {path} not found, creating default")
         with open(path, 'w') as f:
-            f.Write('')
+            f.write('')
         return ''
     except PermissionError:
         # Provide alternative instead of failing
@@ -881,7 +881,7 @@ def process_file(path):
 ```python  theme={null}
 def process_file(path):
     # Just fail and let the agent figure it out
-    return open(path).Read()
+    return open(path).read()
 ```
 
 Configuration parameters should also be justified and documented to avoid "voodoo constants" (Ousterhout's law). If you don't know the right value, how will the agent determine it?
@@ -907,7 +907,7 @@ RETRIES = 5   # Why 5?
 
 ### Provide utility scripts
 
-Even if your agent could Write a script, pre-made scripts offer advantages:
+Even if your agent could write a script, pre-made scripts offer advantages:
 
 **Benefits of utility scripts**:
 
@@ -934,7 +934,7 @@ For most utility scripts, execution is preferred because it's more reliable and 
 
 **analyze_form.py**: Extract all form fields from PDF
 
-```Bash
+```bash
 python scripts/analyze_form.py input.pdf > fields.json
 ```
 
@@ -948,14 +948,14 @@ Output format:
 
 **validate_boxes.py**: Check for overlapping bounding boxes
 
-```Bash
+```bash
 python scripts/validate_boxes.py fields.json
 # Returns: "OK" or lists conflicts
 ```
 
 **fill_form.py**: Apply field values to PDF
 
-```Bash
+```bash
 python scripts/fill_form.py input.pdf fields.json output.pdf
 ```
 ````
@@ -968,7 +968,7 @@ When inputs can be rendered as images, have the agent analyze them:
 ## Form layout analysis
 
 1. Convert PDF to images:
-   ```Bash
+   ```bash
    python scripts/pdf_to_images.py form.pdf
    ```
 
@@ -977,7 +977,7 @@ When inputs can be rendered as images, have the agent analyze them:
 ````
 
 <Note>
-  In this example, you'd need to Write the `pdf_to_images.py` script.
+  In this example, you'd need to write the `pdf_to_images.py` script.
 </Note>
 
 Agent vision capabilities help understand layouts and structures.
@@ -1012,16 +1012,16 @@ List required packages in your SKILL.md and verify they're available in the [cod
 
 ### Runtime environment
 
-Skills run in a code execution environment with filesystem access, Bash commands, and code execution capabilities. For the conceptual explanation of this architecture, see [The Skills architecture](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview#the-skills-architecture) in the overview.
+Skills run in a code execution environment with filesystem access, bash commands, and code execution capabilities. For the conceptual explanation of this architecture, see [The Skills architecture](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview#the-skills-architecture) in the overview.
 
 **How this affects your authoring:**
 
 **How agents access Skills:**
 
 1. **Metadata pre-loaded**: At startup, the name and description from all Skills' YAML frontmatter are loaded into the system prompt
-2. **Files Read on-demand**: Agents use their file-reading tools to access SKILL.md and other files from the filesystem when needed
-3. **Scripts executed efficiently**: Utility scripts can be executed via Bash without loading their full contents into context. Only the script's output consumes tokens
-4. **No context penalty for large files**: Reference files, data, or documentation don't consume context tokens until actually Read
+2. **Files read on-demand**: Agents use their file-reading tools to access SKILL.md and other files from the filesystem when needed
+3. **Scripts executed efficiently**: Utility scripts can be executed via bash without loading their full contents into context. Only the script's output consumes tokens
+4. **No context penalty for large files**: Reference files, data, or documentation don't consume context tokens until actually read
 
 * **File paths matter**: Agents navigate your skill directory like a filesystem. Use forward slashes (`reference/guide.md`), not backslashes
 * **Name files descriptively**: Use names that indicate content: `form_validation_rules.md`, not `doc2.md`
@@ -1032,7 +1032,7 @@ Skills run in a code execution environment with filesystem access, Bash commands
 * **Prefer scripts for deterministic operations**: Write `validate_form.py` rather than asking the agent to generate validation code
 * **Make execution intent clear**:
   * "Run `analyze_form.py` to extract fields" (execute)
-  * "See `analyze_form.py` for the extraction algorithm" (Read as reference)
+  * "See `analyze_form.py` for the extraction algorithm" (read as reference)
 * **Test file access patterns**: Verify the agent can navigate your directory structure by testing with real requests
 
 **Example:**
@@ -1046,7 +1046,7 @@ bigquery-skill/
     └── product.md (usage analytics)
 ```
 
-When the user asks about revenue, the agent reads SKILL.md, sees the reference to `reference/finance.md`, and invokes Bash to Read just that file. The sales.md and product.md files remain on the filesystem, consuming zero context tokens until needed. This filesystem-based model is what enables progressive disclosure. Agents can navigate and selectively load exactly what each task requires.
+When the user asks about revenue, the agent reads SKILL.md, sees the reference to `reference/finance.md`, and invokes bash to read just that file. The sales.md and product.md files remain on the filesystem, consuming zero context tokens until needed. This filesystem-based model is what enables progressive disclosure. Agents can navigate and selectively load exactly what each task requires.
 
 For complete details on the technical architecture, see [How Skills work](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview#how-skills-work) in the Skills overview.
 

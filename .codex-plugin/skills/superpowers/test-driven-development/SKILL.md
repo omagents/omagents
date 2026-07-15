@@ -114,7 +114,7 @@ Vague name, tests mock not code
 
 **MANDATORY. Never skip.**
 
-```Bash
+```bash
 npm test path/to/test.test.ts
 ```
 
@@ -169,7 +169,7 @@ Don't add features, refactor other code, or "improve" beyond the test.
 
 **MANDATORY.**
 
-```Bash
+```bash
 npm test path/to/test.test.ts
 ```
 
@@ -205,7 +205,7 @@ Next failing test for next feature.
 
 ## Why Order Matters
 
-**"I'll Write tests after to verify it works"**
+**"I'll write tests after to verify it works"**
 
 Tests written after code pass immediately. Passing immediately proves nothing:
 - Might test wrong thing
@@ -262,7 +262,7 @@ Tests-first force edge case discovery before implementing. Tests-after verify yo
 | "Tests after achieve same goals" | Tests-after = "what does this do?" Tests-first = "what should this do?" |
 | "Already manually tested" | Ad-hoc ≠ systematic. No record, can't re-run. |
 | "Deleting X hours is wasteful" | Sunk cost fallacy. Keeping unverified code is technical debt. |
-| "Keep as reference, Write tests first" | You'll adapt it. That's testing after. Delete means delete. |
+| "Keep as reference, write tests first" | You'll adapt it. That's testing after. Delete means delete. |
 | "Need to explore first" | Fine. Throw away exploration, start with TDD. |
 | "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
 | "TDD will slow me down" | TDD faster than debugging. Pragmatic = test-first. |
@@ -300,7 +300,7 @@ test('rejects empty email', async () => {
 ```
 
 **Verify RED**
-```Bash
+```bash
 $ npm test
 FAIL: expected 'Email required', got undefined
 ```
@@ -316,7 +316,7 @@ function submitForm(data: FormData) {
 ```
 
 **Verify GREEN**
-```Bash
+```bash
 $ npm test
 PASS
 ```
@@ -356,7 +356,7 @@ Never fix bugs without a test.
 
 ## Testing Anti-Patterns
 
-When adding mocks or test utilities, Read [testing-anti-patterns.md](testing-anti-patterns.md) to avoid common pitfalls:
+When adding mocks or test utilities, read [testing-anti-patterns.md](testing-anti-patterns.md) to avoid common pitfalls:
 - Testing mock behavior instead of real behavior
 - Adding test-only methods to production classes
 - Mocking without understanding dependencies

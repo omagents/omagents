@@ -45,7 +45,7 @@ Subagent (general-purpose):
     It's always OK to pause and clarify. Don't guess or make assumptions.
 
     While iterating, run the focused test for what you're changing; run the
-    full suite once before committing, not after every Edit.
+    full suite once before committing, not after every edit.
 
     ## Code Organization
 

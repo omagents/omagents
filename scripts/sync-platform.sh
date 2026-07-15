@@ -158,11 +158,6 @@ if [[ -d "$SUPERPOWERS_SOURCE_DIR" ]]; then
     cp -R "$super_skill_dir/"* "$super_target_dir/"
 
     find "$super_target_dir" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
-    find "$super_target_dir" -type f -not -path '*/__pycache__/*' -not -name '.DS_Store' -name '*.md' -print0 | while IFS= read -r -d '' file; do
-      tmp=$(mktemp)
-      perl "$PL_SCRIPT" "$file" > "$tmp"
-      mv "$tmp" "$file"
-    done
   done
 else
   echo "[sync] warning: superpowers skills not found at $SUPERPOWERS_SOURCE_DIR" >&2

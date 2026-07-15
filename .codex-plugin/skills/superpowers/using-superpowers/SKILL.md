@@ -51,7 +51,7 @@ These thoughts mean STOP—you're rationalizing:
 
 ## Platform Adaptation
 
-If your harness appears here, Read its reference file for special instructions:
+If your harness appears here, read its reference file for special instructions:
 
 - Codex: `references/codex-tools.md`
 - Pi: `references/pi-tools.md`

@@ -780,7 +780,7 @@ git commit -m "feat: add venv wrapper scripts and install helpers"
 
 ---
 
-### Task 9: Bundle superpowers skills for Codex
+### Task 9: Bundle superpowers skills for Claude and Codex
 
 **Files:**
 - Modify: `scripts/sync-platform.sh`
@@ -788,28 +788,90 @@ git commit -m "feat: add venv wrapper scripts and install helpers"
 
 **Interfaces:**
 - Consumes: `node_modules/superpowers/skills/`.
-- Produces: `.codex-plugin/skills/superpowers/*`.
+- Produces: `.claude-plugin/skills/superpowers/*` and `.codex-plugin/skills/superpowers/*`.
 
-- [ ] **Step 1: Update sync script for Codex**
+Superpowers skills are bundled into both Claude and Codex plugins. They are not declared as a plugin dependency, so the generated `plugin.json` does not list `superpowers` under `dependencies`. The bundled skills are copied verbatim without applying the OmAgents tool-name mapping, so they retain their original Superpowers tool references.
 
-In the `codex` branch, after copying OmAgents skills, add:
+- [ ] **Step 1: Update sync script to bundle superpowers skills for both platforms**
+
+After copying OmAgents skills, add:
 
 ```bash
-SUPERPOWERS_SKILLS="$ROOT_DIR/node_modules/superpowers/skills"
-if [ -d "$SUPERPOWERS_SKILLS" ]; then
-  cp -R "$SUPERPOWERS_SKILLS" "$ROOT_DIR/.codex-plugin/skills/superpowers"
+SUPERPOWERS_SOURCE_DIR="$ROOT_DIR/node_modules/superpowers/skills"
+SUPERPOWERS_TARGET_DIR="$SKILL_TARGET_DIR/superpowers"
+
+if [[ -d "$SUPERPOWERS_SOURCE_DIR" ]]; then
+  mkdir -p "$SUPERPOWERS_TARGET_DIR"
+  for super_skill_dir in "$SUPERPOWERS_SOURCE_DIR"/*/; do
+    super_skill_name=$(basename "$super_skill_dir")
+
+    if [[ "$super_skill_name" == _* || "$super_skill_name" == .* ]]; then
+      continue
+    fi
+
+    super_target_dir="$SUPERPOWERS_TARGET_DIR/$super_skill_name"
+    rm -rf "$super_target_dir"
+    mkdir -p "$super_target_dir"
+    cp -R "$super_skill_dir/"* "$super_target_dir/"
+
+    find "$super_target_dir" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+  done
 else
-  echo "[sync] warning: superpowers skills not found; run npm install" >&2
+  echo "[sync] warning: superpowers skills not found at $SUPERPOWERS_SOURCE_DIR" >&2
 fi
 ```
 
-For Claude, keep the `dependencies` declaration in `plugin.json` and do not bundle.
+Do not apply the OmAgents tool-name mapping to the copied superpowers skills.
 
-- [ ] **Step 2: Update the test**
+- [ ] **Step 2: Update the tests**
 
 ```js
-test("codex plugin bundles superpowers skills", () => {
-  assert.ok(fs.existsSync(path.join(ROOT, ".codex-plugin", "skills", "superpowers")))
+test("node_modules/superpowers/skills exists and contains at least 14 skill directories", () => {
+  const superpowersDir = path.join(ROOT, "node_modules", "superpowers", "skills")
+  assert.ok(fs.existsSync(superpowersDir), "node_modules/superpowers/skills should exist")
+
+  const dirs = fs
+    .readdirSync(superpowersDir)
+    .filter((name) => {
+      const full = path.join(superpowersDir, name)
+      return fs.statSync(full).isDirectory() && !name.startsWith("_") && !name.startsWith(".")
+    })
+
+  assert.ok(dirs.length >= 14, `expected at least 14 superpowers skill directories, found ${dirs.length}`)
+})
+
+test("sync script bundles the same superpowers skills for claude and codex", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  const getSkills = (platform) => {
+    const dir = path.join(ROOT, `.${platform}-plugin`, "skills", "superpowers")
+    return fs
+      .readdirSync(dir)
+      .filter((name) => fs.statSync(path.join(dir, name)).isDirectory())
+      .sort()
+  }
+
+  assert.deepStrictEqual(getSkills("claude"), getSkills("codex"))
+})
+
+test("each bundled superpowers skill has YAML frontmatter", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const superpowersDir = path.join(ROOT, `.${platform}-plugin`, "skills", "superpowers")
+    const dirs = fs.readdirSync(superpowersDir).filter((name) => {
+      return fs.statSync(path.join(superpowersDir, name)).isDirectory()
+    })
+
+    for (const skillName of dirs) {
+      const skillMd = path.join(superpowersDir, skillName, "SKILL.md")
+      assert.ok(fs.existsSync(skillMd))
+      const content = fs.readFileSync(skillMd, "utf-8")
+      assert.ok(content.startsWith("---"))
+    }
+  }
 })
 ```
 
@@ -826,7 +888,7 @@ Expected: PASS.
 
 ```bash
 git add scripts/sync-platform.sh tests/sync-platform.test.js
-git commit -m "feat: bundle superpowers skills for codex"
+git commit -m "feat: bundle superpowers skills for claude and codex"
 ```
 
 ---

@@ -324,6 +324,7 @@ test("generated skills contain no mapped OpenCode tool names", () => {
     })
 
     for (const skillName of skillDirs) {
+      if (skillName === "superpowers") continue
       const skillDir = path.join(skillsDir, skillName)
       for (const file of walkSync(skillDir)) {
         if (path.extname(file) !== ".md") continue
@@ -394,6 +395,66 @@ test("sync script bundles superpowers skills into generated plugins", () => {
       content.length > 0,
       `.${platform}-plugin superpowers brainstorming skill should not be empty`
     )
+  }
+})
+
+test("node_modules/superpowers/skills exists and contains at least 14 skill directories", () => {
+  const superpowersDir = path.join(ROOT, "node_modules", "superpowers", "skills")
+  assert.ok(fs.existsSync(superpowersDir), "node_modules/superpowers/skills should exist")
+
+  const dirs = fs.readdirSync(superpowersDir).filter((name) => {
+    const full = path.join(superpowersDir, name)
+    return fs.statSync(full).isDirectory() && !name.startsWith("_") && !name.startsWith(".")
+  })
+
+  assert.ok(
+    dirs.length >= 14,
+    `expected at least 14 superpowers skill directories, found ${dirs.length}`
+  )
+})
+
+test("sync script bundles the same superpowers skills for claude and codex", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  const getSkills = (platform) => {
+    const dir = path.join(ROOT, `.${platform}-plugin`, "skills", "superpowers")
+    return fs
+      .readdirSync(dir)
+      .filter((name) => fs.statSync(path.join(dir, name)).isDirectory())
+      .sort()
+  }
+
+  assert.deepStrictEqual(
+    getSkills("claude"),
+    getSkills("codex"),
+    "claude and codex should bundle the same superpowers skills"
+  )
+})
+
+test("each bundled superpowers skill has YAML frontmatter", () => {
+  execSync(`bash "${SCRIPT}" claude`, { cwd: ROOT, stdio: "ignore" })
+  execSync(`bash "${SCRIPT}" codex`, { cwd: ROOT, stdio: "ignore" })
+
+  for (const platform of ["claude", "codex"]) {
+    const superpowersDir = path.join(ROOT, `.${platform}-plugin`, "skills", "superpowers")
+    const dirs = fs.readdirSync(superpowersDir).filter((name) => {
+      return fs.statSync(path.join(superpowersDir, name)).isDirectory()
+    })
+
+    for (const skillName of dirs) {
+      const skillMd = path.join(superpowersDir, skillName, "SKILL.md")
+      assert.ok(
+        fs.existsSync(skillMd),
+        `${platform} superpowers skill ${skillName} should have SKILL.md`
+      )
+
+      const content = fs.readFileSync(skillMd, "utf-8")
+      assert.ok(
+        content.startsWith("---"),
+        `${platform} superpowers skill ${skillName} SKILL.md should start with YAML frontmatter`
+      )
+    }
   }
 })
 

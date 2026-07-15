@@ -26,13 +26,13 @@ A question *about* a UI topic is not automatically a visual question. "What kind
 
 ## How It Works
 
-The server watches a directory for HTML files and serves the newest one to the browser. You Write HTML content to `screen_dir`, the user sees it in their browser and can click to select options. Selections are recorded to `state_dir/events` that you Read on your next turn.
+The server watches a directory for HTML files and serves the newest one to the browser. You write HTML content to `screen_dir`, the user sees it in their browser and can click to select options. Selections are recorded to `state_dir/events` that you read on your next turn.
 
-**Content fragments vs full documents:** If your HTML file starts with `<!DOCTYPE` or `<html`, the server serves it as-is (just injects the helper script). Otherwise, the server automatically wraps your content in the frame template — adding the header, CSS theme, connection status, and all interactive infrastructure. **Write content fragments by default.** Only Write full documents when you need complete control over the page.
+**Content fragments vs full documents:** If your HTML file starts with `<!DOCTYPE` or `<html`, the server serves it as-is (just injects the helper script). Otherwise, the server automatically wraps your content in the frame template — adding the header, CSS theme, connection status, and all interactive infrastructure. **Write content fragments by default.** Only write full documents when you need complete control over the page.
 
 ## Starting a Session
 
-```Bash
+```bash
 # Start AFTER the user approves the companion. --open auto-opens their browser on
 # the first screen; --project-dir persists mockups and enables same-port restart.
 scripts/start-server.sh --project-dir /path/to/project --open
@@ -49,34 +49,34 @@ Save `screen_dir` and `state_dir` from the response. With `--open`, the browser 
 without it, so always give the user the **complete** URL from the `url` field —
 never strip the query string, and never hand out a bare `http://host:port`. The
 key gates HTTP and WebSocket access so a stray browser tab or another machine on
-the network can't Read the screens or inject events. After the first load the
+the network can't read the screens or inject events. After the first load the
 browser remembers the key via a cookie, so reloads and `/files/*` assets work
 without repeating it.
 
-**Finding connection info:** The server writes its startup JSON to `$STATE_DIR/server-info`. If you launched the server in the background and didn't capture stdout, Read that file to get the URL and port. When using `--project-dir`, check `<project>/.superpowers/brainstorm/` for the session directory.
+**Finding connection info:** The server writes its startup JSON to `$STATE_DIR/server-info`. If you launched the server in the background and didn't capture stdout, read that file to get the URL and port. When using `--project-dir`, check `<project>/.superpowers/brainstorm/` for the session directory.
 
 **Note:** Pass the project root as `--project-dir` so mockups persist in `.superpowers/brainstorm/` and survive server restarts. Without it, files go to `/tmp` and get cleaned up. Remind the user to add `.superpowers/` to `.gitignore` if it's not already there.
 
 **Launching the server by platform:**
 
 **Claude Code:**
-```Bash
+```bash
 # Default mode works — the script backgrounds the server itself.
 scripts/start-server.sh --project-dir /path/to/project --open
 ```
 
-On Windows, the script auto-detects and switches to foreground mode (which blocks the tool call). Use `run_in_background: true` on the Bash tool call so the server survives across conversation turns, then Read `$STATE_DIR/server-info` on the next turn to get the URL and port.
+On Windows, the script auto-detects and switches to foreground mode (which blocks the tool call). Use `run_in_background: true` on the Bash tool call so the server survives across conversation turns, then read `$STATE_DIR/server-info` on the next turn to get the URL and port.
 
 **Codex:**
-```Bash
+```bash
 # Codex reaps background processes. The script auto-detects CODEX_CI and
 # switches to foreground mode. Run it normally — no extra flags needed.
 scripts/start-server.sh --project-dir /path/to/project --open
 ```
 
 **Copilot CLI:**
-```Bash
-# Use --foreground and start the server via the Bash tool with mode: "async"
+```bash
+# Use --foreground and start the server via the bash tool with mode: "async"
 # so the process survives across turns. Capture the returned shellId for
 # read_bash / stop_bash if you need to interact with it later.
 scripts/start-server.sh --project-dir /path/to/project --open --foreground
@@ -86,7 +86,7 @@ scripts/start-server.sh --project-dir /path/to/project --open --foreground
 
 If the URL is unreachable from your browser (common in remote/containerized setups), bind a non-loopback host:
 
-```Bash
+```bash
 scripts/start-server.sh \
   --project-dir /path/to/project \
   --host 0.0.0.0 \
@@ -97,7 +97,7 @@ Use `--url-host` to control what hostname is printed in the returned URL JSON.
 
 ## The Loop
 
-1. **Check server is alive**, then **Write HTML** to a new file in `screen_dir`:
+1. **Check server is alive**, then **write HTML** to a new file in `screen_dir`:
    - **Required: confirm the server is alive before referring to the URL or pushing a screen.** Check that `$STATE_DIR/server-info` exists and `$STATE_DIR/server-stopped` does not. If it has shut down, restart it with `start-server.sh` using the **same `--project-dir`** — it reuses the same port, so the user's open tab reconnects on its own (it shows a "paused" overlay while the server is down) and you don't need to send a new URL. The server auto-exits after 4 hours idle (configurable with `--idle-timeout-minutes`).
    - Use semantic filenames: `platform.html`, `visual-style.html`, `layout.html`
    - **Never reuse filenames** — each screen gets a fresh file
@@ -114,7 +114,7 @@ Use `--url-host` to control what hostname is printed in the returned URL JSON.
    - Merge with the user's terminal text to get the full picture
    - The terminal message is the primary feedback; `state_dir/events` provides structured interaction data
 
-4. **Iterate or advance** — if feedback changes current screen, Write a new file (e.g., `layout-v2.html`). Only move to the next question when the current step is validated.
+4. **Iterate or advance** — if feedback changes current screen, write a new file (e.g., `layout-v2.html`). Only move to the next question when the current step is validated.
 
 5. **Unload when returning to terminal** — when the next step doesn't need the browser (e.g., a clarifying question, a tradeoff discussion), push a waiting screen to clear the stale content:
 
@@ -265,7 +265,7 @@ If `$STATE_DIR/events` doesn't exist, the user didn't interact with the browser 
 
 - **Scale fidelity to the question** — wireframes for layout, polish for polish questions
 - **Explain the question on each page** — "Which layout feels more professional?" not just "Pick one"
-- **Iterate before advancing** — if feedback changes current screen, Write a new version
+- **Iterate before advancing** — if feedback changes current screen, write a new version
 - **2-4 options max** per screen
 - **Use real content when it matters** — for a photography portfolio, use actual images (Unsplash). Placeholder content obscures design issues.
 - **Keep mockups simple** — focus on layout and structure, not pixel-perfect design
@@ -279,7 +279,7 @@ If `$STATE_DIR/events` doesn't exist, the user didn't interact with the browser 
 
 ## Cleaning Up
 
-```Bash
+```bash
 scripts/stop-server.sh $SESSION_DIR
 ```
 

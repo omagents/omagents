@@ -30,7 +30,7 @@ You're investigating why the new feature breaks existing user sessions. The seni
 **Other developers:** [silence - clearly want the call to end]
 
 Your systematic debugging skill says:
-- Phase 2: Compare against references (Read middleware implementation completely)
+- Phase 2: Compare against references (read middleware implementation completely)
 - Phase 2: Understand dependencies (what assumptions does middleware make?)
 - Don't claim to implement pattern without reading it completely
 

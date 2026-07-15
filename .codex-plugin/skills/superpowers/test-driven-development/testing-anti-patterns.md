@@ -121,7 +121,7 @@ BEFORE adding any method to production class:
 ```typescript
 // ❌ BAD: Mock breaks test logic
 test('detects duplicate server', () => {
-  // Mock prevents config Write that test depends on!
+  // Mock prevents config write that test depends on!
   vi.mock('ToolCatalog', () => ({
     discoverAndCacheTools: vi.fn().mockResolvedValue(undefined)
   }));
