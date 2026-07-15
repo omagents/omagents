@@ -14,9 +14,5 @@
   "websearch": {
     "type": "remote",
     "url": "https://mcp.exa.ai/mcp"
-  },
-  "grep_app": {
-    "type": "remote",
-    "url": "https://mcp.grep.app"
   }
 }
