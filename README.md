@@ -106,9 +106,35 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
     "@devcxl/opencode-spec"
   ]
 }
+
+### Claude Code
+
+You can install OmAgents as a local [Claude Code](https://claude.ai/code) plugin directly from the repository:
+
+```bash
+claude plugin install /path/to/omagents
 ```
 
+On first launch, the plugin registers the bundled skills and MCP servers. Claude Code uses `SessionStart` hooks and `bin/` wrappers instead of the OpenCode-only `shell.env` PATH injection and parallel execution engine, so background task dispatch (`task(background: true)`) and the `/ps` command are not available.
+
+If you edit the source skills in the `skills/` directory, regenerate the generated plugin artifacts by running:
+
+```bash
+npm run sync
+```
+
+### Codex
+
+You can install OmAgents as a local [Codex](https://github.com/openai/codex) plugin directly from the repository:
+
+```bash
+codex plugin add /path/to/omagents
+```
+
+The same platform notes for Claude Code apply: `SessionStart` hooks and `bin/` wrappers replace the OpenCode-only `shell.env` PATH injection and parallel execution engine, so background task dispatch and `/ps` are not available. Run `npm run sync` after editing source skills to regenerate the `.claude-plugin/` and `.codex-plugin/` artifacts.
+
 ---
+
 
 ## Highlights
 

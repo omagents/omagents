@@ -106,9 +106,35 @@ OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
     "@devcxl/opencode-spec"
   ]
 }
+
+### Claude Code
+
+你可以将 OmAgents 作为本地 [Claude Code](https://claude.ai/code) 插件从仓库直接安装：
+
+```bash
+claude plugin install /path/to/omagents
 ```
 
+首次启动时，插件会注册所有打包的 skills 和 MCP servers。Claude Code 使用 `SessionStart` hooks 和 `bin/` wrappers，而不是 OpenCode 独有的 `shell.env` PATH 注入和并行执行引擎，因此后台任务分发（`task(background: true)`）和 `/ps` 命令不可用。
+
+如果你在 `skills/` 目录中编辑了源 skill，请运行以下命令重新生成生成的插件产物：
+
+```bash
+npm run sync
+```
+
+### Codex
+
+你可以将 OmAgents 作为本地 [Codex](https://github.com/openai/codex) 插件从仓库直接安装：
+
+```bash
+codex plugin add /path/to/omagents
+```
+
+与 Claude Code 相同的平台说明适用：`SessionStart` hooks 和 `bin/` wrappers 替代了 OpenCode 独有的 `shell.env` PATH 注入和并行执行引擎，因此后台任务分发和 `/ps` 不可用。编辑源 skill 后请运行 `npm run sync` 以重新生成 `.claude-plugin/` 和 `.codex-plugin/` 产物。
+
 ---
+
 
 ## 核心特性
 
