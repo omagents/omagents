@@ -8,7 +8,7 @@
 
 [English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-一个 OpenCode plugin，将 agent skills、MCP servers、parallel execution 和 superpowers 整合为一次安装。
+一个 OpenCode 和 Codex CLI 插件，将 agent skills、MCP servers、parallel execution 和 superpowers 整合为一次安装。
 
 ---
 
@@ -108,20 +108,17 @@ OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
 }
 ```
 
-### Codex
+### Codex CLI
 
 **前置条件：** 已安装 [Python 3.11+](https://www.python.org/downloads/) 并在 PATH 中。
 
-1. 添加 OmAgents marketplace 并安装插件：
-
 ```bash
-codex plugin marketplace add omagents/omagents
-codex plugin add omagents@omagents
+npx @omagents/omagents
 ```
 
-会话开始时，插件会自动发现打包的 skills、MCP servers，并通过 `SessionStart` hooks 设置 Python venv。OpenCode 独有的并行执行引擎不可用；请使用 Codex 原生的 subagent 工具进行并行调度。
+这会将 OmAgents 插件安装到 `~/.codex/plugins/cache/omagents/omagents/local/` 并在 `~/.codex/config.toml` 中启用。会话开始时，插件会自动发现打包的 skills、MCP servers，并通过 `SessionStart` hooks 设置 Python venv。
 
-> **开发者须知：** 如果你编辑了 `skills/` 中的源 skill，请运行 `npm run sync` 重新生成 `.codex-plugin/` 产物。`prepublishOnly` 脚本会在 `npm publish` 前自动执行 sync。
+OpenCode 独有的并行执行引擎不可用；请使用 Codex 原生的 subagent 工具进行并行调度。
 
 ---
 
@@ -301,17 +298,23 @@ rm -rf ~/.venvs/omagents
 
 ```
 omagents/
+├── index.js                  # 统一入口（OpenCode 插件导出 + Codex CLI 安装器）
 ├── .opencode/plugins/
-│   ├── index.js              # Plugin entry point (merges superpowers + omagents hooks)
-│   └── parallel.js           # Parallel execution engine
-├── skills/                   # Bundled OpenCode skills (18 skills)
-│   ├── _shared/scripts/      # Shared scripts (loop_engine.py)
-│   ├── deep-research/        # Research workflow with gap detection
-│   └── ...                   # 16 more skills
-├── tests/                    # Node.js built-in test runner (26 tests)
-├── AGENTS.md                 # AI agent context file
-├── ROADMAP.md                # Development roadmap
-├── package.json              # Includes superpowers as dependency
+│   ├── index.js              # OpenCode 插件（合并 superpowers + omagents hooks）
+│   └── parallel.js           # 并行执行引擎
+├── .codex/plugins/
+│   └── install.js            # Codex 安装器（通过 npx @omagents/omagents 执行）
+├── hooks/
+│   └── setup-venv.sh         # 共享 venv 设置 hook（OpenCode + Codex）
+├── skills/                   # 打包的 skills（18 OmAgents + 14 Superpowers）
+│   ├── _shared/scripts/      # 共享脚本（loop_engine.py）
+│   ├── deep-research/        # 带有 gap detection 的研究工作流
+│   └── ...                   # 更多 skills
+├── mcp-servers/
+│   └── base.json             # MCP server 定义（单一数据源）
+├── tests/                    # Node.js 内置测试运行器
+├── AGENTS.md                 # AI agent 上下文文件
+├── package.json              # 包含 superpowers 依赖
 └── README.md
 ```
 

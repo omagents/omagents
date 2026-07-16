@@ -6,6 +6,4 @@ __pycache__/
 *.tgz
 .omagents/
 
-# Generated plugin artifacts, distributed via npm
-.claude-plugin/
-.codex-plugin/
+

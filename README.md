@@ -8,7 +8,7 @@
 
 [English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-An OpenCode plugin that bundles agent skills, MCP servers, parallel execution, and superpowers into a single install.
+An OpenCode and Codex CLI plugin that bundles agent skills, MCP servers, parallel execution, and superpowers into a single install.
 
 ---
 
@@ -108,20 +108,17 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
 }
 ```
 
-### Codex
+### Codex CLI
 
 **Prerequisite:** [Python 3.11+](https://www.python.org/downloads/) installed and on PATH.
 
-1. Add the OmAgents marketplace and install the plugin:
-
 ```bash
-codex plugin marketplace add omagents/omagents
-codex plugin add omagents@omagents
+npx @omagents/omagents
 ```
 
-At session start, the plugin auto-discovers bundled skills, MCP servers, and sets up the Python venv via `SessionStart` hooks. The OpenCode-only parallel execution engine is not available; use Codex's native subagent tools for parallel dispatch.
+This installs the OmAgents plugin into `~/.codex/plugins/cache/omagents/omagents/local/` and enables it in `~/.codex/config.toml`. At session start, the plugin auto-discovers bundled skills, MCP servers, and sets up the Python venv via `SessionStart` hooks.
 
-> **For developers:** If you edit source skills in `skills/`, run `npm run sync` to regenerate the `.codex-plugin/` artifact. The `prepublishOnly` script runs sync automatically before `npm publish`.
+The OpenCode-only parallel execution engine is not available; use Codex's native subagent tools for parallel dispatch.
 
 ---
 
@@ -301,16 +298,22 @@ Project structure:
 
 ```
 omagents/
+├── index.js                  # Unified entry (OpenCode plugin export + Codex CLI installer)
 ├── .opencode/plugins/
-│   ├── index.js              # Plugin entry point (merges superpowers + omagents hooks)
+│   ├── index.js              # OpenCode plugin (merges superpowers + omagents hooks)
 │   └── parallel.js           # Parallel execution engine
-├── skills/                   # Bundled OpenCode skills (18 skills)
+├── .codex/plugins/
+│   └── install.js            # Codex installer (run via npx @omagents/omagents)
+├── hooks/
+│   └── setup-venv.sh         # Shared venv setup hook (OpenCode + Codex)
+├── skills/                   # Bundled skills (18 OmAgents + 14 Superpowers)
 │   ├── _shared/scripts/      # Shared scripts (loop_engine.py)
 │   ├── deep-research/        # Research workflow with gap detection
 │   └── ...                   # 16 more skills
-├── tests/                    # Node.js built-in test runner (26 tests)
+├── mcp-servers/
+│   └── base.json             # MCP server definitions (single source of truth)
+├── tests/                    # Node.js built-in test runner
 ├── AGENTS.md                 # AI agent context file
-├── ROADMAP.md                # Development roadmap
 ├── package.json              # Includes superpowers as dependency
 └── README.md
 ```

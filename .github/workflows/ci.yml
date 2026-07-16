@@ -20,13 +20,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Sync platform plugins
-        run: npm run sync
-
       - name: Check JS syntax
         run: |
           node --check .opencode/plugins/index.js
           node --check .opencode/plugins/parallel.js
+          node --check index.js
+          node --check .codex/plugins/install.js
+
+      - name: Validate Codex plugin templates
+        run: |
+            node -e "JSON.parse(require('fs').readFileSync('mcp-servers/base.json','utf8'))"
 
       - name: Check Python scripts
         run: |
@@ -39,7 +42,7 @@ jobs:
           python3 -m py_compile skills/_shared/scripts/loop_engine.py
 
       - name: Check formatting
-        run: npx prettier --check ".opencode/plugins/*.js" "tests/*.js"
+        run: npx prettier --check ".opencode/plugins/*.js" "tests/*.js" "index.js" ".codex/plugins/*.js"
 
       - name: Run tests
         run: node --test tests/*.test.js

@@ -3,9 +3,13 @@
   "version": "0.6.0",
   "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
   "type": "module",
-  "main": ".opencode/plugins/index.js",
+  "main": "index.js",
+  "bin": {
+    "omagents": "index.js"
+  },
   "keywords": [
     "opencode",
+    "codex",
     "plugin",
     "skills",
     "mcp",
@@ -26,11 +30,8 @@
   "scripts": {
     "build:pack": "npm pack",
     "test": "node --test tests/*.test.js",
-    "format": "prettier --write .opencode/plugins/*.js tests/*.js",
-    "format:check": "prettier --check .opencode/plugins/*.js tests/*.js",
-    "sync": "bash scripts/sync-platform.sh",
-    "sync:check": "npm run sync",
-    "prepublishOnly": "npm run sync"
+    "format": "prettier --write .opencode/plugins/*.js tests/*.js index.js .codex/plugins/*.js",
+    "format:check": "prettier --check .opencode/plugins/*.js tests/*.js index.js .codex/plugins/*.js"
   },
   "devDependencies": {
     "prettier": "^3.3.0"

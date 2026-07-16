@@ -114,14 +114,15 @@ test("with GITHUB_TOKEN, plugin registers github (not grep_app)", () => {
   assert.ok(!mcps.grep_app, "grep_app should not be registered when GITHUB_TOKEN is present")
 })
 
-test("Codex marketplace.json exists and is valid", () => {
-  const marketplacePath = path.join(ROOT, ".agents", "plugins", "marketplace.json")
-  assert.ok(fs.existsSync(marketplacePath), ".agents/plugins/marketplace.json should exist")
-  const data = JSON.parse(fs.readFileSync(marketplacePath, "utf-8"))
-  assert.strictEqual(data.name, "omagents", "marketplace name should be omagents")
-  assert.ok(data.plugins && data.plugins.length > 0, "marketplace should have at least one plugin")
-  const plugin = data.plugins.find((p) => p.name === "omagents")
-  assert.ok(plugin, "marketplace should contain an omagents plugin entry")
-  assert.strictEqual(plugin.source.source, "npm")
-  assert.strictEqual(plugin.source.package, "@omagents/omagents")
+test("Codex installer exists and exports installCodex", async () => {
+  const installPath = path.join(ROOT, ".codex", "plugins", "install.js")
+  assert.ok(fs.existsSync(installPath), ".codex/plugins/install.js should exist")
+  const mod = await import(installPath)
+  assert.strictEqual(typeof mod.installCodex, "function")
+})
+
+test("unified index.js re-exports OpenCode plugin", async () => {
+  const mod = await import(path.join(ROOT, "index.js"))
+  assert.strictEqual(typeof mod.default, "function")
+  assert.strictEqual(typeof mod.OmagentsPlugin, "function")
 })
