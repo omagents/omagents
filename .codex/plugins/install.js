@@ -159,6 +159,23 @@ function generatePluginJson(version, description) {
   }
 }
 
+// ─── marketplace.json generation ────────────────────────────────────────────
+
+function generateMarketplaceJson() {
+  return {
+    name: "omagents",
+    interface: { displayName: "OmAgents" },
+    plugins: [
+      {
+        name: "omagents",
+        source: "./omagents",
+        category: "Developer Tools",
+        policy: { installation: "AVAILABLE" },
+      },
+    ],
+  }
+}
+
 // ─── config.toml management ─────────────────────────────────────────────────
 
 const MARKER_START = "# >>> omagents >>>"
@@ -206,12 +223,20 @@ export async function installCodex() {
 
   // Use "local" as version dir - Codex always prefers it over semver versions
   const cacheDir = path.join(codexHome, "plugins", "cache", "omagents", "omagents", "local")
+  const marketplaceRoot = path.join(codexHome, "plugins", "cache", "omagents")
 
   console.log(`[omagents] Installing to ${cacheDir}`)
 
   // Clean and recreate cache dir
   fs.rmSync(cacheDir, { recursive: true, force: true })
   mkdirp(cacheDir)
+
+  // 0. marketplace.json at cache root
+  mkdirp(marketplaceRoot)
+  fs.writeFileSync(
+    path.join(marketplaceRoot, "marketplace.json"),
+    JSON.stringify(generateMarketplaceJson(), null, 2) + "\n"
+  )
 
   // 1. plugin.json
   const pluginDir = path.join(cacheDir, ".codex-plugin")
@@ -291,9 +316,16 @@ export async function installCodex() {
     console.warn("[omagents] warning: superpowers skills not found, skipping")
   }
 
-  // 7. Update config.toml
+  // 7. Update config.toml (marketplace registration + plugin enable)
   const configPath = path.join(codexHome, "config.toml")
-  const pluginSection = `[plugins."omagents@omagents"]\nenabled = true`
+  const pluginSection = [
+    `[marketplaces.omagents]`,
+    `source_type = "local"`,
+    `source = "${marketplaceRoot}"`,
+    ``,
+    `[plugins."omagents@omagents"]`,
+    `enabled = true`,
+  ].join("\n")
   updateConfigToml(configPath, pluginSection)
   console.log(`[omagents] Updated ${configPath}`)
 
