@@ -48,7 +48,7 @@ const HOOKS_CONFIG = {
         hooks: [
           {
             type: "command",
-            command: "${PLUGIN_ROOT}/hooks/setup-venv.sh",
+            command: "node ${PLUGIN_ROOT}/hooks/setup-venv.js",
             timeout: 120,
           },
         ],
@@ -256,10 +256,9 @@ export async function installCodex() {
   const hooksDir = path.join(cacheDir, "hooks")
   mkdirp(hooksDir)
   fs.writeFileSync(path.join(hooksDir, "hooks.json"), JSON.stringify(HOOKS_CONFIG, null, 2) + "\n")
-  const venvHookSrc = path.join(PKG_ROOT, "hooks", "setup-venv.sh")
+  const venvHookSrc = path.join(PKG_ROOT, "hooks", "setup-venv.js")
   if (fs.existsSync(venvHookSrc)) {
-    fs.copyFileSync(venvHookSrc, path.join(hooksDir, "setup-venv.sh"))
-    fs.chmodSync(path.join(hooksDir, "setup-venv.sh"), 0o755)
+    fs.copyFileSync(venvHookSrc, path.join(hooksDir, "setup-venv.js"))
   }
 
   // 4. skills (with tool mapping)

@@ -38,8 +38,8 @@ test("SKILL_SCRIPT_DIRS includes _shared/scripts", () => {
 test("Python prerequisite check exists", () => {
   const indexSource = fs.readFileSync(path.join(PLUGINS_DIR, "index.js"), "utf-8")
   assert.ok(
-    indexSource.includes("python3 --version"),
-    "Plugin should check for Python 3 availability"
+    indexSource.includes("PYTHON_CMD"),
+    "Plugin should use platform-aware PYTHON_CMD for Python availability check"
   )
   assert.ok(
     indexSource.includes("Python 3 is not installed"),

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4] - 2026-07-16
+
+### Changed
+
+- **Cross-platform Windows support**: all venv paths, Python commands, and PATH separators now detect platform at runtime (`Scripts` vs `bin`, `python` vs `python3`, `;` vs `:`).
+- **Hook script rewritten as Node.js**: `hooks/setup-venv.sh` replaced with `hooks/setup-venv.js`. Codex hook command changed to `node ${PLUGIN_ROOT}/hooks/setup-venv.js`. No bash dependency.
+
+### Added
+
+- **AGENTS.md cross-platform rule**: Design Principle #7 requires all code changes to work on Linux, macOS, and Windows.
+
 ## [0.7.3] - 2026-07-16
 
 ### Fixed

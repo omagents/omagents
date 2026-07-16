@@ -18,9 +18,13 @@ const OMAGENTS_DIR = path.resolve(__dirname, "../..")
 const SKILLS_DIR = path.join(OMAGENTS_DIR, "skills")
 
 // Dedicated venv for tools bundled by OmAgents
+const IS_WIN = process.platform === "win32"
+const VENV_BIN = IS_WIN ? "Scripts" : "bin"
+const PYTHON_CMD = IS_WIN ? "python" : "python3"
+const PATH_SEP = IS_WIN ? ";" : ":"
 const AGENT_VENV = path.join(os.homedir(), ".venvs", "omagents")
-const AGENT_PYTHON = path.join(AGENT_VENV, "bin", "python")
-const AGENT_PIP = path.join(AGENT_VENV, "bin", "pip")
+const AGENT_PYTHON = path.join(AGENT_VENV, VENV_BIN, IS_WIN ? "python.exe" : "python")
+const AGENT_PIP = path.join(AGENT_VENV, VENV_BIN, IS_WIN ? "pip.exe" : "pip")
 
 // Directories containing skill helper scripts to expose on PATH
 const SKILL_SCRIPT_DIRS = [
@@ -70,7 +74,7 @@ function warnIfDebug(...args) {
  */
 async function ensurePythonDependencies({ $ }) {
   try {
-    const pythonCheck = await $`python3 --version`.nothrow().quiet()
+    const pythonCheck = await $`${PYTHON_CMD} --version`.nothrow().quiet()
     if (pythonCheck.exitCode !== 0) {
       warnIfDebug(
         "[omagents] Python 3 is not installed or not on PATH.\n" +
@@ -87,7 +91,7 @@ async function ensurePythonDependencies({ $ }) {
 
     const venvExists = fs.existsSync(AGENT_PYTHON)
     if (!venvExists) {
-      await $`python3 -m venv "${AGENT_VENV}"`.quiet()
+      await $`${PYTHON_CMD} -m venv "${AGENT_VENV}"`.quiet()
     }
 
     for (const pkg of REQUIRED_PYTHON_PACKAGES) {
@@ -230,7 +234,7 @@ export const OmagentsPlugin = async (ctx) => {
       }
       // Then prepend our venv + skill scripts to PATH
       const currentPath = output?.env?.PATH || process.env.PATH || ""
-      const venvBin = path.join(AGENT_VENV, "bin")
+      const venvBin = path.join(AGENT_VENV, VENV_BIN)
 
       const parts = []
       parts.push(venvBin)
@@ -242,7 +246,7 @@ export const OmagentsPlugin = async (ctx) => {
       parts.push(currentPath)
 
       output.env = output.env || {}
-      output.env.PATH = parts.join(":")
+      output.env.PATH = parts.join(PATH_SEP)
     },
 
     // Merged hooks

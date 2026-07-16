@@ -261,6 +261,13 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 4. **Pin dependencies.** Superpowers is pinned to a commit. Don't unpin without testing.
 5. **Keep README in sync with all languages.** README.md exists in 4 languages: English (README.md), Simplified Chinese (README.zh-cn.md), Japanese (README.ja.md), Korean (README.ko.md). Any change to README.md MUST be reflected in all language versions in the same commit. If a translation cannot be completed immediately, add `<!-- TODO: sync with README.md -->` at the top of the untranslated file.
 6. **Analyze README impact on every change.** Before committing any change, ask: "Does this change affect what users see in README?" If yes -- new skill added, feature changed, installation steps modified, architecture updated -- update README.md (and all language versions) in the same commit. Don't let README go stale.
+7. **Cross-platform compatibility.** Every code change must work on Linux, macOS, and Windows. Specifically:
+   - **Venv paths**: Use `Scripts` on Windows, `bin` on Unix. Detect with `process.platform === "win32"`.
+   - **Python command**: Use `python` on Windows, `python3` on Unix.
+   - **PATH separator**: Use `;` on Windows, `:` on Unix.
+   - **No bash-only scripts**: Hooks and helper scripts must be Node.js (`.js`), not bash (`.sh`). Use `node` to execute them.
+   - **File paths**: Always use `path.join()` / `path.resolve()`, never hardcode `/` or `\\`.
+   - **Executables**: On Windows, Python/pip executables have `.exe` extension (e.g., `python.exe`, `pip.exe`).
 
 ## Common Mistakes to Avoid
 
