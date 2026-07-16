@@ -10,11 +10,11 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 if [ ! -d "$AGENT_VENV" ]; then
-  echo "[omagents] Creating agent venv at $AGENT_VENV"
+  echo "[omagents] Creating agent venv at $AGENT_VENV" >&2
   python3 -m venv "$AGENT_VENV"
 fi
 
-"$AGENT_VENV/bin/pip" install -q jinja2 || true
+"$AGENT_VENV/bin/pip" install -q jinja2 2>&1 || true
 
 # Copy skill helper scripts into the venv so wrapper scripts can invoke them.
 SKILL_SCRIPTS_DIR="$SCRIPT_DIR/../skills"
@@ -27,4 +27,5 @@ if [ -d "$SKILL_SCRIPTS_DIR" ]; then
   done
 fi
 
-echo "[omagents] venv ready at $AGENT_VENV"
+echo "[omagents] venv ready at $AGENT_VENV" >&2
+echo '{}'
