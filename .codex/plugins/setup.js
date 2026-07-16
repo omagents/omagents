@@ -1,7 +1,7 @@
 /**
  * OmAgents Codex installer.
  *
- * Run via: npx @omagents/omagents
+ * Run via: npx @omagents/omagents codex
  *
  * Copies the OmAgents plugin into ~/.codex/plugins/cache/omagents/omagents/local/
  * and enables it in ~/.codex/config.toml. No marketplace required.

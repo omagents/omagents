@@ -56,6 +56,12 @@ open -e ~/.config/opencode/opencode.json
 
 3. Restart OpenCode.
 
+Or, use the CLI setup command:
+
+```bash
+npx @omagents/omagents opencode
+```
+
 That's it. At session start OmAgents will automatically:
 - Install **superpowers** (bundled, no separate install needed)
 - Register all **skills** (OmAgents + Superpowers)
@@ -113,7 +119,7 @@ OmAgents' hook merging mechanism ensures no conflicts with additional plugins:
 **Prerequisite:** [Python 3.11+](https://www.python.org/downloads/) installed and on PATH.
 
 ```bash
-npx @omagents/omagents
+npx @omagents/omagents codex
 ```
 
 This installs the OmAgents plugin into `~/.codex/plugins/cache/omagents/omagents/local/` and enables it in `~/.codex/config.toml`. At session start, the plugin auto-discovers bundled skills, MCP servers, and sets up the Python venv via `SessionStart` hooks.

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-16
+
+### Changed
+
+- **Subcommand-based CLI**: `npx @omagents/omagents codex` / `npx @omagents/omagents opencode` replace the old auto-detect approach. No more `isMain` detection issues on Linux.
+- **Unified naming**: both platforms use `setup.js` (`.opencode/plugins/setup.js`, `.codex/plugins/setup.js`).
+
+### Added
+
+- **OpenCode setup command** (`.opencode/plugins/setup.js`): `npx @omagents/omagents opencode` automatically adds `"@omagents/omagents"` to `opencode.json` plugin array.
+
 ## [0.7.4] - 2026-07-16
 
 ### Changed

@@ -114,10 +114,10 @@ test("with GITHUB_TOKEN, plugin registers github (not grep_app)", () => {
   assert.ok(!mcps.grep_app, "grep_app should not be registered when GITHUB_TOKEN is present")
 })
 
-test("Codex installer exists and exports installCodex", async () => {
-  const installPath = path.join(ROOT, ".codex", "plugins", "install.js")
-  assert.ok(fs.existsSync(installPath), ".codex/plugins/install.js should exist")
-  const mod = await import(installPath)
+test("Codex setup exists and exports installCodex", async () => {
+  const setupPath = path.join(ROOT, ".codex", "plugins", "setup.js")
+  assert.ok(fs.existsSync(setupPath), ".codex/plugins/setup.js should exist")
+  const mod = await import(setupPath)
   assert.strictEqual(typeof mod.installCodex, "function")
 })
 

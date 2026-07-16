@@ -24,8 +24,10 @@ jobs:
         run: |
           node --check .opencode/plugins/index.js
           node --check .opencode/plugins/parallel.js
+          node --check .opencode/plugins/setup.js
           node --check index.js
-          node --check .codex/plugins/install.js
+          node --check .codex/plugins/setup.js
+          node --check hooks/setup-venv.js
 
       - name: Validate Codex plugin templates
         run: |
@@ -42,7 +44,7 @@ jobs:
           python3 -m py_compile skills/_shared/scripts/loop_engine.py
 
       - name: Check formatting
-        run: npx prettier --check ".opencode/plugins/*.js" "tests/*.js" "index.js" ".codex/plugins/*.js"
+        run: npx prettier --check ".opencode/plugins/*.js" "tests/*.js" "index.js" ".codex/plugins/*.js" "hooks/setup-venv.js"
 
       - name: Run tests
         run: node --test tests/*.test.js

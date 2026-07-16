@@ -113,7 +113,7 @@ OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
 **前置条件：** 已安装 [Python 3.11+](https://www.python.org/downloads/) 并在 PATH 中。
 
 ```bash
-npx @omagents/omagents
+npx @omagents/omagents codex
 ```
 
 这会将 OmAgents 插件安装到 `~/.codex/plugins/cache/omagents/omagents/local/` 并在 `~/.codex/config.toml` 中启用。会话开始时，插件会自动发现打包的 skills、MCP servers，并通过 `SessionStart` hooks 设置 Python venv。
