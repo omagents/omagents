@@ -181,26 +181,49 @@ function generateMarketplaceJson() {
 const MARKER_START = "# >>> omagents >>>"
 const MARKER_END = "# <<< omagents <<<"
 
+// Section prefixes to strip (matches header and all sub-tables)
+const MANAGED_PREFIXES = ["[marketplaces.omagents", '[plugins."omagents@omagents']
+
+function stripManagedSections(config) {
+  const lines = config.split("\n")
+  const result = []
+  let skipping = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith("[")) {
+      skipping = MANAGED_PREFIXES.some((p) => trimmed.startsWith(p))
+    }
+    if (!skipping) result.push(line)
+  }
+
+  // Trim trailing blank lines
+  while (result.length > 0 && result[result.length - 1].trim() === "") {
+    result.pop()
+  }
+  return result.join("\n")
+}
+
 function updateConfigToml(configPath, pluginSection) {
   let config = ""
   if (fs.existsSync(configPath)) {
     config = fs.readFileSync(configPath, "utf-8")
   }
 
-  const block = `${MARKER_START}\n${pluginSection}\n${MARKER_END}\n`
-
+  // Remove existing marker block
   const startIdx = config.indexOf(MARKER_START)
   const endIdx = config.indexOf(MARKER_END)
-
   if (startIdx !== -1 && endIdx !== -1) {
-    const before = config.substring(0, startIdx)
-    const after = config.substring(endIdx + MARKER_END.length)
-    config = before + block + after
-  } else {
-    const sep =
-      config.length > 0 && !config.endsWith("\n") ? "\n\n" : config.endsWith("\n") ? "\n" : "\n"
-    config = config + sep + block
+    config = config.substring(0, startIdx) + config.substring(endIdx + MARKER_END.length)
   }
+
+  // Strip ALL orphaned omagents sections (from older installs without markers)
+  config = stripManagedSections(config)
+
+  // Append fresh marker block
+  const block = `${MARKER_START}\n${pluginSection}\n${MARKER_END}\n`
+  const sep = config.length > 0 && !config.endsWith("\n") ? "\n\n" : "\n"
+  config = config + sep + block
 
   mkdirp(path.dirname(configPath))
   fs.writeFileSync(configPath, config, "utf-8")
