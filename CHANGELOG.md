@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-16
+
+### Added
+
+- **Unified entry point** (`index.js`): re-exports the OpenCode plugin when imported as a module, and runs the Codex installer when executed as CLI (`npx @omagents/omagents`).
+- **Codex CLI auto-install** (`.codex/plugins/install.js`): all-in-one installer that copies the plugin to `~/.codex/plugins/cache/omagents/omagents/local/`, generates `.mcp.json` and `plugin.json` at install time, copies skills with tool name mapping, and enables the plugin in `~/.codex/config.toml`. No marketplace required.
+
+### Changed
+
+- **Codex installation simplified**: replaced `codex plugin marketplace add` + `codex plugin add` with a single `npx @omagents/omagents` command.
+- **`.mcp.json` format fixed**: removed `type` field (Codex infers transport from `command` vs `url`).
+- **GitHub MCP in Codex**: uses `bearer_token_env_var` in `.mcp.json` instead of top-level config.toml headers.
+- **`package.json`**: `main` changed to `index.js`, added `bin` field, removed `sync`/`sync:check`/`prepublishOnly` scripts.
+- **CI**: removed `npm run sync` step, added syntax checks for `index.js` and `.codex/plugins/install.js`.
+- **Cross-platform installer**: replaced Perl-based `sync-platform.sh` with pure JS installer (works on Windows).
+- **README updated** (4 languages): Codex section now uses `npx @omagents/omagents`.
+
+### Removed
+
+- **`scripts/` directory**: `sync-platform.sh`, `templates/`, `tool-mapping.txt` — all replaced by `.codex/plugins/install.js`.
+- **`.agents/plugins/marketplace.json`**: no longer needed; installer writes directly to plugin cache.
+- **`tests/sync-platform.test.js`**: tests for the deleted sync script.
+- **`.codex-plugin/` and `.claude-plugin/` from `.gitignore`**: no longer generated as committed artifacts.
+
 ## [0.6.0] - 2026-07-15
 
 ### Added
