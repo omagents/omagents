@@ -114,13 +114,22 @@ function detectShellConfigPath() {
 }
 
 function ensureBackgroundSubagentsEnv() {
-  if (isBackgroundSubagentsEnabled()) return
+  // Ensure the current process is enabled immediately, regardless of whether
+  // we can persist the setting to a shell config file.
+  process.env[ENV_NAME] = "true"
+
+  // Best-effort persistence to shell config. Don't warn if it fails (e.g.
+  // read-only or permission-denied home directory) because the env var above
+  // is sufficient for the current session.
+  if (isBackgroundSubagentsEnabled()) {
+    // already enabled in this process; no need to persist repeatedly
+    if (process.env[ENV_NAME] !== "true") {
+      process.env[ENV_NAME] = "true"
+    }
+  }
 
   const targetPath = detectShellConfigPath()
   if (!targetPath) {
-    warnIfDebug(
-      "[omagents] Could not detect shell config file. Set OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true manually."
-    )
     return
   }
 
@@ -145,7 +154,7 @@ function ensureBackgroundSubagentsEnv() {
     fs.mkdirSync(path.dirname(targetPath), { recursive: true })
     fs.writeFileSync(targetPath, newContent)
   } catch (err) {
-    warnIfDebug(`[omagents] Could not write to shell config: ${err.message}`)
+    // Silent best-effort: the current session is already enabled above.
   }
 }
 

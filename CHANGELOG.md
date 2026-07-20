@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-07-20
+
+### Fixed
+
+- **Background subagents env setup no longer warns on read-only shell config**: `ensureBackgroundSubagentsEnv()` now enables the environment variable for the current process immediately and only attempts to persist it to shell config as a silent best-effort. This removes the `EACCES: permission denied, open ~/.bashrc` message seen in OpenCode.
+
 ## [0.8.1] - 2026-07-16
 
 ### Fixed
