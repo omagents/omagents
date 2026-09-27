@@ -118,7 +118,16 @@ async function loadSuperpowers() {
   if (_superpowersPlugin !== null) return _superpowersPlugin
   try {
     const mod = await import("superpowers")
-    _superpowersPlugin = mod.default || mod.SuperpowersPlugin || null
+    // superpowers >= 6.4: default export is a V2 descriptor object
+    // { id, server, setup } where .server is the V1 plugin function.
+    // superpowers <= 6.3: default export is the V1 plugin function itself.
+    const candidate =
+      typeof mod.default === "function"
+        ? mod.default
+        : typeof mod.default?.server === "function"
+          ? mod.default.server
+          : mod.SuperpowersPlugin
+    _superpowersPlugin = candidate || null
     if (!_superpowersPlugin) {
       warnIfDebug("[omagents] superpowers module found but no plugin export")
     }

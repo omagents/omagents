@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-27
+
+### Changed
+
+- **superpowers upgraded from 6.1.1 to 6.4.2** (pinned to `8ca22dba`): brings OpenCode 2.0 support, the new `diagnosing-superpowers` skill, rebuilt `executing-plans` with native inline execution, leaner `writing-plans`, plan-scoped SDD workspaces, and numerous workflow fixes.
+- **prettier upgraded** from `^3.3.0` to `^3.9.9`.
+
+### Fixed
+
+- **superpowers 6.4.x default-export compatibility**: `loadSuperpowers()` now resolves the V1 plugin function from both old (`default` is a function) and new (`default` is a `{ id, server, setup }` V2 descriptor) module shapes, falling back to the named `SuperpowersPlugin` export. Without this fix, superpowers hooks silently failed to load with superpowers >= 6.4.
+- **package-lock.json version drift**: lock file was pinned at 0.3.1 while package.json was at 0.8.2; regenerated in sync.
+- **`.opencode/.gitignore` committed**: the file existed in the documented project structure but was never tracked in git.
+
+### Removed
+
+- **Stale `@opencode-ai/plugin` references**: no code imports the SDK (the plugin is dependency-free ESM JavaScript); removed the outdated mentions from AGENTS.md instead of recreating a `.opencode/package.json`.
+
 ## [0.8.2] - 2026-07-20
 
 ### Fixed

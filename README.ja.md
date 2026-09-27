@@ -127,7 +127,7 @@ OpenCode 独自の並列実行エンジンは利用できません。Codex の�
 | | 機能 | 説明 |
 | :---: | :--- | :--- |
 | 🔁 | **Loop Engineering（ループエンジニアリング）** | 反復型skill用の永続的タスクキュー。context clear後も保持、retry logic、統一サマリー。8つのskillで使用 |
-| 🧠 | **Superpowers**（14 skills） | 実装前のbrainstorming、TDD、体系的debugging、plan作成、code review、git worktrees |
+| 🧠 | **Superpowers**（15 skills） | 実装前のbrainstorming、TDD、体系的debugging、plan作成、code review、git worktrees |
 | 🔍 | **Deep Research** | items × fieldsマトリクスによるマルチソース反復research、gap detectionループ、Jinja2レポート |
 | ⚡ | **並列実行** | `task(background: true)`によるbackground taskディスパッチ、永続化とsession isolation付きJob Board、`/ps`コマンド |
 | 📚 | **組み込みMCP** | agentmemory、codegraph、context7、websearch、github/grep_app — すべて自動登録 |
@@ -217,7 +217,7 @@ loop_engine.py add <skill> '<task_json>'      # 既存キューにタスクを�
 | `pre-publish-review` | OmAgents | Yes | 公開前リリースゲートチェックリスト（loop: チェックごと） |
 | `hyperplan` | OmAgents | Yes | 3つの並列criticによる対抗的planレビュー（loop: critic追跡） |
 | `refactor` | OmAgents | Yes | 検証付き体系的コードリファクタリング（loop: ファイルごと） |
-| `superpowers` (14 skills) | Superpowers | - | Brainstorming、TDD、debugging、planning、git worktrees等 |
+| `superpowers` (15 skills) | Superpowers | - | Brainstorming、TDD、debugging、planning、git worktrees等 |
 
 ### MCP Servers
 
@@ -306,7 +306,7 @@ omagents/
 │   └── install.js            # Codex インストーラー（npx @omagents/omagents で実行）
 ├── hooks/
 │   └── setup-venv.sh         # 共有 venv セットアップ hook（OpenCode + Codex）
-├── skills/                   # バンドルされた skills（18 OmAgents + 14 Superpowers）
+├── skills/                   # バンドルされた skills（18 OmAgents + 15 Superpowers）
 │   ├── _shared/scripts/      # 共有スクリプト（loop_engine.py）
 │   ├── deep-research/        # gap detection 付きリサーチワークフロー
 │   └── ...                   # その他の skills

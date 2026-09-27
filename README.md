@@ -133,7 +133,7 @@ The OpenCode-only parallel execution engine is not available; use Codex's native
 | | Feature | What it does |
 | :---: | :--- | :--- |
 | 🔁 | **Loop Engineering** | Durable task queues for iterative skills. Survives context clearing, retry logic, unified summary. Used by 8 skills |
-| 🧠 | **Superpowers** (14 skills) | Brainstorming before implementation, TDD, systematic debugging, plan writing, code review, git worktrees |
+| 🧠 | **Superpowers** (15 skills) | Brainstorming before implementation, TDD, systematic debugging, plan writing, code review, git worktrees |
 | 🔍 | **Deep Research** | Multi-source iterative research with items × fields matrix, gap detection loop, Jinja2 reports |
 | ⚡ | **Parallel Execution** | Background task dispatch via `task(background: true)`, Job Board with persistence + session isolation, `/ps` command |
 | 📚 | **Built-in MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app - all auto-registered |
@@ -223,7 +223,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 | `pre-publish-review` | OmAgents | Yes | Pre-publish release gate checklist (loop: check-by-check) |
 | `hyperplan` | OmAgents | Yes | Adversarial plan review with 3 parallel critics (loop: critic tracking) |
 | `refactor` | OmAgents | Yes | Systematic code refactoring with verification (loop: file-by-file) |
-| `superpowers` (14 skills) | Superpowers | - | Brainstorming, TDD, debugging, planning, git worktrees, and more |
+| `superpowers` (15 skills) | Superpowers | - | Brainstorming, TDD, debugging, planning, git worktrees, and more |
 
 ### MCP Servers
 
@@ -312,7 +312,7 @@ omagents/
 │   └── install.js            # Codex installer (run via npx @omagents/omagents)
 ├── hooks/
 │   └── setup-venv.sh         # Shared venv setup hook (OpenCode + Codex)
-├── skills/                   # Bundled skills (18 OmAgents + 14 Superpowers)
+├── skills/                   # Bundled skills (18 OmAgents + 15 Superpowers)
 │   ├── _shared/scripts/      # Shared scripts (loop_engine.py)
 │   ├── deep-research/        # Research workflow with gap detection
 │   └── ...                   # 16 more skills

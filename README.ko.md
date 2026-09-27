@@ -127,7 +127,7 @@ OpenCode 전용 병렬 실행 엔진은 사용할 수 없습니다. Codex의 네
 | | 기능 | 설명 |
 | :---: | :--- | :--- |
 | 🔁 | **Loop Engineering**(루프 엔지니어링) | 반복적 skill을 위한 durable task queue. context clear 후에도 유지, retry logic, 통합 요약. 8개 skill에서 사용 |
-| 🧠 | **Superpowers** (14 skill) | 구현 전 brainstorming, TDD, 체계적 debugging, plan 작성, code review, git worktree |
+| 🧠 | **Superpowers** (15 skill) | 구현 전 brainstorming, TDD, 체계적 debugging, plan 작성, code review, git worktree |
 | 🔍 | **Deep Research** | 다중 소스 반복 연구, items × fields 매트릭스, gap detection loop, Jinja2 보고서 |
 | ⚡ | **Parallel Execution**(병렬 실행) | `task(background: true)`를 통한 background task 분배, 지속성 + session 격리를 갖춘 Job Board, `/ps` 명령어 |
 | 📚 | **내장 MCP** | agentmemory, codegraph, context7, websearch, github/grep_app - 모두 자동 등록 |
@@ -217,7 +217,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 | `pre-publish-review` | OmAgents | Yes | 게시 전 release gate checklist (loop: check별) |
 | `hyperplan` | OmAgents | Yes | 3개 병렬 critic을 활용한 대립적 plan 검토 (loop: critic 추적) |
 | `refactor` | OmAgents | Yes | 검증을 통한 체계적 코드 리팩토링 (loop: 파일별) |
-| `superpowers` (14 skill) | Superpowers | - | Brainstorming, TDD, debugging, planning, git worktree 등 |
+| `superpowers` (15 skill) | Superpowers | - | Brainstorming, TDD, debugging, planning, git worktree 등 |
 
 ### MCP Server
 
@@ -306,7 +306,7 @@ omagents/
 │   └── install.js            # Codex 설치기 (npx @omagents/omagents로 실행)
 ├── hooks/
 │   └── setup-venv.sh         # 공유 venv 설정 hook (OpenCode + Codex)
-├── skills/                   # 번들된 skills (18 OmAgents + 14 Superpowers)
+├── skills/                   # 번들된 skills (18 OmAgents + 15 Superpowers)
 │   ├── _shared/scripts/      # 공유 스크립트 (loop_engine.py)
 │   ├── deep-research/        # gap detection 연구 워크플로
 │   └── ...                   # 추가 skills

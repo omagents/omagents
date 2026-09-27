@@ -127,7 +127,7 @@ OpenCode 独有的并行执行引擎不可用；请使用 Codex 原生的 subage
 | | 功能 | 作用 |
 | :---: | :--- | :--- |
 | 🔁 | **Loop Engineering（循环工程）** | 为迭代式 skills 提供持久化任务队列。支持上下文清除后恢复、重试逻辑、统一摘要。被 8 个 skills 使用 |
-| 🧠 | **Superpowers**（14 个 skills） | 实现前先进行 brainstorming、TDD、systematic debugging、plan 编写、code review、git worktrees |
+| 🧠 | **Superpowers**（15 个 skills） | 实现前先进行 brainstorming、TDD、systematic debugging、plan 编写、code review、git worktrees |
 | 🔍 | **Deep Research** | 多来源迭代研究，支持 items × fields 矩阵、gap detection loop、Jinja2 报告 |
 | ⚡ | **Parallel Execution** | 通过 `task(background: true)` 进行后台任务分发，Job Board 支持持久化和 session 隔离，`/ps` 命令 |
 | 📚 | **内置 MCPs** | agentmemory、codegraph、context7、websearch、github/grep_app —— 全部自动注册 |
@@ -217,7 +217,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 | `pre-publish-review` | OmAgents | 是 | 发布前检查清单（loop：逐项检查） |
 | `hyperplan` | OmAgents | 是 | 对抗式 plan 审查，3 个并行 critics（loop：critic 跟踪） |
 | `refactor` | OmAgents | 是 | 带验证的系统性代码重构（loop：逐文件） |
-| `superpowers`（14 个 skills） | Superpowers | - | Brainstorming、TDD、debugging、planning、git worktrees 等 |
+| `superpowers`（15 个 skills） | Superpowers | - | Brainstorming、TDD、debugging、planning、git worktrees 等 |
 
 ### MCP Servers
 
@@ -306,7 +306,7 @@ omagents/
 │   └── install.js            # Codex 安装器（通过 npx @omagents/omagents 执行）
 ├── hooks/
 │   └── setup-venv.sh         # 共享 venv 设置 hook（OpenCode + Codex）
-├── skills/                   # 打包的 skills（18 OmAgents + 14 Superpowers）
+├── skills/                   # 打包的 skills（18 OmAgents + 15 Superpowers）
 │   ├── _shared/scripts/      # 共享脚本（loop_engine.py）
 │   ├── deep-research/        # 带有 gap detection 的研究工作流
 │   └── ...                   # 更多 skills

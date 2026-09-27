@@ -35,11 +35,11 @@ OmAgents (`@omagents/omagents`) is an OpenCode plugin that bundles agent skills,
 ```
 omagents/
 ├── .opencode/
-│   ├── .gitignore              # Ignores node_modules, package.json, etc.
-│   ├── package.json            # @opencode-ai/plugin SDK dependency
+│   ├── .gitignore              # Ignores node_modules/
 │   └── plugins/
 │       ├── index.js            # Plugin entry point (merges superpowers + omagents hooks)
-│       └── parallel.js         # Parallel execution engine (607 lines)
+│       ├── parallel.js         # Parallel execution engine (607 lines)
+│       └── setup.js            # OpenCode setup command (npx @omagents/omagents opencode)
 ├── .github/
 │   ├── ISSUE_TEMPLATE/         # bug_report.md, feature_request.md
 │   └── workflows/
@@ -147,9 +147,9 @@ Registered automatically via `config` hook. User config takes precedence (won't 
 | `hyperplan` | Adversarial plan review with 3 parallel critics | No | Yes | Yes (loop_engine + parallel) |
 | `refactor` | Systematic code refactoring with verification | No | Yes | Yes (loop_engine) |
 
-### Superpowers Skills (14, bundled via dependency)
+### Superpowers Skills (15, bundled via dependency)
 
-brainstorming, test-driven-development, systematic-debugging, writing-plans, executing-plans, requesting-code-review, receiving-code-review, using-git-worktrees, verification-before-completion, writing-skills, subagent-driven-development, dispatching-parallel-agents, finishing-a-development-branch, using-superpowers
+brainstorming, test-driven-development, systematic-debugging, writing-plans, executing-plans, requesting-code-review, receiving-code-review, using-git-worktrees, verification-before-completion, writing-skills, subagent-driven-development, dispatching-parallel-agents, finishing-a-development-branch, using-superpowers, diagnosing-superpowers
 
 ## Python Venv
 
@@ -201,11 +201,11 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 - **No build step.** Plugin code is plain JavaScript (ESM). Skills are plain Markdown + optional Python.
 - **Syntax check:** `node --check .opencode/plugins/index.js`
 - **Python check:** `python3 -m py_compile skills/deep-research/scripts/*.py`
+- **Unit tests:** `node --test tests/*.test.js` (plugin structure, skills frontmatter, loop engine workflow)
 - **Local testing:** Point OpenCode config to local clone:
   ```json
   { "plugin": ["omagents@git+file:///path/to/omagents"] }
   ```
-- **No tests yet** - only syntax checks in CI. (Planned: add unit tests in P2)
 
 ## CI/CD
 
@@ -237,10 +237,10 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 
 | Dependency | Type | Version |
 |-----------|------|---------|
-| `superpowers` | git (pinned to commit) | 6.1.1 (`d884ae04`) |
-| `@opencode-ai/plugin` | dev (in `.opencode/`) | 1.17.16 |
+| `superpowers` | git (pinned to commit) | 6.4.2 (`8ca22dba`) |
+| `prettier` | dev | ^3.9.9 |
 
-**superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. To update, change the commit SHA in `package.json`, run `npm install`, and verify.
+**superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. To update, change the commit SHA in `package.json`, run `npm install`, and verify. Note: superpowers >= 6.4 exports a V2 descriptor object as `default`; the V1 plugin function is `default.server` (also the named export `SuperpowersPlugin`). `loadSuperpowers()` in `.opencode/plugins/index.js` handles both shapes.
 
 ## Version History
 
@@ -252,6 +252,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | 0.1.3 | - | Node 24, CI upgrades |
 | 0.1.4 | v0.1.4 | Version bump |
 | 0.2.1 | v0.2.1 | Loop engine, 12 new skills, Job Board persistence + isolation, compaction hook, multilingual README, project governance |
+| 0.9.0 | v0.9.0 | superpowers 6.1.1 -> 6.4.2 (V2 export compat fix), prettier ^3.9.9, lock file sync |
 
 ## Design Principles
 
@@ -276,7 +277,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 3. **Don't duplicate venv path info.** The `agents-python-tools` skill covers this. Reference it.
 4. **Don't unpin superpowers.** It's pinned to a commit for stability.
 5. **Don't add `templates/` to project structure diagrams.** It doesn't exist at root.
-6. **Don't forget `.opencode/` has its own `.gitignore`** that excludes `node_modules`, `package.json`, etc. Those are not committed.
-7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 18; superpowers has 14. They're registered separately.
+6. **Don't forget `.opencode/` has its own `.gitignore`** that excludes `node_modules`. The plugin code has no npm dependencies of its own (pure ESM JavaScript); `@opencode-ai/plugin` is NOT needed.
+7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 18; superpowers has 15. They're registered separately.
 8. **Don't change README.md without updating all language versions.** README exists in 4 languages (EN, ZH-CN, JA, KO). All must be updated in the same commit.
 9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.
