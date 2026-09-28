@@ -1,6 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert"
 import fs from "fs"
+import os from "os"
 import path from "path"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
@@ -312,6 +313,103 @@ test("V2 compaction hook appends the state preservation note", async () => {
       1,
       "note is not duplicated"
     )
+  } finally {
+    if (typeof cleanup === "function") await cleanup()
+  }
+})
+
+// ─── Self-repo dedup guard ─────────────────────────────────────────────────
+//
+// Inside the OmAgents source repo, the repo's own .opencode/plugins/*.js are
+// auto-discovered as project plugins in addition to a globally-installed
+// @omagents/omagents. The installed copy must yield so only the local
+// checkout activates.
+
+/** Copy the plugin into a fake node_modules layout (the "installed package"). */
+function makeInstalledCopy(t) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-installed-"))
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
+  const pkgDir = path.join(tmp, "node_modules", "@omagents", "omagents")
+  fs.mkdirSync(path.join(pkgDir, ".opencode", "plugins"), { recursive: true })
+  fs.mkdirSync(path.join(pkgDir, "mcp-servers"), { recursive: true })
+  for (const f of ["index.js", "parallel.js"]) {
+    fs.copyFileSync(path.join(PLUGINS_DIR, f), path.join(pkgDir, ".opencode", "plugins", f))
+  }
+  fs.copyFileSync(
+    path.join(ROOT, "mcp-servers", "base.json"),
+    path.join(pkgDir, "mcp-servers", "base.json")
+  )
+  return path.join(pkgDir, ".opencode", "plugins", "index.js")
+}
+
+/** Create a fake OmAgents source checkout (package.json + project plugins). */
+function makeSourceRepo(t) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-srcrepo-"))
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
+  fs.mkdirSync(path.join(tmp, ".opencode", "plugins"), { recursive: true })
+  fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ name: "@omagents/omagents" }))
+  fs.writeFileSync(path.join(tmp, ".opencode", "plugins", "index.js"), "// local checkout\n")
+  return tmp
+}
+
+test("installed package yields to the local checkout inside the source repo (V2)", async (t) => {
+  const entry = makeInstalledCopy(t)
+  const srcRepo = makeSourceRepo(t)
+  const mod = await import(entry)
+  const { ctx, captured } = makeFakeV2Context()
+  ctx.location = { directory: srcRepo, project: { directory: srcRepo } }
+  await mod.default.setup(ctx)
+  assert.strictEqual(captured.skills.length, 0, "no skills registered when yielding")
+  assert.strictEqual(Object.keys(captured.mcps).length, 0, "no MCPs registered when yielding")
+  assert.strictEqual(
+    Object.keys(captured.sessionHooks).length,
+    0,
+    "no session hooks registered when yielding"
+  )
+})
+
+test("installed package also yields from a subdirectory of the source repo (V2)", async (t) => {
+  const entry = makeInstalledCopy(t)
+  const srcRepo = makeSourceRepo(t)
+  const subdir = path.join(srcRepo, "skills", "deep-research")
+  fs.mkdirSync(subdir, { recursive: true })
+  const mod = await import(entry)
+  const { ctx, captured } = makeFakeV2Context()
+  ctx.location = { directory: subdir }
+  await mod.default.setup(ctx)
+  assert.strictEqual(Object.keys(captured.mcps).length, 0, "no MCPs registered when yielding")
+})
+
+test("installed package runs normally in any other project (V2)", async (t) => {
+  const entry = makeInstalledCopy(t)
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-other-"))
+  t.after(() => fs.rmSync(other, { recursive: true, force: true }))
+  const mod = await import(entry)
+  const { ctx, captured } = makeFakeV2Context()
+  ctx.location = { directory: other, project: { directory: other } }
+  const cleanup = await mod.default.setup(ctx)
+  try {
+    assert.ok(Object.keys(captured.mcps).length > 0, "MCPs registered in a normal project")
+  } finally {
+    if (typeof cleanup === "function") await cleanup()
+  }
+})
+
+test("installed package yields to the local checkout inside the source repo (V1)", async (t) => {
+  const entry = makeInstalledCopy(t)
+  const srcRepo = makeSourceRepo(t)
+  const mod = await import(entry)
+  const hooks = await mod.default.server({ directory: srcRepo })
+  assert.deepStrictEqual(hooks, {}, "V1 returns empty hooks when yielding")
+})
+
+test("local checkout never yields inside the source repo (V2)", async () => {
+  const mod = await import(path.join(PLUGINS_DIR, "index.js"))
+  const { ctx, captured } = makeFakeV2Context()
+  ctx.location = { directory: ROOT, project: { directory: ROOT } }
+  const cleanup = await mod.default.setup(ctx)
+  try {
+    assert.ok(Object.keys(captured.mcps).length > 0, "local checkout stays active in its own repo")
   } finally {
     if (typeof cleanup === "function") await cleanup()
   }

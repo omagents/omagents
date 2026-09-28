@@ -88,6 +88,8 @@ export default { id: "omagents", server: OmagentsPlugin, setup: setupV2 }
 
 No `@opencode/plugin` import — the descriptor is a plain object, keeping the package dependency-free and loadable by both runtimes.
 
+**Self-repo dedup guard:** when OpenCode runs inside the OmAgents source repo itself, the repo's `.opencode/plugins/*.js` are auto-discovered as project plugins *on top of* any globally-installed `@omagents/omagents`. The published (node_modules) copy detects this (project `package.json` name + project-local `.opencode/plugins/index.js`, walking up from `ctx.location.directory` on V2 / `ctx.directory` on V1) and yields, so the local working-tree checkout is the single active copy. Never remove this guard — without it everything registers twice in this repo.
+
 On load the plugin:
 
 1. **Load superpowers** via `import("superpowers")` with graceful degradation; `loadSuperpowers()` resolves both halves (`server` for V1, `setup` for V2)

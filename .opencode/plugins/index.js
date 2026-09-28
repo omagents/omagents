@@ -203,6 +203,12 @@ async function loadSuperpowers() {
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 export const OmagentsPlugin = async (ctx) => {
+  // Inside the OmAgents source repo the published package yields to the
+  // auto-discovered local checkout (see "Self-repo dedup guard" below).
+  if (shouldYieldToLocalCheckout(ctx?.directory)) {
+    return {}
+  }
+
   // Load superpowers and run its V1 plugin function to get its hooks
   let superHooks = {}
   const sp = await loadSuperpowers()
@@ -405,6 +411,63 @@ function toV2McpConfig(def) {
   return rest
 }
 
+// ─── Self-repo dedup guard ───────────────────────────────────────────────────
+//
+// When OpenCode runs inside the OmAgents source repo itself, the repo's own
+// `.opencode/plugins/*.js` are auto-discovered as project plugins in addition
+// to any globally-installed `@omagents/omagents` from the user's config. Both
+// would register the same skills/MCPs/tools/hooks twice. The installed package
+// detects this situation and yields, so the local checkout is the single
+// active copy — which is also what a developer editing the working tree wants.
+
+// True when this module is the published package (loaded from node_modules)
+// rather than a source checkout.
+const IS_INSTALLED_PACKAGE = (() => {
+  const segments = __dirname.split(path.sep)
+  for (let i = 0; i + 2 < segments.length; i++) {
+    if (
+      segments[i] === "node_modules" &&
+      segments[i + 1] === "@omagents" &&
+      segments[i + 2] === "omagents"
+    ) {
+      return true
+    }
+  }
+  return false
+})()
+
+// True when `dir` is (or is inside) the OmAgents source repo, meaning its
+// project-local `.opencode/plugins/index.js` will also be loaded by the host.
+function isInsideOmagentsSourceRepo(dir) {
+  let current = dir
+  for (let depth = 0; depth < 10 && current; depth++) {
+    try {
+      const pkg = JSON.parse(
+        fs.readFileSync(path.join(current, "package.json"), "utf8")
+      )
+      if (
+        pkg.name === "@omagents/omagents" &&
+        fs.existsSync(path.join(current, ".opencode", "plugins", "index.js")) &&
+        path.resolve(current) !== path.resolve(OMAGENTS_DIR)
+      ) {
+        return true
+      }
+    } catch {
+      // no readable package.json at this level — keep walking up
+    }
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  return false
+}
+
+// The installed package yields when running inside the OmAgents source repo.
+// All entry points funnel through here before registering anything.
+function shouldYieldToLocalCheckout(projectDir) {
+  return IS_INSTALLED_PACKAGE && !!projectDir && isInsideOmagentsSourceRepo(projectDir)
+}
+
 async function setupV2(ctx) {
   // V1 hosts may also invoke default.setup with a V1-shaped context (observed
   // on opencode 1.18.x). Detect it and return quietly — V1 is served entirely
@@ -414,6 +477,16 @@ async function setupV2(ctx) {
     typeof ctx.session?.hook !== "function" ||
     typeof ctx.skill?.transform !== "function" ||
     typeof ctx.tool?.transform !== "function"
+  ) {
+    return
+  }
+
+  // Inside the OmAgents source repo the published package yields to the
+  // auto-discovered local checkout (see "Self-repo dedup guard" above).
+  if (
+    shouldYieldToLocalCheckout(
+      ctx.location?.project?.directory || ctx.location?.directory
+    )
   ) {
     return
   }
