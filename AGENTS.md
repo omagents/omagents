@@ -88,7 +88,7 @@ export default { id: "omagents", server: OmagentsPlugin, setup: setupV2 }
 
 No `@opencode/plugin` import — the descriptor is a plain object, keeping the package dependency-free and loadable by both runtimes.
 
-**Self-repo dedup guard:** when OpenCode runs inside the OmAgents source repo itself, the repo's `.opencode/plugins/*.js` are auto-discovered as project plugins *on top of* any globally-installed `@omagents/omagents`. The published (node_modules) copy detects this (project `package.json` name + project-local `.opencode/plugins/index.js`, walking up from `ctx.location.directory` on V2 / `ctx.directory` on V1) and yields, so the local working-tree checkout is the single active copy. Never remove this guard — without it everything registers twice in this repo.
+**Self-repo dedup guard:** when OpenCode runs inside the OmAgents source repo itself, the repo's `.opencode/plugins/*.js` are auto-discovered as project plugins *on top of* any globally-installed `@omagents/omagents`. The published (node_modules) copy detects this (project `package.json` name + project-local `.opencode/plugins/index.js`, walking up from `ctx.location.directory` on V2 / `ctx.directory` on V1) and yields, so the local working-tree checkout is the single active copy. Never remove this guard — without it everything registers twice in this repo. Note: `opencode plugin list` is a static inventory of *loadable* modules and still lists all entries (npm + local + parallel-engine); the guard only prevents the npm copy's `setup()`/`server()` from activating. (Project `opencode.json` with `"plugin": []` does NOT disable globally-configured plugins — the arrays merge — so a config-level fix is not possible.)
 
 On load the plugin:
 
