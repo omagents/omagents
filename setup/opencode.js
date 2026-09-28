@@ -52,14 +52,25 @@ export async function setupOpencode() {
     }
   }
 
-  // Ensure plugin array exists
-  config.plugin = config.plugin || []
+  // OpenCode V2 renamed the config key "plugin" -> "plugins". V2 still
+  // normalizes the V1 key, so writing "plugin" works on both — but when the
+  // file already uses the native V2 key, add there instead of mixing styles.
+  const pluginKey = Array.isArray(config.plugins)
+    ? "plugins"
+    : Array.isArray(config.plugin)
+      ? "plugin"
+      : "plugin"
 
-  // Check if already installed
+  // Ensure plugin array exists
+  config[pluginKey] = config[pluginKey] || []
+
+  // Check if already installed (either key)
   const pkgName = "@omagents/omagents"
-  const alreadyInstalled = config.plugin.some(
-    (p) => p === pkgName || (typeof p === "string" && p.startsWith(pkgName + "@"))
-  )
+  const isOmagents = (p) =>
+    p === pkgName ||
+    (typeof p === "string" && p.startsWith(pkgName + "@")) ||
+    (p && typeof p === "object" && typeof p.package === "string" && p.package.startsWith(pkgName))
+  const alreadyInstalled = config.plugin?.some(isOmagents) || config.plugins?.some(isOmagents)
 
   if (alreadyInstalled) {
     console.log(`[omagents] Already in ${configPath}`)
@@ -68,7 +79,7 @@ export async function setupOpencode() {
   }
 
   // Add to plugin array
-  config.plugin.push(pkgName)
+  config[pluginKey].push(pkgName)
 
   // Write config
   fs.mkdirSync(configDir, { recursive: true })

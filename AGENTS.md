@@ -37,8 +37,8 @@ omagents/
 ├── .opencode/
 │   ├── .gitignore              # Ignores host-generated artifacts (see note below)
 │   └── plugins/
-│       ├── index.js            # Plugin entry point (merges superpowers + omagents hooks)
-│       └── parallel.js         # Parallel execution engine (607 lines)
+│       ├── index.js            # Plugin entry point (dual V1/V2; merges superpowers + omagents)
+│       └── parallel.js         # Parallel execution engine (V1 + V2 wiring, shared job board)
 ├── .github/
 │   ├── ISSUE_TEMPLATE/         # bug_report.md, feature_request.md
 │   └── workflows/
@@ -77,42 +77,50 @@ omagents/
 
 ## Plugin Entry Point (`.opencode/plugins/index.js`)
 
-The plugin does the following on load:
+The default export is a **dual V1/V2 descriptor** (same pattern as superpowers >= 6.4):
 
-1. **Load superpowers** via `import("superpowers")` with graceful degradation
-2. **Register skills** from `skills/` directory via `config.skills.paths`
-3. **Register MCP servers** (see below)
-4. **Merge hooks** from superpowers + parallel execution engine
-5. **Provision Python venv** at `~/.venvs/omagents` on `session.created`, auto-installs `jinja2`
-6. **Inject PATH** via `shell.env` hook: venv bin + skill script dirs + existing PATH
+```js
+export default { id: "omagents", server: OmagentsPlugin, setup: setupV2 }
+```
+
+- **V1 (opencode 1.x)**: calls `server()` (>= 1.18.29) or scans the named `OmagentsPlugin` export (older). `server()` returns the V1 hooks object. Note V1 hosts may also invoke `default.setup` with a V1-shaped ctx — `setupV2` detects this (missing `ctx.session.hook`/`ctx.skill.transform`) and returns quietly.
+- **V2 (opencode 2.x)**: reads `id` + `setup()` and never calls `server()`. `setupV2(ctx)` registers everything through the V2 plugin context: skills via `ctx.skill.transform`, MCP servers via `ctx.mcp.transform`, `/ps` command via `ctx.command.transform`, tools via `ctx.tool.transform`, PATH injection via `ctx.shell.hook("create.before")`, job board + system prompt via `ctx.session.hook("context")`, compaction note via `ctx.session.hook("compaction")`, lifecycle via `ctx.event.subscribe()`.
+
+No `@opencode/plugin` import — the descriptor is a plain object, keeping the package dependency-free and loadable by both runtimes.
+
+On load the plugin:
+
+1. **Load superpowers** via `import("superpowers")` with graceful degradation; `loadSuperpowers()` resolves both halves (`server` for V1, `setup` for V2)
+2. **Register skills** from `skills/` (V1: `config.skills.paths`; V2: per-skill `ctx.skill.transform` with frontmatter parsing)
+3. **Register MCP servers** (V1: `config.mcp` with `enabled`; V2: `ctx.mcp.transform` with the `enabled` key stripped). User config takes precedence (won't override existing)
+4. **Merge hooks** from superpowers + parallel execution engine (V1)
+5. **Provision Python venv** at `~/.venvs/omagents`, auto-installs `jinja2` (V1: on `session.created`; V2: at plugin setup, non-blocking). Uses `node:child_process`, runs once per process
+6. **Inject PATH** via shell hook: venv bin + skill script dirs + existing PATH (deduped)
 
 Key variables:
 - `OMAGENTS_DIR` = project root (parent of `.opencode/`)
 - `SKILLS_DIR` = `OMAGENTS_DIR/skills`
 - `AGENT_VENV` = `~/.venvs/omagents`
 - `AGENT_PYTHON` = `~/.venvs/omagents/bin/python`
-- `SKILL_SCRIPT_DIRS` = script directories from deep-research, markitdown-converter, playwright-web-scraping
+- `SKILL_SCRIPT_DIRS` = script directories from deep-research, markitdown-converter, playwright-web-scraping, _shared
 
 ## Parallel Execution Engine (`.opencode/plugins/parallel.js`)
 
-The parallel execution engine (607 lines):
+The parallel execution engine:
 
-- Intercepts `task` tool calls with `background: true`
-- Maintains in-memory Job Board (`Map<taskID, JobRecord>`)
-- Injects Job Board status into LLM context via `experimental.chat.messages.transform`
-- Injects parallel execution system prompt via `experimental.chat.system.transform`
-- Auto-enables background subagents by writing `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` to shell config
+- **V1**: intercepts `task` tool calls with `background: true`; auto-enables background subagents by writing `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` to shell config
+- **V2**: intercepts native `subagent` tool calls with `background: true` (no env var needed); the child session ID comes from the tool result's structured `metadata.sessionID` (text parsing as fallback); completion notices arrive as synthetic `<subagent sessionID="..." state="...">` user messages scanned by the `context` hook; `session.idle` / `session.execution.{succeeded,failed,interrupted}` events are the fallback/reconcile path; cancel uses `ctx.session.interrupt`
+- Maintains Job Board (`Map<taskID, JobRecord>`), persisted to `~/.local/share/opencode/storage/omagents/job-board.json`
+- Injects Job Board status into LLM context (V1: `experimental.chat.messages.transform`; V2: `ctx.session.hook("context")`); sentinel-guarded against double injection
+- Injects parallel execution system prompt (V1: `experimental.chat.system.transform` with `task(...)`; V2: `event.system` with `subagent(...)`)
 - Provides custom tools: `parallel_status`, `cancel_task`
-- Registers `/ps` command
+- Registers `/ps` command (V1: `config.command`; V2: `ctx.command.transform`, skipped if the user defined their own `ps`)
 - Writes TUI state to `~/.local/share/opencode/storage/omagents/tui-state.json`
-
-**Known limitations:**
-- Job Board is in-memory only (lost on restart)
-- Job Board injects ALL sessions' jobs into every session (cross-session leak)
+- Its default export is a `{ id, server, setup }` descriptor too (V2 auto-discovery requires object defaults); `setup` is a deliberate no-op — the real wiring is done by `index.js` via the named exports
 
 ## MCP Servers
 
-Registered automatically via `config` hook. User config takes precedence (won't override existing).
+Registered automatically (V1: `config` hook; V2: `ctx.mcp.transform`). User config takes precedence (won't override existing).
 
 | MCP | Type | Config |
 |-----|------|--------|
@@ -256,6 +264,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | 0.9.0 | v0.9.0 | superpowers 6.1.1 -> 6.4.2 (V2 export compat fix), prettier ^3.9.9, lock file sync |
 | 0.9.1 | v0.9.1 | Fix: move OpenCode setup script out of auto-discovered `.opencode/plugins/` (startup crash in this repo); gitignore host-generated SDK artifacts |
 | 0.9.2 | v0.9.2 | Fix: package `main` back to plugin entry — CLI wrapper as `main` made `opencode run` exit(1) on plugin load (0.7.0–0.9.1) |
+| 0.10.0 | v0.10.0 | OpenCode 2.x support: dual V1/V2 plugin entry (`{ id, server, setup }`), V2 wiring for skills/MCPs/tools/hooks, parallel engine on native `subagent` tool, hook idempotency fixes |
 
 ## Design Principles
 
@@ -286,3 +295,5 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.
 10. **Don't put non-plugin scripts in `.opencode/plugins/`.** OpenCode auto-discovers and loads EVERY `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions. A CLI script there (this broke startup when developing in this repo — see v0.9.1) crashes plugin init. CLI entry scripts live in `setup/` instead; only true plugin files belong in `.opencode/plugins/`.
 11. **Don't point package `main` at the CLI wrapper.** OpenCode imports the plugin via `main`; module-level `process.argv` dispatch (plus `process.exit`) in that file kills the host process (this broke `opencode run` for npm installs of 0.7.0–0.9.1 — see v0.9.2). `main` must be the plugin entry (`.opencode/plugins/index.js`); only `bin` may point at the CLI wrapper.
+12. **Don't export a bare function as `default` from `.opencode/plugins/*.js`.** OpenCode V2 requires the default export to be a `{ id, setup }` descriptor object and hard-fails the plugin otherwise (`PluginModule.LoadError`). Keep the dual shape `{ id, server, setup }`: `server` is the V1 plugin function, `setup` the V2 one. V1 hosts may invoke exported functions (including `setup`) with a V1-shaped ctx — guard V2 entry points by checking V2-only domains (e.g. `typeof ctx.session?.hook === "function"`) and return quietly.
+13. **Don't import `@opencode/plugin` (V2 SDK) or `@opencode-ai/plugin` (V1 SDK) in plugin code.** The dual entry point is a plain object; importing a host SDK package breaks the other runtime. superpowers does the same.

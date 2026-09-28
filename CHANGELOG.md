@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-28
+
+### Added
+
+- **OpenCode 2.x support** (dual V1/V2 plugin, one package): the default export of `.opencode/plugins/index.js` is now a `{ id: "omagents", server, setup }` descriptor — V1 hosts call `server()` (or scan the named `OmagentsPlugin` export on older releases), V2 hosts read `id` + `setup()`. Previously the V1-only function default export made V2 reject the plugin entirely (`PluginModule.LoadError: Plugin must export a default definition with an id and an effect or setup function`). No new runtime dependency: the descriptor is a plain object, so neither `@opencode/plugin` (V2 SDK) nor `@opencode-ai/plugin` (V1 SDK) is imported.
+  - **V2 skill registration**: every `skills/<name>/SKILL.md` is registered via `ctx.skill.transform` with a built-in lenient frontmatter parser (per-skill error containment so one bad payload can't disable the plugin).
+  - **V2 MCP registration**: built-in servers registered via `ctx.mcp.transform` in the V2 config shape (the V1 `enabled` key is stripped); existing user-defined servers are never overridden.
+  - **V2 parallel engine**: intercepts native `subagent(background: true)` calls via `ctx.tool.hook`, reads the child session ID from the tool result's structured `metadata.sessionID`, tracks completions from synthetic `<subagent ...>` notices and `session.idle` / `session.execution.*` events, injects the Job Board and the V2 system prompt via `ctx.session.hook("context")`, and registers `parallel_status` / `cancel_task` (via `ctx.tool.transform`) plus `/ps` (via `ctx.command.transform`, skipped when the user defined their own).
+  - **V2 PATH injection + compaction note**: via `ctx.shell.hook("create.before")` and `ctx.session.hook("compaction")`.
+  - superpowers 6.4.x's V2 half (`default.setup`) is now invoked on V2 hosts, so superpowers skills/bootstrap work there too.
+- **New tests** (`tests/plugin-v2.test.js`): V2 setup registration (skills, MCPs incl. user-config precedence, tools, `/ps`), end-to-end background-subagent tracking against a fake V2 context, shell PATH injection idempotency, compaction note idempotency, V1-context guard.
+- **`npx @omagents/omagents opencode`**: respects an existing native V2 `plugins` array in `opencode.json` (adds there instead of mixing keys) and detects object-form (`{ "package": ... }`) entries when checking for an existing install.
+
+### Fixed
+
+- **V1 hook idempotency** (V1 hosts may invoke both the named export and `default.server`): system-prompt injection, job-board injection, PATH prepending, and the compaction note are now deduplicated; Python venv provisioning runs at most once per process.
+- **Job Board terminal states are sticky**: a job already marked `completed`/`error` no longer regresses when its completion notice is re-scanned on a later turn; only a missing result summary is backfilled.
+- **Python provisioning no longer requires the V1 `$` shell**: uses `node:child_process`, so it works in both runtimes.
+- `.opencode/plugins/parallel.js` default export is now a valid V2 descriptor (no-op `setup`) so V2 auto-discovery in this repo no longer logs a `PluginModule.LoadError` for it.
+
 ## [0.9.2] - 2026-09-28
 
 ### Fixed

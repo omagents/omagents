@@ -35,7 +35,7 @@ Read this and install omagents: https://raw.githubusercontent.com/omagents/omage
 ### 人間向け
 
 **前提条件:**
-- [OpenCode](https://opencode.ai)がインストール済みで実行中
+- [OpenCode](https://opencode.ai)がインストール済みで実行中 — **OpenCode 1.x と 2.x の両方**に対応（プラグインは V1/V2 デュアルエントリポイントを同梱）
 - [Python 3.11+](https://www.python.org/downloads/)がインストール済みでPATHに設定済み（deep-research、markitdown-converter、playwright-web-scraping、loop engineに必要）
 
 1. OpenCodeの設定ファイルを開く:

@@ -35,7 +35,7 @@ Read this and install omagents: https://raw.githubusercontent.com/omagents/omage
 ### 사용자용 가이드
 
 **사전 요구 사항:**
-- [OpenCode](https://opencode.ai)가 설치되어 실행 중이어야 함
+- [OpenCode](https://opencode.ai)가 설치되어 실행 중이어야 함 — **OpenCode 1.x와 2.x 모두** 지원 (플러그인이 V1/V2 듀얼 엔트리 포인트 제공)
 - [Python 3.11+](https://www.python.org/downloads/)이 설치되어 PATH에 등록되어 있어야 함 (deep-research, markitdown-converter, playwright-web-scraping 및 loop engine에 필요)
 
 1. OpenCode 설정 파일을 엽니다:

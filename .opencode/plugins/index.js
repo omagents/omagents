@@ -10,8 +10,12 @@ import path from "path"
 import fs from "fs"
 import { fileURLToPath } from "url"
 import os from "os"
-import { createParallelHooks } from "./parallel.js"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
+import { createParallelHooks, setupParallelV2 } from "./parallel.js"
 import baseMcps from "../../mcp-servers/base.json" with { type: "json" }
+
+const execFileAsync = promisify(execFile)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const OMAGENTS_DIR = path.resolve(__dirname, "../..")
@@ -69,88 +73,142 @@ function warnIfDebug(...args) {
 }
 
 /**
- * Ensure the dedicated agent venv exists and has the required Python packages.
- * If Python 3 is not found, logs a clear warning with install instructions.
+ * Prepend the agent venv and skill script dirs to a PATH-like string.
+ * Shared by the V1 `shell.env` hook and the V2 `shell "create.before"` hook.
+ * Idempotent: entries already present are not duplicated.
  */
-async function ensurePythonDependencies({ $ }) {
+function buildPathWithAgentTools(currentPath) {
+  const current = currentPath || process.env.PATH || ""
+  const existing = current.split(PATH_SEP)
+
+  const parts = []
+  const venvBin = path.join(AGENT_VENV, VENV_BIN)
+  if (!existing.includes(venvBin)) parts.push(venvBin)
+  for (const dir of SKILL_SCRIPT_DIRS) {
+    if (fs.existsSync(dir) && !existing.includes(dir)) {
+      parts.push(dir)
+    }
+  }
+  parts.push(current)
+
+  return parts.join(PATH_SEP)
+}
+
+// Extra context appended to compaction requests (V1 experimental.session
+// .compacting / V2 session "compaction" hook) so the agent can resume work.
+const COMPACTION_NOTE =
+  "## OmAgents State Preservation\n" +
+  "If you were processing a loop_engine task queue, run:\n" +
+  "  loop_engine.py status <skill>\n" +
+  "  loop_engine.py next <skill>\n" +
+  "to resume where you left off.\n" +
+  "If you had background tasks running, use parallel_status to check their state."
+
+async function tryRun(cmd, args) {
   try {
-    const pythonCheck = await $`${PYTHON_CMD} --version`.nothrow().quiet()
-    if (pythonCheck.exitCode !== 0) {
-      warnIfDebug(
-        "[omagents] Python 3 is not installed or not on PATH.\n" +
-          "  OmAgents requires Python 3.11+ for the following features:\n" +
-          "    - Deep Research (Jinja2 report templates)\n" +
-          "    - MarkItDown converter\n" +
-          "    - Playwright web scraping\n" +
-          "    - Loop engine (remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit)\n" +
-          "  Install Python: https://www.python.org/downloads/\n" +
-          "  After installing, restart OpenCode."
-      )
-      return
-    }
-
-    const venvExists = fs.existsSync(AGENT_PYTHON)
-    if (!venvExists) {
-      await $`${PYTHON_CMD} -m venv "${AGENT_VENV}"`.quiet()
-    }
-
-    for (const pkg of REQUIRED_PYTHON_PACKAGES) {
-      const checkResult = await $`"${AGENT_PYTHON}" -c "import ${pkg}"`.nothrow().quiet()
-      if (checkResult.exitCode === 0) {
-        continue
-      }
-      try {
-        await $`"${AGENT_PIP}" install "${pkg}"`.quiet()
-      } catch (installError) {
-        warnIfDebug(`[omagents] Could not install ${pkg}:`, installError.message)
-      }
-    }
-  } catch (error) {
-    warnIfDebug("[omagents] Python dependency check failed:", error.message)
+    await execFileAsync(cmd, args)
+    return true
+  } catch {
+    return false
   }
 }
 
-// ─── Load Superpowers (graceful degradation if unavailable) ──────────────────
+// Provisioning runs at most once per process, no matter how many times the
+// host invokes the plugin entry point (V1 may call both the named export and
+// default.server; V2 calls setup once).
+let _provisioning = null
 
-let _superpowersPlugin = null
+/**
+ * Ensure the dedicated agent venv exists and has the required Python packages.
+ * If Python 3 is not found, logs a clear warning with install instructions.
+ * Uses node:child_process so it works in both the V1 (Bun) and V2 runtimes.
+ * Never rejects.
+ */
+function ensurePythonDependencies() {
+  if (_provisioning) return _provisioning
+  _provisioning = (async () => {
+    try {
+      if (!(await tryRun(PYTHON_CMD, ["--version"]))) {
+        warnIfDebug(
+          "[omagents] Python 3 is not installed or not on PATH.\n" +
+            "  OmAgents requires Python 3.11+ for the following features:\n" +
+            "    - Deep Research (Jinja2 report templates)\n" +
+            "    - MarkItDown converter\n" +
+            "    - Playwright web scraping\n" +
+            "    - Loop engine (remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit)\n" +
+            "  Install Python: https://www.python.org/downloads/\n" +
+            "  After installing, restart OpenCode."
+        )
+        return
+      }
+
+      if (!fs.existsSync(AGENT_PYTHON)) {
+        if (!(await tryRun(PYTHON_CMD, ["-m", "venv", AGENT_VENV]))) {
+          warnIfDebug("[omagents] Could not create venv at", AGENT_VENV)
+          return
+        }
+      }
+
+      for (const pkg of REQUIRED_PYTHON_PACKAGES) {
+        if (await tryRun(AGENT_PYTHON, ["-c", `import ${pkg}`])) {
+          continue
+        }
+        if (!(await tryRun(AGENT_PIP, ["install", pkg]))) {
+          warnIfDebug(`[omagents] Could not install ${pkg}`)
+        }
+      }
+    } catch (error) {
+      warnIfDebug("[omagents] Python dependency check failed:", error.message)
+    }
+  })()
+  return _provisioning
+}
+
+// ─── Load Superpowers (graceful degradation if unavailable) ──────────────────
+//
+// superpowers >= 6.4 ships a dual entry point: default export is
+// { id, server, setup } where .server is the V1 plugin function and .setup is
+// the V2 setup function. superpowers <= 6.3 exports the V1 plugin function
+// directly. We resolve both halves once and let each host runtime pick its own.
+
+let _superpowers = null // null = not tried, false = unavailable, { server, setup }
 
 async function loadSuperpowers() {
-  if (_superpowersPlugin !== null) return _superpowersPlugin
+  if (_superpowers !== null) return _superpowers
   try {
     const mod = await import("superpowers")
-    // superpowers >= 6.4: default export is a V2 descriptor object
-    // { id, server, setup } where .server is the V1 plugin function.
-    // superpowers <= 6.3: default export is the V1 plugin function itself.
-    const candidate =
-      typeof mod.default === "function"
-        ? mod.default
-        : typeof mod.default?.server === "function"
-          ? mod.default.server
-          : mod.SuperpowersPlugin
-    _superpowersPlugin = candidate || null
-    if (!_superpowersPlugin) {
+    const d = mod.default
+    const server =
+      typeof d === "function"
+        ? d
+        : typeof d?.server === "function"
+          ? d.server
+          : typeof mod.SuperpowersPlugin === "function"
+            ? mod.SuperpowersPlugin
+            : null
+    const setup = typeof d?.setup === "function" ? d.setup : null
+    _superpowers = server || setup ? { server, setup } : false
+    if (!_superpowers) {
       warnIfDebug("[omagents] superpowers module found but no plugin export")
     }
   } catch {
-    _superpowersPlugin = false // mark as tried-and-failed (distinct from null=not-tried)
+    _superpowers = false // mark as tried-and-failed (distinct from null=not-tried)
     warnIfDebug(
       "[omagents] superpowers not available, skipping (install with: bun add superpowers)"
     )
   }
-  return _superpowersPlugin || null
+  return _superpowers || null
 }
 
 // ─── Plugin ──────────────────────────────────────────────────────────────────
 
 export const OmagentsPlugin = async (ctx) => {
-  const { $ } = ctx
-
-  // Load superpowers and run its plugin function to get its hooks
+  // Load superpowers and run its V1 plugin function to get its hooks
   let superHooks = {}
   const sp = await loadSuperpowers()
-  if (sp) {
+  if (sp && sp.server) {
     try {
-      superHooks = (await sp(ctx)) || {}
+      superHooks = (await sp.server(ctx)) || {}
     } catch (err) {
       warnIfDebug("[omagents] superpowers plugin failed to initialize:", err.message)
     }
@@ -233,7 +291,7 @@ export const OmagentsPlugin = async (ctx) => {
 
     "session.created": async () => {
       if (superHooks["session.created"]) await superHooks["session.created"]()
-      if ($) await ensurePythonDependencies({ $ })
+      await ensurePythonDependencies()
     },
 
     "shell.env": async (input, output) => {
@@ -241,21 +299,10 @@ export const OmagentsPlugin = async (ctx) => {
       if (superHooks["shell.env"]) {
         await superHooks["shell.env"](input, output)
       }
-      // Then prepend our venv + skill scripts to PATH
-      const currentPath = output?.env?.PATH || process.env.PATH || ""
-      const venvBin = path.join(AGENT_VENV, VENV_BIN)
-
-      const parts = []
-      parts.push(venvBin)
-      for (const dir of SKILL_SCRIPT_DIRS) {
-        if (fs.existsSync(dir)) {
-          parts.push(dir)
-        }
-      }
-      parts.push(currentPath)
-
+      // Then prepend our venv + skill scripts to PATH (deduped: the host may
+      // invoke this hook twice when both plugin entry points are picked up)
       output.env = output.env || {}
-      output.env.PATH = parts.join(PATH_SEP)
+      output.env.PATH = buildPathWithAgentTools(output.env.PATH)
     },
 
     // Merged hooks
@@ -265,14 +312,13 @@ export const OmagentsPlugin = async (ctx) => {
     "experimental.chat.system.transform": parallelHooks["experimental.chat.system.transform"],
     "experimental.session.compacting": async (_input, output) => {
       output.context = output.context || []
-      output.context.push(
-        "## OmAgents State Preservation\n" +
-          "If you were processing a loop_engine task queue, run:\n" +
-          "  loop_engine.py status <skill>\n" +
-          "  loop_engine.py next <skill>\n" +
-          "to resume where you left off.\n" +
-          "If you had background tasks running, use parallel_status to check their state."
+      if (
+        output.context.some(
+          (c) => typeof c === "string" && c.includes("OmAgents State Preservation")
+        )
       )
+        return
+      output.context.push(COMPACTION_NOTE)
     },
     event: mergedEvent,
 
@@ -281,4 +327,208 @@ export const OmagentsPlugin = async (ctx) => {
   }
 }
 
-export default OmagentsPlugin
+// ─── OpenCode V2 ─────────────────────────────────────────────────────────────
+//
+// V2 (opencode 2.x) loads the default export's { id, setup } descriptor and
+// never calls the V1 plugin function. setup() registers everything through
+// the V2 plugin context: skills/MCP/commands/tools via domain transforms,
+// shell env via ctx.shell.hook("create.before"), prompt context via
+// ctx.session.hook("context"/"compaction"), and lifecycle via
+// ctx.event.subscribe().
+
+/**
+ * Minimal YAML frontmatter parser for SKILL.md files. Handles plain
+ * `key: value` lines, quoted values (including quotes closing on an indented
+ * continuation line), block scalar markers (`>`, `|`), and CRLF endings.
+ * Only the name/description fields consumed below need to survive parsing.
+ */
+function parseFrontmatter(raw) {
+  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
+  if (!match) return { frontmatter: {}, content: raw }
+
+  const frontmatter = {}
+  let lastKey = null
+  for (const rawLine of match[1].split("\n")) {
+    const line = rawLine.replace(/\r$/, "")
+    const colonIdx = line.indexOf(":")
+    if (colonIdx > 0 && !/^\s/.test(line)) {
+      const key = line.slice(0, colonIdx).trim()
+      const value = line.slice(colonIdx + 1).trim()
+      frontmatter[key] = /^(>[+-]?|\|[+-]?)$/.test(value) ? "" : value
+      lastKey = key
+    } else if (lastKey !== null && line.trim() !== "") {
+      // Continuation of a multi-line value: append so long descriptions
+      // survive. Newlines collapse to spaces.
+      frontmatter[lastKey] = `${frontmatter[lastKey]} ${line.trim()}`.trim()
+    }
+  }
+
+  for (const key of Object.keys(frontmatter)) {
+    frontmatter[key] = frontmatter[key].replace(/^(["'])([\s\S]*)\1$/, "$2")
+  }
+
+  return { frontmatter, content: match[2] }
+}
+
+function collectSkillInfos() {
+  const skills = []
+  let entries = []
+  try {
+    entries = fs.readdirSync(SKILLS_DIR, { withFileTypes: true })
+  } catch {
+    return skills
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name.startsWith("_")) continue
+    const skillPath = path.join(SKILLS_DIR, entry.name, "SKILL.md")
+    if (!fs.existsSync(skillPath)) continue
+    try {
+      const { frontmatter, content } = parseFrontmatter(fs.readFileSync(skillPath, "utf8"))
+      skills.push({
+        id: entry.name,
+        name: frontmatter.name || entry.name,
+        ...(frontmatter.description ? { description: frontmatter.description } : {}),
+        path: skillPath,
+        content,
+      })
+    } catch (err) {
+      warnIfDebug(`[omagents] failed to read skill "${entry.name}":`, err.message)
+    }
+  }
+  return skills
+}
+
+// Convert the V1-shaped built-in MCP definitions ({ type, command|url,
+// enabled, ... }) to the V2 Mcp.ServerConfig shape (no `enabled` field).
+function toV2McpConfig(def) {
+  const { enabled, ...rest } = def
+  return rest
+}
+
+async function setupV2(ctx) {
+  // V1 hosts may also invoke default.setup with a V1-shaped context (observed
+  // on opencode 1.18.x). Detect it and return quietly — V1 is served entirely
+  // by the server() entry point.
+  if (
+    !ctx ||
+    typeof ctx.session?.hook !== "function" ||
+    typeof ctx.skill?.transform !== "function" ||
+    typeof ctx.tool?.transform !== "function"
+  ) {
+    return
+  }
+
+  // Superpowers: run its V2 setup half (registers its skills + bootstrap)
+  const sp = await loadSuperpowers()
+  if (sp && sp.setup) {
+    try {
+      await sp.setup(ctx)
+    } catch (err) {
+      warnIfDebug("[omagents] superpowers v2 setup failed:", err.message)
+    }
+  }
+
+  // Register bundled skills as native V2 skills
+  try {
+    const skills = collectSkillInfos()
+    if (skills.length > 0) {
+      await ctx.skill.transform((editor) => {
+        for (const skill of skills) {
+          // editor.add() decodes against the host Skill.Info schema and throws
+          // on mismatch; contain per skill so one bad payload skips that skill
+          // instead of disabling the whole plugin.
+          try {
+            editor.add(skill)
+          } catch (err) {
+            console.error(`[omagents] skill "${skill.id}" rejected by host, skipping:`, err)
+          }
+        }
+      })
+    }
+  } catch (err) {
+    console.error("[omagents] v2 skill registration failed:", err)
+  }
+
+  // Register built-in MCP servers (user config takes precedence)
+  try {
+    await ctx.mcp.transform((editor) => {
+      for (const [name, def] of Object.entries(BUILTIN_MCPS)) {
+        try {
+          if (!editor.get(name)) {
+            editor.set(name, toV2McpConfig(def))
+          }
+        } catch (err) {
+          console.error(`[omagents] MCP server "${name}" rejected by host, skipping:`, err)
+        }
+      }
+    })
+  } catch (err) {
+    console.error("[omagents] v2 MCP registration failed:", err)
+  }
+
+  // PATH injection for the agent venv + skill helper scripts
+  try {
+    await ctx.shell.hook("create.before", (event) => {
+      try {
+        event.env = event.env || {}
+        event.env.PATH = buildPathWithAgentTools(event.env.PATH)
+      } catch (err) {
+        warnIfDebug("[omagents] v2 shell hook failed:", err.message)
+      }
+    })
+  } catch (err) {
+    console.error("[omagents] v2 shell hook registration failed:", err)
+  }
+
+  // State-preservation note on compaction requests
+  try {
+    await ctx.session.hook("compaction", (event) => {
+      try {
+        event.system = event.system || []
+        if (
+          event.system.some(
+            (p) => p && typeof p.text === "string" && p.text.includes("OmAgents State Preservation")
+          )
+        )
+          return
+        event.system.push({ type: "text", text: COMPACTION_NOTE })
+      } catch (err) {
+        warnIfDebug("[omagents] v2 compaction hook failed:", err.message)
+      }
+    })
+  } catch (err) {
+    console.error("[omagents] v2 compaction hook registration failed:", err)
+  }
+
+  // Parallel execution engine (tools, hooks, /ps command, event subscription)
+  let cleanupParallel
+  try {
+    cleanupParallel = await setupParallelV2(ctx)
+  } catch (err) {
+    console.error("[omagents] v2 parallel engine registration failed:", err)
+  }
+
+  // Provision the Python venv in the background (never blocks plugin load)
+  void ensurePythonDependencies()
+
+  return () => {
+    try {
+      cleanupParallel?.()
+    } catch {
+      // best-effort
+    }
+  }
+}
+
+/**
+ * Dual V1/V2 entry point.
+ *
+ * - V2 (opencode 2.x) reads `id` + `setup`.
+ * - V1 (opencode 1.18.29+) calls `server()`.
+ * - Older V1 releases scan named exports and call `OmagentsPlugin`.
+ */
+export default {
+  id: "omagents",
+  server: OmagentsPlugin,
+  setup: setupV2,
+}

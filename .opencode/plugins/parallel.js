@@ -74,6 +74,38 @@ If task B needs results from task A: launch A with \`background: true\`, continu
 - For trivial tasks or tiny mechanical edits, direct execution is fine.
 </Parallel_Execution>`
 
+// V2 variant: OpenCode 2.x exposes background execution through the native
+// `subagent` tool ({ agent, description, prompt, background }) instead of the
+// V1 experimental `task(background: true)`.
+const PARALLEL_SYSTEM_PROMPT_V2 = `<Parallel_Execution>
+You have parallel execution capabilities via background tasks.
+
+## When to parallelize
+- Researching multiple items (e.g., "compare frameworks A, B, C" -> 3 parallel research tasks)
+- Exploring different parts of a codebase simultaneously
+- Implementing independent features or fixes in different files/modules
+- Any work where subtasks don't depend on each other
+
+## How to parallelize
+1. Decompose the user's request into independent subtasks
+2. Call \`subagent(agent, description, prompt, background: true)\` for each - multiple calls in one response run in parallel
+3. Continue working on other things while they run
+4. Background task completions are automatically delivered to you and tracked on the Background Job Board - do NOT poll
+5. When all background tasks are done, synthesize their results
+
+## For dependent tasks
+If task B needs results from task A: launch A with \`background: true\`, continue other work, and when A's result appears in the Job Board, launch B with A's results in the prompt.
+
+## Rules
+- Prefer \`subagent(..., background: true)\` for delegated work that can run independently
+- Do NOT poll running tasks. Completion notifications arrive automatically.
+- Acknowledge completed tasks from the Job Board before your final response.
+- Parallel background tasks are allowed only when their write scopes do not conflict.
+- You can launch up to 5-8 parallel tasks. For more, batch them.
+- Use \`cancel_task\` only when the user asks, or when a running lane is obsolete or wrong.
+- For trivial tasks or tiny mechanical edits, direct execution is fine.
+</Parallel_Execution>`
+
 // Alias counter
 let aliasCounter = 0
 function nextAlias(agent) {
@@ -289,6 +321,17 @@ function updateJobStatus(taskID, state, result) {
   if (!job) return
   if (job.state === "reconciled" || job.state === "cancelled") return
 
+  // Terminal states are sticky: a job already marked completed/error (e.g. by
+  // a lifecycle event) must not regress when the completion text is scanned
+  // again on a later turn. Only backfill a missing result summary.
+  if (job.state === "completed" || job.state === "error") {
+    if (result && !job.resultSummary) {
+      job.resultSummary = result
+      writeTuiState()
+    }
+    return
+  }
+
   job.state = state
   job.terminalState = state
   job.terminalUnreconciled = state === "completed" || state === "error"
@@ -318,6 +361,46 @@ function getUnreconciledJobs(parentSessionID) {
 function getRunningJobs(parentSessionID) {
   return getJobsForSession(parentSessionID).filter((j) => j.state === "running")
 }
+
+function findJobByIdOrAlias(id) {
+  return jobBoard.get(id) || [...jobBoard.values()].find((j) => j.alias === id)
+}
+
+// Shared by the V1 `parallel_status` tool and its V2 counterpart.
+function buildParallelStatusJson(sessionId) {
+  const jobs = sessionId ? getJobsForSession(sessionId) : [...jobBoard.values()]
+
+  if (jobs.length === 0) {
+    return JSON.stringify({ total: 0, message: "No background tasks found." })
+  }
+
+  const summary = {
+    total: jobs.length,
+    running: jobs.filter((j) => j.state === "running").length,
+    completed: jobs.filter((j) => j.state === "completed" || j.state === "reconciled").length,
+    error: jobs.filter((j) => j.state === "error").length,
+    tasks: jobs.map((j) => ({
+      alias: j.alias,
+      task_id: j.taskID,
+      agent: j.agent,
+      description: j.description,
+      state: j.state,
+      elapsed_s: Math.round(
+        (j.state === "running"
+          ? Date.now() - j.launchedAt
+          : (j.completedAt || Date.now()) - j.launchedAt) / 1000
+      ),
+      result: j.resultSummary?.slice(0, 200),
+    })),
+  }
+
+  return JSON.stringify(summary, null, 2)
+}
+
+// Prompt body of the /ps command (shared by the V1 config hook and the V2
+// command transform).
+const PS_COMMAND_TEMPLATE =
+  "List all background tasks for the current session. Use the parallel_status tool to get the current status, then display as a concise table with columns: Alias | Agent | Status | Elapsed | Description. If no tasks are running, say 'No background tasks.'"
 
 // ─── Job Board Context for LLM ──────────────────────────────────────────────
 
@@ -387,6 +470,9 @@ export function createParallelHooks(ctx) {
 
     "experimental.chat.system.transform": async (_input, output) => {
       output.system = output.system || []
+      // Guard against double registration (V1 hosts may invoke both the named
+      // export and default.server of the dual V1/V2 entry point).
+      if (output.system.includes(PARALLEL_SYSTEM_PROMPT)) return
       output.system.push(PARALLEL_SYSTEM_PROMPT)
     },
 
@@ -495,13 +581,14 @@ export function createParallelHooks(ctx) {
       const boardText = buildJobBoardText(sessionID)
       if (!boardText) return
 
-      // Guard: don't double-inject
-      const existingText = lastUser.parts[0]?.text || ""
-      if (
-        typeof existingText === "string" &&
-        existingText.includes("SENTINEL: omagents-job-board-v1")
+      // Guard: don't double-inject (check every text part, not just parts[0])
+      const alreadyInjected = lastUser.parts.some(
+        (p) =>
+          p.type === "text" &&
+          typeof p.text === "string" &&
+          p.text.includes("SENTINEL: omagents-job-board-v1")
       )
-        return
+      if (alreadyInjected) return
 
       // Prepend job board to the first text part
       const firstPart = lastUser.parts.find((p) => p.type === "text")
@@ -562,8 +649,7 @@ export function createParallelHooks(ctx) {
       config.command = config.command || {}
       if (!config.command.ps) {
         config.command.ps = {
-          template:
-            "List all background tasks for the current session. Use the parallel_status tool to get the current status, then display as a concise table with columns: Alias | Agent | Status | Elapsed | Description. If no tasks are running, say 'No background tasks.'",
+          template: PS_COMMAND_TEMPLATE,
           description: "Show running background tasks",
         }
       }
@@ -582,40 +668,8 @@ export function createParallelHooks(ctx) {
           },
         },
         async execute(args, context) {
-          let jobs
-          if (args.session_id) {
-            jobs = getJobsForSession(args.session_id)
-          } else {
-            // Return all jobs - the LLM can filter
-            jobs = [...jobBoard.values()]
-          }
-
-          if (jobs.length === 0) {
-            return JSON.stringify({ total: 0, message: "No background tasks found." })
-          }
-
-          const summary = {
-            total: jobs.length,
-            running: jobs.filter((j) => j.state === "running").length,
-            completed: jobs.filter((j) => j.state === "completed" || j.state === "reconciled")
-              .length,
-            error: jobs.filter((j) => j.state === "error").length,
-            tasks: jobs.map((j) => ({
-              alias: j.alias,
-              task_id: j.taskID,
-              agent: j.agent,
-              description: j.description,
-              state: j.state,
-              elapsed_s: Math.round(
-                (j.state === "running"
-                  ? Date.now() - j.launchedAt
-                  : (j.completedAt || Date.now()) - j.launchedAt) / 1000
-              ),
-              result: j.resultSummary?.slice(0, 200),
-            })),
-          }
-
-          return JSON.stringify(summary, null, 2)
+          // No session filter -> return all jobs; the LLM can filter
+          return buildParallelStatusJson(args.session_id)
         },
       },
 
@@ -633,10 +687,7 @@ export function createParallelHooks(ctx) {
           if (!id) return "Error: task_id is required."
 
           // Find job by taskID or alias
-          let job = jobBoard.get(id)
-          if (!job) {
-            job = [...jobBoard.values()].find((j) => j.alias === id)
-          }
+          const job = findJobByIdOrAlias(id)
           if (!job) {
             return `Error: No background task found with ID or alias '${id}'.`
           }
@@ -701,4 +752,347 @@ function buildJobBoardTextForAll() {
   return lines.join("\n")
 }
 
-export default createParallelHooks
+// ─── OpenCode V2 wiring ─────────────────────────────────────────────────────
+//
+// OpenCode 2.x runs background work through the native `subagent` tool
+// ({ agent, description, prompt, background }) instead of the V1 experimental
+// `task(background: true)`. The tool result carries structured metadata
+// ({ sessionID, status }), and completion notices arrive in the parent
+// session as synthetic user messages:
+//   <subagent sessionID="..." state="completed|error|cancelled" ...>text</subagent>
+
+const V2_SUBAGENT_COMPLETION_RE =
+  /<subagent\s+sessionID="([^"]+)"\s+state="(completed|error|cancelled)"[^>]*>([\s\S]*?)<\/subagent>/
+
+function extractV2ChildSessionID(result) {
+  if (!result || typeof result !== "object") return undefined
+  const meta = result.metadata
+  if (meta && typeof meta.sessionID === "string" && meta.sessionID) return meta.sessionID
+  const out = result.output
+  if (out && typeof out === "object" && typeof out.sessionID === "string" && out.sessionID) {
+    return out.sessionID
+  }
+  // Last resort: the text "The subagent is working in the background (sessionID: ...)."
+  const text = typeof result.content === "string" ? result.content : ""
+  const m = /sessionID:\s*([^\s()]+)/.exec(text)
+  return m ? m[1] : undefined
+}
+
+function extractV2ResultStatus(result) {
+  if (!result || typeof result !== "object") return undefined
+  const metaStatus = result.metadata?.status
+  if (typeof metaStatus === "string" && metaStatus) return metaStatus
+  const out = result.output
+  if (out && typeof out === "object" && typeof out.status === "string" && out.status) {
+    return out.status
+  }
+  return undefined
+}
+
+function scanV2CompletionText(text) {
+  if (typeof text !== "string" || !text.includes("<subagent")) return
+  const m = V2_SUBAGENT_COMPLETION_RE.exec(text)
+  if (!m) return
+  const [, sessionID, state, body] = m
+  if (!jobBoard.has(sessionID)) return
+  updateJobStatus(sessionID, state, body?.trim() || undefined)
+}
+
+function handleV2Event(event) {
+  const type = event?.type
+  if (typeof type !== "string") return
+  const data = event.data && typeof event.data === "object" ? event.data : {}
+  const sessionID = typeof data.sessionID === "string" ? data.sessionID : undefined
+
+  if (type === "session.idle") {
+    if (!sessionID) return
+    // Parent session went idle -> mark its finished jobs as reconciled
+    reconcileJobs(sessionID)
+    // Child session went idle while still marked running -> treat as completed
+    const job = jobBoard.get(sessionID)
+    if (job && job.state === "running") {
+      updateJobStatus(sessionID, "completed", undefined)
+    }
+    return
+  }
+
+  if (type === "session.execution.succeeded") {
+    if (sessionID && jobBoard.has(sessionID)) {
+      updateJobStatus(sessionID, "completed", undefined)
+    }
+    return
+  }
+
+  if (type === "session.execution.failed") {
+    if (sessionID && jobBoard.has(sessionID)) {
+      const message = data.error && typeof data.error === "object" ? data.error.message : undefined
+      updateJobStatus(sessionID, "error", typeof message === "string" ? message : undefined)
+    }
+    return
+  }
+
+  if (type === "session.execution.interrupted") {
+    if (sessionID && jobBoard.has(sessionID)) {
+      updateJobStatus(sessionID, "cancelled", undefined)
+    }
+    return
+  }
+
+  if (type === "session.deleted") {
+    if (!sessionID) return
+    jobBoard.delete(sessionID)
+    for (const [key, pending] of pendingCalls) {
+      if (pending.parentSessionId === sessionID) {
+        pendingCalls.delete(key)
+      }
+    }
+    writeTuiState()
+  }
+}
+
+/**
+ * Register the parallel execution engine with an OpenCode 2.x plugin context.
+ * Returns a cleanup function that detaches the event subscription.
+ */
+export async function setupParallelV2(ctx) {
+  // V1 hosts scan every exported function in .opencode/plugins/*.js and invoke
+  // them with a V1-shaped context. Return quietly there — the V1 wiring lives
+  // in createParallelHooks().
+  if (!ctx || typeof ctx.tool?.hook !== "function" || typeof ctx.session?.hook !== "function") {
+    return
+  }
+
+  // Restore persisted Job Board from disk
+  try {
+    loadJobBoard()
+  } catch {
+    // best-effort
+  }
+
+  // ── Track launches of background subagents ──────────────────────────────
+
+  await ctx.tool.hook("execute.before", (event) => {
+    try {
+      if (event.tool !== "subagent") return
+      const args = event.input
+      if (!args || typeof args !== "object") return
+      // Foreground subagents complete synchronously; only track background ones
+      if (args.background !== true) return
+
+      pendingCalls.set(event.id, {
+        callId: event.id,
+        parentSessionId: event.sessionID,
+        agentType: typeof args.agent === "string" ? args.agent : "general",
+        label: typeof args.description === "string" ? args.description : "",
+      })
+    } catch (err) {
+      warnIfDebug("[omagents] v2 execute.before hook failed:", err.message)
+    }
+  })
+
+  await ctx.tool.hook("execute.after", (event) => {
+    try {
+      if (event.tool !== "subagent") return
+      const pending = pendingCalls.get(event.id)
+      if (!pending) return
+      pendingCalls.delete(event.id)
+      if (event.status !== "completed") return
+
+      const result = event.result
+      const childID = extractV2ChildSessionID(result)
+      if (!childID) return
+
+      const status = extractV2ResultStatus(result)
+      registerLaunch(childID, pending.parentSessionId, pending.agentType, pending.label)
+      if (status === "completed" || status === "error" || status === "cancelled") {
+        const out = result?.output
+        const text = out && typeof out === "object" ? out.output : undefined
+        updateJobStatus(childID, status, typeof text === "string" ? text : undefined)
+      }
+    } catch (err) {
+      warnIfDebug("[omagents] v2 execute.after hook failed:", err.message)
+    }
+  })
+
+  // ── Inject parallel instructions + job board into every model call ──────
+
+  await ctx.session.hook("context", (event) => {
+    try {
+      // System prompt (idempotent within one request)
+      event.system = event.system || []
+      if (
+        !event.system.some((p) => p && p.type === "text" && p.text === PARALLEL_SYSTEM_PROMPT_V2)
+      ) {
+        event.system.push({ type: "text", text: PARALLEL_SYSTEM_PROMPT_V2 })
+      }
+
+      const messages = event.messages
+      if (!Array.isArray(messages) || messages.length === 0) return
+
+      // Process subagent completion notices delivered as synthetic messages
+      for (const msg of messages) {
+        if (msg.role !== "user") continue
+        for (const part of msg.content || []) {
+          if (part && part.type === "text") scanV2CompletionText(part.text)
+        }
+      }
+
+      // Inject the job board into the last user message
+      const sessionID = event.sessionID
+      if (!sessionID) return
+      const boardText = buildJobBoardText(sessionID)
+      if (!boardText) return
+
+      let lastUser = null
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          lastUser = messages[i]
+          break
+        }
+      }
+      if (!lastUser) return
+      lastUser.content = lastUser.content || []
+
+      // Guard: don't double-inject
+      const alreadyInjected = lastUser.content.some(
+        (p) =>
+          p &&
+          p.type === "text" &&
+          typeof p.text === "string" &&
+          p.text.includes("SENTINEL: omagents-job-board-v1")
+      )
+      if (alreadyInjected) return
+
+      const firstText = lastUser.content.find(
+        (p) => p && p.type === "text" && typeof p.text === "string"
+      )
+      if (firstText) {
+        firstText.text = `${boardText}\n\n${firstText.text}`
+      } else {
+        lastUser.content.unshift({ type: "text", text: boardText })
+      }
+    } catch (err) {
+      // Never let hook errors break the request pipeline
+      warnIfDebug("[omagents] v2 context hook failed:", err.message)
+    }
+  })
+
+  // ── Track session lifecycle ─────────────────────────────────────────────
+
+  const controller = new AbortController()
+  void (async () => {
+    try {
+      for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+        try {
+          handleV2Event(event)
+        } catch (err) {
+          warnIfDebug("[omagents] v2 event handling failed:", err.message)
+        }
+      }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        warnIfDebug("[omagents] v2 event stream ended:", err?.message || err)
+      }
+    }
+  })()
+
+  // ── Custom tools ────────────────────────────────────────────────────────
+
+  await ctx.tool.transform((editor) => {
+    editor.add({
+      name: "parallel_status",
+      description:
+        "Check the status of all background tasks for the current session. Returns a JSON summary of all tracked background jobs including their state (running/completed/error), elapsed time, and result summaries.",
+      input: {
+        type: "object",
+        properties: {
+          session_id: {
+            type: "string",
+            description: "Optional session ID. If not provided, returns all jobs.",
+          },
+        },
+        additionalProperties: false,
+      },
+      execute: async (args) => ({
+        content: buildParallelStatusJson(args?.session_id),
+      }),
+    })
+
+    editor.add({
+      name: "cancel_task",
+      description:
+        "Cancel a running background task by its task ID or alias. Aborts the underlying session.",
+      input: {
+        type: "object",
+        properties: {
+          task_id: {
+            type: "string",
+            description: "The task ID or alias of the background task to cancel.",
+          },
+        },
+        required: ["task_id"],
+        additionalProperties: false,
+      },
+      execute: async (args) => {
+        const id = args?.task_id
+        if (!id) return { content: "Error: task_id is required." }
+
+        const job = findJobByIdOrAlias(id)
+        if (!job) {
+          return { content: `Error: No background task found with ID or alias '${id}'.` }
+        }
+        if (job.state !== "running") {
+          return { content: `Task '${job.alias}' is already in state: ${job.state}.` }
+        }
+
+        try {
+          await ctx.session.interrupt({ sessionID: job.taskID, continue: false })
+          updateJobStatus(job.taskID, "cancelled", undefined)
+          return { content: `Cancelled task '${job.alias}' (${job.taskID}).` }
+        } catch (err) {
+          return { content: `Error cancelling task '${job.alias}': ${err.message}` }
+        }
+      },
+    })
+  })
+
+  // ── /ps command (skip when the user defined their own) ──────────────────
+
+  try {
+    const existing = await ctx.command.list()
+    const items = Array.isArray(existing) ? existing : existing?.commands || existing?.items || []
+    const hasPs = items.some((c) => c && c.name === "ps")
+    if (!hasPs) {
+      await ctx.command.transform((editor) => {
+        editor.add({
+          name: "ps",
+          description: "Show running background tasks",
+          execute: async ({ sessionID, prompt, delivery }) => {
+            await ctx.session.prompt({
+              ...prompt,
+              sessionID,
+              text: PS_COMMAND_TEMPLATE,
+              delivery,
+            })
+          },
+        })
+      })
+    }
+  } catch (err) {
+    warnIfDebug("[omagents] v2 /ps command registration failed:", err.message)
+  }
+
+  return () => controller.abort()
+}
+
+// Default export: a valid V2 plugin descriptor so V2 auto-discovery (which
+// loads every .opencode/plugins/*.js) accepts this module. The real wiring is
+// done by index.js (which imports the named exports below); setup() is a
+// deliberate no-op to avoid double registration.
+// V1 hosts either scan the named export (createParallelHooks) or call
+// default.server — keep them pointing at the same V1 factory.
+export default {
+  id: "omagents.parallel-engine",
+  server: createParallelHooks,
+  setup: () => {},
+}

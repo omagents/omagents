@@ -16,10 +16,16 @@ test("parallel engine exists", () => {
   assert.ok(fs.existsSync(path.join(PLUGINS_DIR, "parallel.js")))
 })
 
-test("index.js exports OmagentsPlugin", async () => {
+test("index.js exports dual V1/V2 entry point", async () => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
+  // V1: named export scanned by older V1 hosts
   assert.strictEqual(typeof mod.OmagentsPlugin, "function")
-  assert.strictEqual(typeof mod.default, "function")
+  // Dual descriptor: V1 >= 1.18.29 calls default.server(), V2 reads id + setup()
+  assert.strictEqual(typeof mod.default, "object")
+  assert.strictEqual(mod.default.id, "omagents")
+  assert.strictEqual(typeof mod.default.server, "function")
+  assert.strictEqual(typeof mod.default.setup, "function")
+  assert.strictEqual(mod.default.server, mod.OmagentsPlugin)
 })
 
 test("index.js imports MCP definitions from base.json", async () => {
@@ -84,8 +90,8 @@ test("index.js contains conditional github/grep_app fallback logic", () => {
 
 function getRegisteredMcps(env) {
   const script = `
-    import plugin from "./.opencode/plugins/index.js";
-    const p = await plugin({ $: {} });
+    import mod from "./.opencode/plugins/index.js";
+    const p = await mod.server({});
     const config = { skills: { paths: [] }, mcp: {} };
     await p.config(config);
     console.log(JSON.stringify(config.mcp));
@@ -123,6 +129,10 @@ test("Codex setup exists and exports installCodex", async () => {
 
 test("unified index.js re-exports OpenCode plugin", async () => {
   const mod = await import(path.join(ROOT, "index.js"))
-  assert.strictEqual(typeof mod.default, "function")
+  // Default export is the dual V1/V2 descriptor object
+  assert.strictEqual(typeof mod.default, "object")
+  assert.strictEqual(mod.default.id, "omagents")
+  assert.strictEqual(typeof mod.default.server, "function")
+  assert.strictEqual(typeof mod.default.setup, "function")
   assert.strictEqual(typeof mod.OmagentsPlugin, "function")
 })
