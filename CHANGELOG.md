@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-09-28
+
+### Fixed
+
+- **Duplicate plugin activation inside the OmAgents source repo**: when OpenCode runs in this repository, the repo's own `.opencode/plugins/*.js` are auto-discovered as project plugins *in addition to* the globally-installed `@omagents/omagents` from the user's config, so every skill/MCP/tool/hook was registered twice (`opencode plugin list` showed three entries). The published package now detects when it runs inside the OmAgents source repo (project `package.json` name + project-local `.opencode/plugins/index.js`, walking up from `ctx.location.directory` on V2 / `ctx.directory` on V1) and yields — the local working-tree checkout becomes the single active copy, which is also what developers editing the repo want. Other projects are unaffected.
+
 ## [0.10.0] - 2026-09-28
 
 ### Added
