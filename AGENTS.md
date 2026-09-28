@@ -255,6 +255,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | 0.2.1 | v0.2.1 | Loop engine, 12 new skills, Job Board persistence + isolation, compaction hook, multilingual README, project governance |
 | 0.9.0 | v0.9.0 | superpowers 6.1.1 -> 6.4.2 (V2 export compat fix), prettier ^3.9.9, lock file sync |
 | 0.9.1 | v0.9.1 | Fix: move OpenCode setup script out of auto-discovered `.opencode/plugins/` (startup crash in this repo); gitignore host-generated SDK artifacts |
+| 0.9.2 | v0.9.2 | Fix: package `main` back to plugin entry — CLI wrapper as `main` made `opencode run` exit(1) on plugin load (0.7.0–0.9.1) |
 
 ## Design Principles
 
@@ -284,3 +285,4 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 8. **Don't change README.md without updating all language versions.** README exists in 4 languages (EN, ZH-CN, JA, KO). All must be updated in the same commit.
 9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.
 10. **Don't put non-plugin scripts in `.opencode/plugins/`.** OpenCode auto-discovers and loads EVERY `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions. A CLI script there (this broke startup when developing in this repo — see v0.9.1) crashes plugin init. CLI entry scripts live in `setup/` instead; only true plugin files belong in `.opencode/plugins/`.
+11. **Don't point package `main` at the CLI wrapper.** OpenCode imports the plugin via `main`; module-level `process.argv` dispatch (plus `process.exit`) in that file kills the host process (this broke `opencode run` for npm installs of 0.7.0–0.9.1 — see v0.9.2). `main` must be the plugin entry (`.opencode/plugins/index.js`); only `bin` may point at the CLI wrapper.
