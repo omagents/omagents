@@ -35,11 +35,10 @@ OmAgents (`@omagents/omagents`) is an OpenCode plugin that bundles agent skills,
 ```
 omagents/
 ├── .opencode/
-│   ├── .gitignore              # Ignores node_modules/
+│   ├── .gitignore              # Ignores host-generated artifacts (see note below)
 │   └── plugins/
 │       ├── index.js            # Plugin entry point (merges superpowers + omagents hooks)
-│       ├── parallel.js         # Parallel execution engine (607 lines)
-│       └── setup.js            # OpenCode setup command (npx @omagents/omagents opencode)
+│       └── parallel.js         # Parallel execution engine (607 lines)
 ├── .github/
 │   ├── ISSUE_TEMPLATE/         # bug_report.md, feature_request.md
 │   └── workflows/
@@ -64,6 +63,8 @@ omagents/
 │   └── playwright-web-scraping/# Web scraping with Playwright
 │       ├── SKILL.md
 │       └── scripts/
+├── setup/
+│   └── opencode.js             # OpenCode setup command (npx @omagents/omagents opencode)
 ├── package.json                # superpowers as git dependency (pinned to commit)
 ├── package-lock.json
 ├── CHANGELOG.md
@@ -277,7 +278,8 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 3. **Don't duplicate venv path info.** The `agents-python-tools` skill covers this. Reference it.
 4. **Don't unpin superpowers.** It's pinned to a commit for stability.
 5. **Don't add `templates/` to project structure diagrams.** It doesn't exist at root.
-6. **Don't forget `.opencode/` has its own `.gitignore`** that excludes `node_modules`. The plugin code has no npm dependencies of its own (pure ESM JavaScript); `@opencode-ai/plugin` is NOT needed.
+6. **Don't forget `.opencode/` has its own `.gitignore`** that excludes `node_modules`, `package.json`, and `package-lock.json`. OpenCode itself auto-generates these (it installs the `@opencode-ai/plugin` SDK into `.opencode/` when loading project plugins) — they are host artifacts and must not be committed.
 7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 18; superpowers has 15. They're registered separately.
 8. **Don't change README.md without updating all language versions.** README exists in 4 languages (EN, ZH-CN, JA, KO). All must be updated in the same commit.
 9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.
+10. **Don't put non-plugin scripts in `.opencode/plugins/`.** OpenCode auto-discovers and loads EVERY `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions. A CLI script there (this broke startup when developing in this repo — see v0.9.1) crashes plugin init. CLI entry scripts live in `setup/` instead; only true plugin files belong in `.opencode/plugins/`.

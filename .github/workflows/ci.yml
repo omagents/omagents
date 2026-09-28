@@ -24,7 +24,7 @@ jobs:
         run: |
           node --check .opencode/plugins/index.js
           node --check .opencode/plugins/parallel.js
-          node --check .opencode/plugins/setup.js
+          node --check setup/opencode.js
           node --check index.js
           node --check .codex/plugins/setup.js
           node --check hooks/setup-venv.js

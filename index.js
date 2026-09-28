@@ -17,7 +17,7 @@ if (command === "codex") {
     process.exit(1)
   })
 } else if (command === "opencode") {
-  const { setupOpencode } = await import("./.opencode/plugins/setup.js")
+  const { setupOpencode } = await import("./setup/opencode.js")
   setupOpencode().catch((err) => {
     console.error("[omagents]", err.message)
     process.exit(1)

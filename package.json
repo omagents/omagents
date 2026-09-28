@@ -30,8 +30,8 @@
   "scripts": {
     "build:pack": "npm pack",
     "test": "node --test tests/*.test.js",
-    "format": "prettier --write .opencode/plugins/*.js tests/*.js index.js .codex/plugins/*.js hooks/setup-venv.js",
-    "format:check": "prettier --check .opencode/plugins/*.js tests/*.js index.js .codex/plugins/*.js hooks/setup-venv.js"
+    "format": "prettier --write .opencode/plugins/*.js setup/*.js tests/*.js index.js .codex/plugins/*.js hooks/setup-venv.js",
+    "format:check": "prettier --check .opencode/plugins/*.js setup/*.js tests/*.js index.js .codex/plugins/*.js hooks/setup-venv.js"
   },
   "devDependencies": {
     "prettier": "^3.9.9"
