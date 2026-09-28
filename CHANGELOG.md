@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-09-28
+
+### Fixed
+
+- **OpenCode cannot start in this repo** (developer machines only): OpenCode auto-discovers and loads every `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions as hooks. `setup.js` — a CLI script, not a plugin — exported `setupOpencode()`, which returns `undefined` when the plugin is already installed. The `undefined` return was treated as the plugin's hooks, crashing plugin init (`Cannot read properties of undefined (reading 'config')`) and making `opencode run` / the desktop app fail with `Unexpected server error` in this directory. This had also been silently logging `plugin config hook failed` since v0.8.0 introduced the file.
+  - `.opencode/plugins/setup.js` moved to `setup/opencode.js` (out of the auto-discovered directory). The `npx @omagents/omagents opencode` command is unchanged.
+  - npm-package consumers were never affected (the cache path is not auto-discovered); this only manifested when developing inside the repository.
+
+### Changed
+
+- **`.opencode/.gitignore` now also excludes `package.json` and `package-lock.json`**: OpenCode auto-installs the `@opencode-ai/plugin` SDK into `.opencode/` when loading project plugins (observed: files created at the exact second of plugin loading). These are host-generated artifacts and must not be committed.
+
 ## [0.9.0] - 2026-09-27
 
 ### Changed

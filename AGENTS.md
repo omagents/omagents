@@ -254,6 +254,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | 0.1.4 | v0.1.4 | Version bump |
 | 0.2.1 | v0.2.1 | Loop engine, 12 new skills, Job Board persistence + isolation, compaction hook, multilingual README, project governance |
 | 0.9.0 | v0.9.0 | superpowers 6.1.1 -> 6.4.2 (V2 export compat fix), prettier ^3.9.9, lock file sync |
+| 0.9.1 | v0.9.1 | Fix: move OpenCode setup script out of auto-discovered `.opencode/plugins/` (startup crash in this repo); gitignore host-generated SDK artifacts |
 
 ## Design Principles
 
