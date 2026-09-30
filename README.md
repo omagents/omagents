@@ -90,8 +90,6 @@ The plugin handles everything else automatically - no manual MCP configuration, 
 
 ### Optional: API Keys
 
-Some remote MCP servers accept optional API keys for higher rate limits:
-
 ```bash
 # ~/.zshrc or ~/.bashrc
 export EXA_API_KEY="your-exa-key"
@@ -99,7 +97,11 @@ export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-Setting `GITHUB_TOKEN` enables the full GitHub Copilot MCP (issues, PRs, repos, code search). Without it, OmAgents falls back to Vercel's `mcp.grep.app` for public code search only.
+How the keys affect MCP registration (evaluated at startup):
+
+- **`EXA_API_KEY`**: switches `websearch` to a locally-run `exa-mcp-server`. Without a key, it falls back to Exa's free hosted endpoint `mcp.exa.ai/mcp`.
+- **`CONTEXT7_API_KEY`**: optional — `context7` always runs locally via `@upstash/context7-mcp`, and the key raises its rate limits.
+- **`GITHUB_TOKEN`**: enables the full GitHub Copilot MCP (issues, PRs, repos, code search). Without it, OmAgents falls back to Vercel's `mcp.grep.app` for public code search only.
 
 ### Combine with Other Plugins
 
@@ -231,8 +233,8 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 |-----|------|-------|
 | `agentmemory` | Local | Session memory and audit |
 | `codegraph` | Local | Codebase symbol graph and exploration |
-| `context7` | Remote | Documentation search (free tier available) |
-| `websearch` | Remote | Web search via Exa (free tier available) |
+| `context7` | Local | Documentation search via `@upstash/context7-mcp` (optional `CONTEXT7_API_KEY` for higher limits) |
+| `websearch` | Local / Remote | `exa-mcp-server` locally when `EXA_API_KEY` is set; otherwise Exa's free hosted endpoint |
 | `github` / `grep_app` | Remote | GitHub Copilot MCP when `GITHUB_TOKEN` is set; otherwise `mcp.grep.app` for public code search |
 
 ### Parallel Execution

@@ -84,7 +84,7 @@ plugin이 나머지는 모두 자동으로 처리합니다 - 수동 MCP 설정, 
 
 ### 선택 사항: API Key
 
-일부 원격 MCP server는 더 높은 rate limit을 위해 선택적 API key를 지원합니다:
+각 key가 MCP 등록에 미치는 영향 (시작 시 판정):
 
 ```bash
 # ~/.zshrc 또는 ~/.bashrc
@@ -93,7 +93,9 @@ export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-`GITHUB_TOKEN`을 설정하면 전체 GitHub Copilot MCP(issues, PRs, repos, code search)가 활성화됩니다. 설정하지 않으면 OmAgents는 공개 code search만 지원하는 Vercel의 `mcp.grep.app`으로 대체됩니다.
+- **`EXA_API_KEY`**: `websearch`를 로컬 실행되는 `exa-mcp-server`로 전환합니다. 미설정 시 Exa의 무료 호스티드 엔드포인트 `mcp.exa.ai/mcp`로 대체됩니다.
+- **`CONTEXT7_API_KEY`**: 선택 사항 — `context7`은 항상 `@upstash/context7-mcp`로 로컬 실행되며, key 설정 시 rate limit이 완화됩니다.
+- **`GITHUB_TOKEN`**: 전체 GitHub Copilot MCP(issues, PRs, repos, code search)가 활성화됩니다. 설정하지 않으면 OmAgents는 공개 code search만 지원하는 Vercel의 `mcp.grep.app`으로 대체됩니다.
 
 ### 다른 Plugin과 결합
 
@@ -225,8 +227,8 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 |-----|------|------|
 | `agentmemory` | Local | Session memory 및 감사 |
 | `codegraph` | Local | 코드베이스 symbol graph 및 탐색 |
-| `context7` | Remote | 문서 검색 (무료 tier 사용 가능) |
-| `websearch` | Remote | Exa를 통한 web search (무료 tier 사용 가능) |
+| `context7` | Local | `@upstash/context7-mcp`를 통한 문서 검색 (선택적 `CONTEXT7_API_KEY`로 rate limit 완화) |
+| `websearch` | Local / Remote | `EXA_API_KEY` 설정 시 `exa-mcp-server`를 로컬 실행; 미설정 시 Exa의 무료 호스티드 엔드포인트 사용 |
 | `github` / `grep_app` | Remote | `GITHUB_TOKEN` 설정 시 GitHub Copilot MCP; 미설정 시 공개 code search용 `mcp.grep.app` |
 
 ### 병렬 실행

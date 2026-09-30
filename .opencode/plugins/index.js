@@ -44,6 +44,28 @@ for (const [name, def] of Object.entries(baseMcps)) {
   BUILTIN_MCPS[name] = { ...def, enabled: true }
 }
 
+// context7: always run the local MCP server (@upstash/context7-mcp). Works
+// without a key; CONTEXT7_API_KEY raises the rate limits when provided.
+BUILTIN_MCPS.context7 = {
+  type: "local",
+  command: ["npx", "-y", "@upstash/context7-mcp"],
+  enabled: true,
+  ...(process.env.CONTEXT7_API_KEY
+    ? { environment: { CONTEXT7_API_KEY: process.env.CONTEXT7_API_KEY } }
+    : {}),
+}
+
+// websearch (exa): the local MCP server requires EXA_API_KEY to start; when
+// no key is available, keep the free hosted endpoint from base.json.
+if (process.env.EXA_API_KEY) {
+  BUILTIN_MCPS.websearch = {
+    type: "local",
+    command: ["npx", "-y", "exa-mcp-server"],
+    environment: { EXA_API_KEY: process.env.EXA_API_KEY },
+    enabled: true,
+  }
+}
+
 // GitHub code search: use the full GitHub Copilot MCP when a token is
 // available; otherwise fall back to Vercel's public Grep.app MCP.
 if (process.env.GITHUB_TOKEN) {

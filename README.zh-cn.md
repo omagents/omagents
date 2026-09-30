@@ -84,7 +84,7 @@ plugin 会自动处理其余所有事项——无需手动配置 MCP、无需安
 
 ### 可选：API Keys
 
-部分远程 MCP servers 支持可选的 API keys 以获得更高的速率限制：
+各 key 对 MCP 注册的影响（启动时判定）：
 
 ```bash
 # ~/.zshrc 或 ~/.bashrc
@@ -93,7 +93,9 @@ export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-设置 `GITHUB_TOKEN` 可启用完整的 GitHub Copilot MCP（issues、PRs、repos、code search）。未设置时，OmAgents 会回退到 Vercel 的 `mcp.grep.app`，仅支持公开代码搜索。
+- **`EXA_API_KEY`**：使 `websearch` 切换为本地运行的 `exa-mcp-server`。未设置时回退到 Exa 免费托管端点 `mcp.exa.ai/mcp`。
+- **`CONTEXT7_API_KEY`**：可选——`context7` 始终通过 `@upstash/context7-mcp` 本地运行，设置此 key 可提高速率限制。
+- **`GITHUB_TOKEN`**：启用完整的 GitHub Copilot MCP（issues、PRs、repos、code search）。未设置时，OmAgents 会回退到 Vercel 的 `mcp.grep.app`，仅支持公开代码搜索。
 
 ### 与其他 Plugin 组合使用
 
@@ -225,8 +227,8 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 |-----|------|-------|
 | `agentmemory` | Local | Session 记忆和审计 |
 | `codegraph` | Local | 代码库符号图和探索 |
-| `context7` | Remote | 文档搜索（提供免费额度） |
-| `websearch` | Remote | 通过 Exa 进行 web 搜索（提供免费额度） |
+| `context7` | Local | 通过 `@upstash/context7-mcp` 进行文档搜索（可选 `CONTEXT7_API_KEY` 提高速率限制） |
+| `websearch` | Local / Remote | 设置 `EXA_API_KEY` 时本地运行 `exa-mcp-server`；否则使用 Exa 免费托管端点 |
 | `github` / `grep_app` | Remote | 设置 `GITHUB_TOKEN` 时使用 GitHub Copilot MCP；否则使用 `mcp.grep.app` 进行公开代码搜索 |
 
 ### Parallel Execution

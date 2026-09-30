@@ -128,8 +128,8 @@ Registered automatically (V1: `config` hook; V2: `ctx.mcp.transform`). User conf
 |-----|------|--------|
 | `agentmemory` | local | `npx -y @agentmemory/mcp` |
 | `codegraph` | local | `npx -y @colbymchenry/codegraph serve --mcp` |
-| `context7` | remote | `https://mcp.context7.com/mcp` |
-| `websearch` | remote | `https://mcp.exa.ai/mcp` |
+| `context7` | local | `npx -y @upstash/context7-mcp` (optional `CONTEXT7_API_KEY` for higher rate limits) |
+| `websearch` | local/remote | `npx -y exa-mcp-server` when `EXA_API_KEY` is set; otherwise remote `https://mcp.exa.ai/mcp` |
 | `github` | remote | `https://api.githubcopilot.com/mcp/` (requires `GITHUB_TOKEN`) |
 | `grep_app` | remote | `https://mcp.grep.app` (fallback when no `GITHUB_TOKEN`) |
 

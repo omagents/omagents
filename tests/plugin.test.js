@@ -120,6 +120,35 @@ test("with GITHUB_TOKEN, plugin registers github (not grep_app)", () => {
   assert.ok(!mcps.grep_app, "grep_app should not be registered when GITHUB_TOKEN is present")
 })
 
+test("context7 always registers as local @upstash/context7-mcp", () => {
+  const mcps = getRegisteredMcps({})
+  assert.strictEqual(mcps.context7.type, "local", "context7 should be local")
+  assert.deepStrictEqual(mcps.context7.command, ["npx", "-y", "@upstash/context7-mcp"])
+})
+
+test("CONTEXT7_API_KEY is passed through to the local context7 MCP", () => {
+  const mcps = getRegisteredMcps({ CONTEXT7_API_KEY: "fake-context7-key-for-test" })
+  assert.strictEqual(mcps.context7.environment.CONTEXT7_API_KEY, "fake-context7-key-for-test")
+})
+
+test("context7 registers without environment when CONTEXT7_API_KEY is unset", () => {
+  const mcps = getRegisteredMcps({ CONTEXT7_API_KEY: "" })
+  assert.strictEqual(mcps.context7.environment, undefined)
+})
+
+test("with EXA_API_KEY, websearch registers as local exa-mcp-server", () => {
+  const mcps = getRegisteredMcps({ EXA_API_KEY: "fake-exa-key-for-test" })
+  assert.strictEqual(mcps.websearch.type, "local", "websearch should be local with EXA_API_KEY")
+  assert.deepStrictEqual(mcps.websearch.command, ["npx", "-y", "exa-mcp-server"])
+  assert.strictEqual(mcps.websearch.environment.EXA_API_KEY, "fake-exa-key-for-test")
+})
+
+test("without EXA_API_KEY, websearch stays on the remote exa endpoint", () => {
+  const mcps = getRegisteredMcps({ EXA_API_KEY: "" })
+  assert.strictEqual(mcps.websearch.type, "remote", "websearch should stay remote without a key")
+  assert.strictEqual(mcps.websearch.url, "https://mcp.exa.ai/mcp")
+})
+
 test("Codex setup exists and exports installCodex", async () => {
   const setupPath = path.join(ROOT, ".codex", "plugins", "setup.js")
   assert.ok(fs.existsSync(setupPath), ".codex/plugins/setup.js should exist")
