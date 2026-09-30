@@ -238,7 +238,7 @@ Follow these steps **in order** to publish a new release:
 4. **Push and create GitHub release**:
    ```bash
    git push && git push --tags
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <(awk '/^## \[X.Y.Z\]/{f=1} f; /^## \[/{if(f&&!first){exit} first=1}' CHANGELOG.md) --verify-tag
+   gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <(awk 'f&&/^## \[/{exit} /^## \[X\.Y\.Z\]/{f=1} f' CHANGELOG.md) --verify-tag
    ```
    The release notes are extracted from the corresponding CHANGELOG.md section for this version (replace `X.Y.Z` with the actual version numbers, escaping `.` as needed).
 
