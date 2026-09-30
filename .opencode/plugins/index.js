@@ -464,9 +464,7 @@ function isInsideOmagentsSourceRepo(dir) {
   let current = dir
   for (let depth = 0; depth < 10 && current; depth++) {
     try {
-      const pkg = JSON.parse(
-        fs.readFileSync(path.join(current, "package.json"), "utf8")
-      )
+      const pkg = JSON.parse(fs.readFileSync(path.join(current, "package.json"), "utf8"))
       if (
         pkg.name === "@omagents/omagents" &&
         fs.existsSync(path.join(current, ".opencode", "plugins", "index.js")) &&
@@ -505,11 +503,7 @@ async function setupV2(ctx) {
 
   // Inside the OmAgents source repo the published package yields to the
   // auto-discovered local checkout (see "Self-repo dedup guard" above).
-  if (
-    shouldYieldToLocalCheckout(
-      ctx.location?.project?.directory || ctx.location?.directory
-    )
-  ) {
+  if (shouldYieldToLocalCheckout(ctx.location?.project?.directory || ctx.location?.directory)) {
     return
   }
 
