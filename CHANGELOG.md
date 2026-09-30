@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-09-30
+
+### Changed
+
+- **Local-first MCP registration**: built-in MCP servers now prefer locally-run processes over remote endpoints where that does not add a credential requirement, mirroring the existing `GITHUB_TOKEN` conditional pattern:
+  - **`context7`** now always runs locally via `npx -y @upstash/context7-mcp` (works without a key; setting `CONTEXT7_API_KEY` passes it through to raise rate limits).
+  - **`websearch`** (exa) runs the local `npx -y exa-mcp-server` **when `EXA_API_KEY` is set**; without a key it stays on the free hosted `https://mcp.exa.ai/mcp` endpoint, so zero-config users are unaffected.
+  - `github` / `grep_app` are unchanged — there is no maintained npx-equivalent local GitHub MCP server (the official one is a Go binary/Docker image), and `grep_app` has no local equivalent at all.
+  - User-defined MCP config still takes precedence (both V1 and V2), and `mcp-servers/base.json` is unchanged so the remote websearch endpoint remains the keyless default.
+
+### Added
+
+- **Tests**: V1 env-conditional registration is exercised end-to-end via `getRegisteredMcps` (local context7 with/without `CONTEXT7_API_KEY` pass-through, local/remote websearch by `EXA_API_KEY`); V2 MCP registration test now asserts the same conditional shape.
+
 ## [0.10.1] - 2026-09-28
 
 ### Fixed
