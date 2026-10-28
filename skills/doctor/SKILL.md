@@ -36,11 +36,16 @@ Each MCP server should be reachable. Check:
 
 | MCP | How to verify |
 |-----|---------------|
-| `agentmemory` | `npx -y @agentmemory/mcp --help` exits successfully |
-| `codegraph` | `npx -y @colbymchenry/codegraph --help` exits successfully |
-| `context7` | Remote URL `https://mcp.context7.com/mcp` is reachable |
-| `websearch` | Remote URL `https://mcp.exa.ai/mcp` is reachable |
+| `agentmemory` | `npx -y @agentmemory/mcp < /dev/null` exits promptly with code 0 |
+| `codegraph` | `npx -y @colbymchenry/codegraph serve --mcp < /dev/null` exits promptly |
+| `context7` | `npx -y @upstash/context7-mcp < /dev/null` exits promptly |
+| `websearch` | With `EXA_API_KEY`: `npx -y exa-mcp-server < /dev/null` exits promptly. Without: remote URL `https://mcp.exa.ai/mcp` is reachable |
 | `github` / `grep_app` | Check if `GITHUB_TOKEN` env var is set. If set, github MCP should work. If not, grep_app fallback is used. |
+
+Do NOT probe local (stdio) MCP servers with `--help` — they ignore the flag
+and block on stdin forever. Stdio servers exit cleanly on stdin EOF, so
+redirect `< /dev/null` instead. A cold npx cache can make the first run slow
+(package download); that is normal and not a hang.
 
 Report which MCPs are configured and whether the token/key is present.
 
