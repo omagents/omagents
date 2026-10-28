@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-10-28
+
+### Fixed
+
+- **Local MCP startup timeout (V2)**: built-in local MCP servers (`agentmemory`, `codegraph`, `context7`, and `websearch` when `EXA_API_KEY` is set) are registered with `timeout: { startup: 180s }`. On a cold npx cache, `npx -y <pkg>` must download the package before the server can answer the MCP initialize handshake, which can exceed the host's default startup timeout (~30s). Worse, killing the timed-out process mid-download never populates the npx cache, so every subsequent startup failed identically (`mcp connect failed: Request timed out`). Warm-cache startups are unaffected (sub-second). Remote servers and the V1 registration path are unchanged; a user-defined `timeout` in a builtin's config is respected.
+
+- **doctor skill**: the MCP connectivity checks probed stdio servers with `--help`, which those servers ignore — they block on stdin forever, so the check itself hung. The checks now redirect `< /dev/null` (stdio MCP servers exit cleanly on stdin EOF), and the context7/websearch rows reflect the local-first registration from v0.11.0.
+
 ## [0.11.0] - 2026-09-30
 
 ### Changed
