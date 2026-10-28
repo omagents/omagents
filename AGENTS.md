@@ -133,6 +133,8 @@ Registered automatically (V1: `config` hook; V2: `ctx.mcp.transform`). User conf
 | `github` | remote | `https://api.githubcopilot.com/mcp/` (requires `GITHUB_TOKEN`) |
 | `grep_app` | remote | `https://mcp.grep.app` (fallback when no `GITHUB_TOKEN`) |
 
+On the V2 path, local servers are registered with `timeout: { startup: 180s }` (`toV2McpConfig` in `.opencode/plugins/index.js`) because `npx -y <pkg>` must download the package before the server can answer the MCP initialize handshake on a cold npx cache. The V1 path and `mcp-servers/base.json` keep the plain V1 shape.
+
 ## Skills
 
 ### OmAgents Skills (18)
@@ -267,6 +269,9 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | 0.9.1 | v0.9.1 | Fix: move OpenCode setup script out of auto-discovered `.opencode/plugins/` (startup crash in this repo); gitignore host-generated SDK artifacts |
 | 0.9.2 | v0.9.2 | Fix: package `main` back to plugin entry — CLI wrapper as `main` made `opencode run` exit(1) on plugin load (0.7.0–0.9.1) |
 | 0.10.0 | v0.10.0 | OpenCode 2.x support: dual V1/V2 plugin entry (`{ id, server, setup }`), V2 wiring for skills/MCPs/tools/hooks, parallel engine on native `subagent` tool, hook idempotency fixes |
+| 0.10.1 | v0.10.1 | Fix: self-repo dedup guard — published package yields to the repo's local checkout when running inside this repo |
+| 0.11.0 | v0.11.0 | Local-first MCP registration: context7 always local (`@upstash/context7-mcp`), websearch local (`exa-mcp-server`) when `EXA_API_KEY` is set |
+| 0.11.1 | v0.11.1 | Fix: V2 local MCP servers get `timeout: { startup: 180s }` (cold npx cache exceeded the host startup timeout, killing the download mid-way so every startup failed); doctor skill stdio probes no longer hang |
 
 ## Design Principles
 

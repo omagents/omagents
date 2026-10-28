@@ -149,6 +149,12 @@ test("V2 setup registers built-in MCP servers in V2 shape", async () => {
     for (const [name, cfg] of Object.entries(captured.mcps)) {
       assert.ok(!("enabled" in cfg), `MCP "${name}" must not carry the V1 'enabled' field`)
       assert.ok(cfg.type === "local" || cfg.type === "remote", `MCP "${name}" has a valid type`)
+      if (cfg.type === "local") {
+        assert.ok(
+          cfg.timeout?.startup >= 60_000,
+          `local MCP "${name}" should carry a generous startup timeout (cold npx cache)`
+        )
+      }
     }
   } finally {
     if (typeof cleanup === "function") await cleanup()

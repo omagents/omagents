@@ -426,10 +426,19 @@ function collectSkillInfos() {
   return skills
 }
 
+// npx-based local MCP servers download their package on first run, which can
+// exceed the host's default MCP startup timeout on a cold npx cache. Worse,
+// a killed download never populates the cache, so every startup then fails
+// identically. Give local servers a generous startup timeout (V2 shape).
+const LOCAL_MCP_STARTUP_TIMEOUT_MS = 180_000
+
 // Convert the V1-shaped built-in MCP definitions ({ type, command|url,
 // enabled, ... }) to the V2 Mcp.ServerConfig shape (no `enabled` field).
 function toV2McpConfig(def) {
   const { enabled, ...rest } = def
+  if (def.type === "local" && !rest.timeout) {
+    rest.timeout = { startup: LOCAL_MCP_STARTUP_TIMEOUT_MS }
+  }
   return rest
 }
 
