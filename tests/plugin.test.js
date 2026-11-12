@@ -145,17 +145,22 @@ test("context7 registers without environment when CONTEXT7_API_KEY is unset", ()
   assert.strictEqual(mcps.context7.environment, undefined)
 })
 
-test("with EXA_API_KEY, websearch registers as local exa-mcp-server", () => {
+test("with EXA_API_KEY, websearch stays remote and uses x-api-key authentication", () => {
   const mcps = getRegisteredMcps({ EXA_API_KEY: "fake-exa-key-for-test" })
-  assert.strictEqual(mcps.websearch.type, "local", "websearch should be local with EXA_API_KEY")
-  assert.deepStrictEqual(mcps.websearch.command, ["npx", "-y", "exa-mcp-server"])
-  assert.strictEqual(mcps.websearch.environment.EXA_API_KEY, "fake-exa-key-for-test")
+  assert.strictEqual(mcps.websearch.type, "remote", "websearch should stay remote with EXA_API_KEY")
+  assert.strictEqual(mcps.websearch.url, "https://mcp.exa.ai/mcp")
+  assert.strictEqual(mcps.websearch.headers["x-api-key"], "fake-exa-key-for-test")
+  assert.strictEqual(mcps.websearch.oauth, false)
+  assert.strictEqual(mcps.websearch.command, undefined)
+  assert.strictEqual(mcps.websearch.environment, undefined)
 })
 
-test("without EXA_API_KEY, websearch stays on the remote exa endpoint", () => {
+test("without EXA_API_KEY, websearch uses the anonymous remote exa endpoint", () => {
   const mcps = getRegisteredMcps({ EXA_API_KEY: "" })
   assert.strictEqual(mcps.websearch.type, "remote", "websearch should stay remote without a key")
   assert.strictEqual(mcps.websearch.url, "https://mcp.exa.ai/mcp")
+  assert.strictEqual(mcps.websearch.headers, undefined)
+  assert.strictEqual(mcps.websearch.environment, undefined)
 })
 
 test("Codex setup exists and exports installCodex", async () => {

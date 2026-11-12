@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Websearch always uses the hosted Exa MCP**: `https://mcp.exa.ai/mcp` remains the endpoint for every configuration. Anonymous access works without setup; setting `EXA_API_KEY` now adds an `x-api-key` header to the remote MCP for authenticated, higher-limit access instead of launching a local `exa-mcp-server` process.
+
 ## [0.13.0] - 2026-11-12
 
 ### Changed

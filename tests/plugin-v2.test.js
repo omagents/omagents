@@ -153,16 +153,18 @@ test("V2 setup registers built-in MCP servers in V2 shape", async () => {
       assert.ok(captured.mcps.grep_app, "grep_app should be registered without GITHUB_TOKEN")
       assert.ok(!captured.mcps.github)
     }
-    // context7 always runs locally; websearch goes local only with EXA_API_KEY
     assert.strictEqual(captured.mcps.context7.type, "local", "context7 should register as local")
+    assert.strictEqual(
+      captured.mcps.websearch.type,
+      "remote",
+      "websearch always uses the remote endpoint"
+    )
+    assert.strictEqual(captured.mcps.websearch.url, "https://mcp.exa.ai/mcp")
     if (process.env.EXA_API_KEY) {
-      assert.strictEqual(captured.mcps.websearch.type, "local", "websearch local with EXA_API_KEY")
+      assert.strictEqual(captured.mcps.websearch.headers["x-api-key"], process.env.EXA_API_KEY)
+      assert.strictEqual(captured.mcps.websearch.oauth, false)
     } else {
-      assert.strictEqual(
-        captured.mcps.websearch.type,
-        "remote",
-        "websearch stays on the remote endpoint without EXA_API_KEY"
-      )
+      assert.strictEqual(captured.mcps.websearch.headers, undefined)
     }
     for (const [name, cfg] of Object.entries(captured.mcps)) {
       assert.ok(!("enabled" in cfg), `MCP "${name}" must not carry the V1 'enabled' field`)

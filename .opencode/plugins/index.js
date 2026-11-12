@@ -42,13 +42,14 @@ BUILTIN_MCPS.context7 = {
     : {}),
 }
 
-// websearch (exa): the local MCP server requires EXA_API_KEY to start; when
-// no key is available, keep the free hosted endpoint from base.json.
+// websearch (exa): always use the hosted MCP. Anonymous access works without
+// setup; an API key enables authenticated, higher-limit access on the same URL.
 if (process.env.EXA_API_KEY) {
   BUILTIN_MCPS.websearch = {
-    type: "local",
-    command: ["npx", "-y", "exa-mcp-server"],
-    environment: { EXA_API_KEY: process.env.EXA_API_KEY },
+    type: "remote",
+    url: "https://mcp.exa.ai/mcp",
+    oauth: false,
+    headers: { "x-api-key": process.env.EXA_API_KEY },
     enabled: true,
   }
 }

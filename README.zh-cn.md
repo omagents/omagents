@@ -93,7 +93,7 @@ export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-- **`EXA_API_KEY`**：使 `websearch` 切换为本地运行的 `exa-mcp-server`。未设置时回退到 Exa 免费托管端点 `mcp.exa.ai/mcp`。
+- **`EXA_API_KEY`**：通过 `x-api-key` Header 为托管的 `websearch` MCP 提供鉴权和更高限额。未设置时，同一个 `mcp.exa.ai/mcp` 端点以匿名方式使用。
 - **`CONTEXT7_API_KEY`**：可选——`context7` 始终通过 `@upstash/context7-mcp` 本地运行，设置此 key 可提高速率限制。
 - **`GITHUB_TOKEN`**：启用完整的 GitHub Copilot MCP（issues、PRs、repos、code search）。未设置时，OmAgents 会回退到 Vercel 的 `mcp.grep.app`，仅支持公开代码搜索。
 
@@ -244,7 +244,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 | `agentmemory` | Local | Session 记忆和审计 |
 | `codegraph` | Local | 代码库符号图和探索 |
 | `context7` | Local | 通过 `@upstash/context7-mcp` 进行文档搜索（可选 `CONTEXT7_API_KEY` 提高速率限制） |
-| `websearch` | Local / Remote | 设置 `EXA_API_KEY` 时本地运行 `exa-mcp-server`；否则使用 Exa 免费托管端点 |
+| `websearch` | Remote | 使用 Exa 托管 MCP；默认匿名，设置 `EXA_API_KEY` 时通过 `x-api-key` 鉴权 |
 | `github` / `grep_app` | Remote | 设置 `GITHUB_TOKEN` 时使用 GitHub Copilot MCP；否则使用 `mcp.grep.app` 进行公开代码搜索 |
 
 ### Parallel Execution

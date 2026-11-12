@@ -39,7 +39,7 @@ Each MCP server should be reachable. Check:
 | `agentmemory` | `npx -y @agentmemory/mcp < /dev/null` exits promptly with code 0 |
 | `codegraph` | `npx -y @colbymchenry/codegraph serve --mcp < /dev/null` exits promptly |
 | `context7` | `npx -y @upstash/context7-mcp < /dev/null` exits promptly |
-| `websearch` | With `EXA_API_KEY`: `npx -y exa-mcp-server < /dev/null` exits promptly. Without: remote URL `https://mcp.exa.ai/mcp` is reachable |
+| `websearch` | Remote URL `https://mcp.exa.ai/mcp` is reachable; when `EXA_API_KEY` is set, the registered config includes an `x-api-key` header |
 | `github` / `grep_app` | Check if `GITHUB_TOKEN` env var is set. If set, github MCP should work. If not, grep_app fallback is used. |
 
 Do NOT probe local (stdio) MCP servers with `--help` — they ignore the flag

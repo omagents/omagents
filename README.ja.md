@@ -93,7 +93,7 @@ export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-- **`EXA_API_KEY`**: `websearch`をローカル実行の`exa-mcp-server`に切り替えます。未設定の場合はExaの無料ホストエンドポイント`mcp.exa.ai/mcp`にフォールバックします。
+- **`EXA_API_KEY`**: ホスト型`websearch` MCPの`x-api-key`ヘッダーで認証し、上限を引き上げます。未設定の場合も同じ`mcp.exa.ai/mcp`エンドポイントを匿名で使用します。
 - **`CONTEXT7_API_KEY`**: オプション — `context7`は常に`@upstash/context7-mcp`でローカル実行され、keyでレート制限が緩和されます。
 - **`GITHUB_TOKEN`**: 完全なGitHub Copilot MCP（issues、PRs、repos、code search）が有効になります。未設定の場合、OmAgentsは公開コード検索のみのVercelの`mcp.grep.app`にフォールバックします。
 
@@ -244,7 +244,7 @@ loop_engine.py add <skill> '<task_json>'      # 既存キューにタスクを�
 | `agentmemory` | Local | Session memoryとaudit |
 | `codegraph` | Local | コードベースのsymbol graph・探索 |
 | `context7` | Local | `@upstash/context7-mcp`によるドキュメント検索（オプションの`CONTEXT7_API_KEY`でレート制限緩和） |
-| `websearch` | Local / Remote | `EXA_API_KEY`設定時は`exa-mcp-server`をローカル実行; 未設定時はExaの無料ホストエンドポイント |
+| `websearch` | Remote | ExaホストMCP; デフォルトは匿名、`EXA_API_KEY`設定時は`x-api-key`で認証 |
 | `github` / `grep_app` | Remote | `GITHUB_TOKEN`設定時にGitHub Copilot MCP; 未設定時は公開コード検索用`mcp.grep.app` |
 
 ### 並列実行
