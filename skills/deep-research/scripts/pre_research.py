@@ -23,9 +23,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from layout import LayoutError, ResearchLayout
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
 LOOP_ENGINE = SKILL_DIR.parent / "_shared" / "scripts" / "loop_engine.py"
-PRE_SKILL_KEY = "deep-research-pre"
 
 DEFAULT_MAX_PRE_LOOPS = 2
 DEFAULT_MIN_CANDIDATES = 5
@@ -62,7 +63,7 @@ def _run_loop(cmd: list[str]) -> str:
 
 
 def _workspace_pre_findings_dir(workspace: Path) -> Path:
-    d = workspace / "pre_findings"
+    d = ResearchLayout.resolve(workspace).pre_findings_dir
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -84,6 +85,7 @@ def _load_pre_findings(workspace: Path) -> list[dict[str, Any]]:
 def cmd_init(args: argparse.Namespace) -> int:
     """Initialize the pre-research loop with a broad search task."""
     workspace = Path(args.workspace)
+    layout = ResearchLayout.resolve(workspace)
     workspace.mkdir(parents=True, exist_ok=True)
 
     query = args.query
@@ -107,7 +109,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     ]
 
     task_json = json.dumps(initial_tasks, ensure_ascii=False)
-    _run_loop([sys.executable, str(LOOP_ENGINE), "init", PRE_SKILL_KEY, task_json])
+    _run_loop([
+        sys.executable,
+        str(LOOP_ENGINE),
+        "init",
+        layout.loop_skill(pre=True),
+        task_json,
+    ])
 
     state = {
         "query": query,
@@ -115,7 +123,9 @@ def cmd_init(args: argparse.Namespace) -> int:
         "workspace": str(workspace),
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
-    (workspace / "pre_research_state.json").write_text(
+    state_path = layout.pre_research_state_path
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
         json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
@@ -134,7 +144,13 @@ def cmd_next(args: argparse.Namespace) -> int:
     Outputs just the task JSON (or null), consistent with loop_engine.
     The orchestrator wraps it with instructions.
     """
-    output = _run_loop([sys.executable, str(LOOP_ENGINE), "next", PRE_SKILL_KEY])
+    layout = ResearchLayout.resolve(args.workspace)
+    output = _run_loop([
+        sys.executable,
+        str(LOOP_ENGINE),
+        "next",
+        layout.loop_skill(pre=True),
+    ])
     if not output or output == "null":
         print("null")
         return 0
@@ -152,7 +168,15 @@ def cmd_next(args: argparse.Namespace) -> int:
 def cmd_complete(args: argparse.Namespace) -> int:
     """Mark a pre-research task complete."""
     result = args.result if args.result else "Pre-research search completed"
-    _run_loop([sys.executable, str(LOOP_ENGINE), "complete", PRE_SKILL_KEY, args.task_id, result])
+    layout = ResearchLayout.resolve(args.workspace)
+    _run_loop([
+        sys.executable,
+        str(LOOP_ENGINE),
+        "complete",
+        layout.loop_skill(pre=True),
+        args.task_id,
+        result,
+    ])
     print(f"Pre-research task {args.task_id} completed.")
     return 0
 
@@ -160,7 +184,8 @@ def cmd_complete(args: argparse.Namespace) -> int:
 def cmd_evaluate(args: argparse.Namespace) -> int:
     """Evaluate pre-research coverage and add tasks if needed."""
     workspace = Path(args.workspace)
-    state_path = workspace / "pre_research_state.json"
+    layout = ResearchLayout.resolve(workspace)
+    state_path = layout.pre_research_state_path
     if not state_path.exists():
         print(json.dumps({"should_continue": False, "reason": "No pre-research state found"}))
         return 0
@@ -168,7 +193,12 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     state = json.loads(state_path.read_text(encoding="utf-8"))
     max_loops = state.get("max_pre_loops", DEFAULT_MAX_PRE_LOOPS)
 
-    loop_status = _run_loop([sys.executable, str(LOOP_ENGINE), "status", PRE_SKILL_KEY])
+    loop_status = _run_loop([
+        sys.executable,
+        str(LOOP_ENGINE),
+        "status",
+        layout.loop_skill(pre=True),
+    ])
     findings = _load_pre_findings(workspace)
 
     all_candidates: list[dict[str, Any]] = []
@@ -214,7 +244,13 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
             ),
             "iteration": next_loop,
         }
-        _run_loop([sys.executable, str(LOOP_ENGINE), "add", PRE_SKILL_KEY, json.dumps(new_task, ensure_ascii=False)])
+        _run_loop([
+            sys.executable,
+            str(LOOP_ENGINE),
+            "add",
+            layout.loop_skill(pre=True),
+            json.dumps(new_task, ensure_ascii=False),
+        ])
         state["loops_completed"] = next_loop
         state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
         reasons.append(f"Added targeted search task pre-{next_loop + 1}")
@@ -233,9 +269,10 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
 def cmd_finalize(args: argparse.Namespace) -> int:
     """Merge all pre-research findings into pre_research.json."""
     workspace = Path(args.workspace)
+    layout = ResearchLayout.resolve(workspace)
     findings = _load_pre_findings(workspace)
 
-    state_path = workspace / "pre_research_state.json"
+    state_path = layout.pre_research_state_path
     state = {}
     if state_path.exists():
         state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -268,10 +305,16 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         "finding_count": len(findings),
     }
 
-    output_path = workspace / "pre_research.json"
+    output_path = layout.pre_research_path
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(pre_research, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    _run_loop([sys.executable, str(LOOP_ENGINE), "reset", PRE_SKILL_KEY])
+    _run_loop([
+        sys.executable,
+        str(LOOP_ENGINE),
+        "reset",
+        layout.loop_skill(pre=True),
+    ])
 
     print(json.dumps({
         "action": "pre_research_finalized",
@@ -285,7 +328,13 @@ def cmd_finalize(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Print pre-research loop status."""
-    output = _run_loop([sys.executable, str(LOOP_ENGINE), "status", PRE_SKILL_KEY])
+    layout = ResearchLayout.resolve(args.workspace)
+    output = _run_loop([
+        sys.executable,
+        str(LOOP_ENGINE),
+        "status",
+        layout.loop_skill(pre=True),
+    ])
     print(output)
     return 0
 
@@ -321,6 +370,7 @@ def main() -> int:
     finalize_parser.set_defaults(func=cmd_finalize)
 
     status_parser = subparsers.add_parser("status", help="Print loop status")
+    status_parser.add_argument("--workspace", "-w", required=True, help="Workspace directory")
     status_parser.set_defaults(func=cmd_status)
 
     args = parser.parse_args()
@@ -328,4 +378,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except LayoutError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)

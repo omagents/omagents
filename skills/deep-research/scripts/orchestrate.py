@@ -19,11 +19,15 @@ Phases:
 from __future__ import annotations
 
 import json
+import os
+import shlex
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from layout import LayoutError, ResearchLayout
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
@@ -33,6 +37,23 @@ PRE_RESEARCH_SCRIPT = SCRIPTS_DIR / "pre_research.py"
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def command_arg(value: str | Path) -> str:
+    if os.name == "nt":
+        return "'" + str(value).replace("'", "''") + "'"
+    return shlex.quote(str(value))
+
+
+def shell_name() -> str:
+    return "powershell" if os.name == "nt" else "posix"
+
+
+def resume_command(layout: ResearchLayout) -> dict[str, Any]:
+    return {
+        "executable": "deep_research.py",
+        "args": ["run-all", "--resume", "--workspace", str(layout.workspace)],
+    }
 
 
 def _current_date_string() -> str:
@@ -56,22 +77,26 @@ def _run_capture(cmd: list[str]) -> str:
     return result.stdout.strip()
 
 
-def state_path(workspace: Path) -> Path:
-    return workspace / "orchestration_state.json"
+def state_path(layout: ResearchLayout) -> Path:
+    return layout.orchestration_state_path
 
 
-def load_state(workspace: Path) -> dict[str, Any] | None:
-    path = state_path(workspace)
+def load_state(layout: ResearchLayout) -> dict[str, Any] | None:
+    path = state_path(layout)
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
         return None
+    if not isinstance(state, dict) or not isinstance(state.get("phase"), str):
+        return None
+    return state
 
 
-def save_state(workspace: Path, state: dict[str, Any]) -> None:
-    path = state_path(workspace)
+def save_state(layout: ResearchLayout, state: dict[str, Any]) -> None:
+    path = state_path(layout)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -79,10 +104,10 @@ def save_state(workspace: Path, state: dict[str, Any]) -> None:
 # Loop engine helpers
 # ---------------------------------------------------------------------------
 
-def get_next_task() -> dict[str, Any] | None:
+def get_next_task(layout: ResearchLayout) -> dict[str, Any] | None:
     """Check loop_engine for the next pending task."""
     result = subprocess.run(
-        [sys.executable, str(LOOP_ENGINE), "next", "deep-research"],
+        [sys.executable, str(LOOP_ENGINE), "next", layout.loop_skill()],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -96,18 +121,18 @@ def get_next_task() -> dict[str, Any] | None:
         return None
 
 
-def get_pending_tasks(batch_size: int) -> list[dict[str, Any]]:
+def get_pending_tasks(batch_size: int, layout: ResearchLayout) -> list[dict[str, Any]]:
     """Get up to batch_size pending tasks from the loop engine."""
     tasks: list[dict[str, Any]] = []
     for _ in range(batch_size):
-        task = get_next_task()
+        task = get_next_task(layout)
         if task is None:
             break
         tasks.append(task)
     return tasks
 
 
-def init_loop_engine(tasks: list[dict[str, Any]]) -> None:
+def init_loop_engine(tasks: list[dict[str, Any]], layout: ResearchLayout) -> None:
     """Initialize the loop engine with research tasks."""
     task_list = [
         {
@@ -121,12 +146,12 @@ def init_loop_engine(tasks: list[dict[str, Any]]) -> None:
         for t in tasks
     ]
     subprocess.run(
-        [sys.executable, str(LOOP_ENGINE), "init", "deep-research", json.dumps(task_list)],
+        [sys.executable, str(LOOP_ENGINE), "init", layout.loop_skill(), json.dumps(task_list)],
         check=False,
     )
 
 
-def add_gap_tasks(new_tasks: list[dict[str, Any]]) -> None:
+def add_gap_tasks(new_tasks: list[dict[str, Any]], layout: ResearchLayout) -> None:
     """Add gap-fill tasks to the loop engine."""
     for task in new_tasks:
         task_json = json.dumps({
@@ -138,7 +163,7 @@ def add_gap_tasks(new_tasks: list[dict[str, Any]]) -> None:
             "description": task.get("focus", ""),
         })
         subprocess.run(
-            [sys.executable, str(LOOP_ENGINE), "add", "deep-research", task_json],
+            [sys.executable, str(LOOP_ENGINE), "add", layout.loop_skill(), task_json],
             check=False,
         )
 
@@ -147,9 +172,11 @@ def add_gap_tasks(new_tasks: list[dict[str, Any]]) -> None:
 # Pre-research helpers
 # ---------------------------------------------------------------------------
 
-def pre_research_next(workspace: Path) -> dict[str, Any] | None:
+def pre_research_next(
+    workspace: Path, layout: ResearchLayout
+) -> dict[str, Any] | None:
     """Get next pending pre-research task."""
-    output = _run_capture([sys.executable, str(PRE_RESEARCH_SCRIPT), "next", "-w", str(workspace)])
+    output = _run_capture([sys.executable, str(PRE_RESEARCH_SCRIPT), "next", "-w", str(layout.workspace)])
     if not output or output == "null":
         return None
     try:
@@ -158,36 +185,42 @@ def pre_research_next(workspace: Path) -> dict[str, Any] | None:
         return None
 
 
-def pre_research_init(workspace: Path, query: str, max_loops: int = 2) -> None:
+def pre_research_init(
+    workspace: Path, query: str, layout: ResearchLayout, max_loops: int = 2
+) -> None:
     """Initialize pre-research loop."""
     subprocess.run([
         sys.executable, str(PRE_RESEARCH_SCRIPT), "init",
-        "-q", query, "-w", str(workspace),
+        "-q", query, "-w", str(layout.workspace),
         "--max-loops", str(max_loops),
     ], check=False)
 
 
-def pre_research_complete(workspace: Path, task_id: str) -> None:
+def pre_research_complete(
+    workspace: Path, task_id: str, layout: ResearchLayout
+) -> None:
     """Complete a pre-research task."""
     subprocess.run([
         sys.executable, str(PRE_RESEARCH_SCRIPT), "complete",
-        task_id, "-w", str(workspace),
+        task_id, "-w", str(layout.workspace),
     ], check=False)
 
 
-def pre_research_evaluate(workspace: Path) -> dict[str, Any]:
+def pre_research_evaluate(
+    workspace: Path, layout: ResearchLayout
+) -> dict[str, Any]:
     """Evaluate pre-research coverage."""
-    output = _run_capture([sys.executable, str(PRE_RESEARCH_SCRIPT), "evaluate", "-w", str(workspace)])
+    output = _run_capture([sys.executable, str(PRE_RESEARCH_SCRIPT), "evaluate", "-w", str(layout.workspace)])
     try:
         return json.loads(output)
     except json.JSONDecodeError:
         return {"should_continue": False}
 
 
-def pre_research_finalize(workspace: Path) -> None:
+def pre_research_finalize(workspace: Path, layout: ResearchLayout) -> None:
     """Finalize pre-research into pre_research.json."""
     subprocess.run([
-        sys.executable, str(PRE_RESEARCH_SCRIPT), "finalize", "-w", str(workspace),
+        sys.executable, str(PRE_RESEARCH_SCRIPT), "finalize", "-w", str(layout.workspace),
     ], check=False)
 
 
@@ -195,8 +228,18 @@ def pre_research_finalize(workspace: Path) -> None:
 # Dispatch helpers
 # ---------------------------------------------------------------------------
 
-def output_dispatch_instructions(tasks: list[dict[str, Any]], workspace: Path) -> None:
+def output_dispatch_instructions(
+    tasks: list[dict[str, Any]], workspace: Path, layout: ResearchLayout
+) -> None:
     """Output JSON instructions for the agent to dispatch subagents."""
+    tasks_with_paths = []
+    for task in tasks:
+        output_path = layout.findings_dir / f"{task['task_id']}.json"
+        tasks_with_paths.append({
+            **task,
+            "output_path": str(output_path),
+            "output_path_quoted": command_arg(output_path),
+        })
     date_str = _current_date_string()
     year_str = _current_year()
     date_context = f"Current date: {date_str}. Include '{year_str}' in search queries. Do NOT rely on training data. "
@@ -204,39 +247,64 @@ def output_dispatch_instructions(tasks: list[dict[str, Any]], workspace: Path) -
     if len(tasks) == 1:
         print(json.dumps({
             "action": "dispatch_subagent",
+            "workspace": str(layout.workspace),
+            "run_id": layout.run_id,
+            "findings_dir": str(layout.findings_dir),
+            "shell": shell_name(),
+            "workspace_quoted": command_arg(layout.workspace),
+            "resume_command": resume_command(layout),
             "current_date": date_str,
-            "task": tasks[0],
+            "task": tasks_with_paths[0],
             "instruction": (
                 date_context +
                 "Dispatch a subagent for the task above using task(background: true). "
                 "The subagent MUST search for the latest information and cite sources with dates. "
+                "Use the task's output_path and shell-safe output_path_quoted when writing findings. "
                 "After the subagent completes and findings are written, run: "
-                f"deep_research.py run-all --resume --workspace {workspace}"
+                f"deep_research.py run-all --resume --workspace {command_arg(layout.workspace)}"
             ),
         }, indent=2, ensure_ascii=False))
     else:
         print(json.dumps({
             "action": "dispatch_subagents_batch",
+            "workspace": str(layout.workspace),
+            "run_id": layout.run_id,
+            "findings_dir": str(layout.findings_dir),
+            "shell": shell_name(),
+            "workspace_quoted": command_arg(layout.workspace),
+            "resume_command": resume_command(layout),
             "current_date": date_str,
-            "tasks": tasks,
+            "tasks": tasks_with_paths,
             "instruction": (
                 date_context +
                 f"Dispatch a subagent for EACH task above using task(background: true). "
                 f"All {len(tasks)} tasks can run in parallel. "
                 "Each subagent MUST search for the latest information and cite sources with dates. "
+                "Use each task's output_path and shell-safe output_path_quoted when writing findings. "
                 "After all subagents complete and findings are written, run: "
-                f"deep_research.py run-all --resume --workspace {workspace}"
+                f"deep_research.py run-all --resume --workspace {command_arg(layout.workspace)}"
             ),
         }, indent=2, ensure_ascii=False))
 
 
-def output_pre_research_instructions(task_data: dict[str, Any], workspace: Path) -> None:
+def output_pre_research_instructions(
+    task_data: dict[str, Any], workspace: Path, layout: ResearchLayout
+) -> None:
     """Output JSON instructions for the agent to do pre-research search."""
     date_str = _current_date_string()
     year_str = _current_year()
     task_id = task_data.get("task_id", "pre-1")
+    output_path = layout.pre_findings_dir / f"{task_id}.json"
     print(json.dumps({
         "action": "pre_research_search",
+        "workspace": str(layout.workspace),
+        "run_id": layout.run_id,
+        "pre_findings_dir": str(layout.pre_findings_dir),
+        "output_path": str(output_path),
+        "output_path_quoted": command_arg(output_path),
+        "shell": shell_name(),
+        "workspace_quoted": command_arg(layout.workspace),
+        "resume_command": resume_command(layout),
         "current_date": date_str,
         "task": task_data,
         "instruction": (
@@ -246,8 +314,9 @@ def output_pre_research_instructions(task_data: dict[str, Any], workspace: Path)
             "Do NOT rely on your training data - it may be outdated. "
             "Extract key entities (models, frameworks, projects, etc.) with their latest versions, "
             "vendors, and source URLs. "
-            f"Write findings to {workspace}/pre_findings/{task_id}.json using a Bash command. "
-            f"After writing findings, run: deep_research.py run-all --resume --workspace {workspace}"
+            f"Write findings to {command_arg(output_path)} using a {shell_name()} shell command. "
+            "The same value is available as output_path and output_path_quoted. "
+            f"After writing findings, run: deep_research.py run-all --resume --workspace {command_arg(layout.workspace)}"
         ),
         "output_schema": {
             "task_id": task_id,
@@ -271,8 +340,22 @@ def run_all(
     skip_pre_research: bool = False,
 ) -> int:
     """Run the full research pipeline with pause/resume support."""
-    workspace.mkdir(parents=True, exist_ok=True)
-    state = load_state(workspace) if resume else None
+    layout = ResearchLayout.resolve(workspace)
+    if resume and not layout.orchestration_state_path.exists():
+        print(
+            f"Error: no orchestration checkpoint found for --resume in {layout.workspace}",
+            file=sys.stderr,
+        )
+        return 1
+
+    layout.workspace.mkdir(parents=True, exist_ok=True)
+    state = load_state(layout) if resume else None
+    if resume and state is None:
+        print(
+            f"Error: could not read orchestration checkpoint in {layout.workspace}",
+            file=sys.stderr,
+        )
+        return 1
 
     # Phase 0: Pre-research (Landscape Scan)
     if state is None and not skip_pre_research:
@@ -281,12 +364,13 @@ def run_all(
             "loop": 0,
             "query": query,
             "template": template,
-            "workspace": str(workspace),
+            "workspace": str(layout.workspace),
+            "run_id": layout.run_id,
             "started_at": now(),
         }
-        save_state(workspace, state)
+        save_state(layout, state)
 
-        pre_research_init(workspace, query)
+        pre_research_init(workspace, query, layout)
         print("Phase 0: Pre-research (landscape scan) initialized.")
 
     if state is None and skip_pre_research:
@@ -295,45 +379,46 @@ def run_all(
             "loop": 0,
             "query": query,
             "template": template,
-            "workspace": str(workspace),
+            "workspace": str(layout.workspace),
+            "run_id": layout.run_id,
             "started_at": now(),
         }
-        save_state(workspace, state)
+        save_state(layout, state)
 
     state["last_resumed_at"] = now()
-    save_state(workspace, state)
+    save_state(layout, state)
 
     # Phase 0: Pre-research
     if state["phase"] == "pre_research":
-        pre_task = pre_research_next(workspace)
+        pre_task = pre_research_next(workspace, layout)
         if pre_task:
-            output_pre_research_instructions(pre_task, workspace)
+            output_pre_research_instructions(pre_task, workspace, layout)
             return 0  # Pause - agent needs to do search
 
         # No more pending tasks, try to complete any in-progress
         # and evaluate
-        eval_result = pre_research_evaluate(workspace)
+        eval_result = pre_research_evaluate(workspace, layout)
         if eval_result.get("should_continue"):
-            pre_task = pre_research_next(workspace)
+            pre_task = pre_research_next(workspace, layout)
             if pre_task:
-                output_pre_research_instructions(pre_task, workspace)
+                output_pre_research_instructions(pre_task, workspace, layout)
                 return 0
 
         # Pre-research complete, finalize
-        pre_research_finalize(workspace)
+        pre_research_finalize(workspace, layout)
         print("Phase 0: Pre-research complete. pre_research.json generated.")
         state["phase"] = "planning"
-        save_state(workspace, state)
+        save_state(layout, state)
 
     # Phase 1: Planning
     if state["phase"] == "planning":
         print("Phase 1: Creating research plan...")
-        pre_research_path = workspace / "pre_research.json"
+        pre_research_path = layout.pre_research_path
         plan_template = state.get("template", template)
         plan_cmd = [
             "--query", state.get("query", query) or query,
             "--template", plan_template,
-            "--output", str(workspace / "plan.json"),
+            "--output", str(layout.plan_path),
         ]
         if pre_research_path.exists():
             plan_cmd.extend(["--pre-research", str(pre_research_path)])
@@ -341,88 +426,88 @@ def run_all(
         if rc != 0:
             return rc
 
-        plan = json.loads((workspace / "plan.json").read_text(encoding="utf-8"))
-        init_loop_engine(plan.get("tasks", []))
+        plan = json.loads(layout.plan_path.read_text(encoding="utf-8"))
+        init_loop_engine(plan.get("tasks", []), layout)
 
         state["phase"] = "dispatch"
-        save_state(workspace, state)
+        save_state(layout, state)
 
     # Phase 2: Dispatch / Research (batch-aware)
     if state["phase"] == "dispatch":
-        plan = json.loads((workspace / "plan.json").read_text(encoding="utf-8"))
+        plan = json.loads(layout.plan_path.read_text(encoding="utf-8"))
         batch_size = plan.get("config", {}).get("batch_size", 3)
 
-        pending = get_pending_tasks(batch_size)
+        pending = get_pending_tasks(batch_size, layout)
         if pending:
-            output_dispatch_instructions(pending, workspace)
+            output_dispatch_instructions(pending, workspace, layout)
             return 0  # Pause - agent needs to dispatch subagents
 
         state["phase"] = "gap_analysis"
-        save_state(workspace, state)
+        save_state(layout, state)
 
     # Phase 3: Gap Analysis
     if state["phase"] == "gap_analysis":
         print("Phase 3: Running gap analysis...")
         run_script("gap_analysis.py", [
-            "--plan", str(workspace / "plan.json"),
-            "--findings-dir", str(workspace / "findings"),
-            "--output", str(workspace / "gap_report.json"),
+            "--plan", str(layout.plan_path),
+            "--findings-dir", str(layout.findings_dir),
+            "--output", str(layout.gap_path),
         ])
 
-        gap_path = workspace / "gap_report.json"
+        gap_path = layout.gap_path
+        if layout.legacy and not gap_path.exists():
+            gap_path = layout.storage_dir / "gap_report.json"
         if gap_path.exists():
             try:
                 gap_report = json.loads(gap_path.read_text(encoding="utf-8"))
                 if gap_report.get("should_continue"):
-                    add_gap_tasks(gap_report.get("new_tasks", []))
+                    add_gap_tasks(gap_report.get("new_tasks", []), layout)
                     state["phase"] = "dispatch"
                     state["loop"] += 1
-                    save_state(workspace, state)
+                    save_state(layout, state)
                     plan_template = state.get("template", template)
                     return run_all(query, workspace, plan_template, resume=True, skip_pre_research=True)
             except json.JSONDecodeError:
                 pass
 
         state["phase"] = "merging"
-        save_state(workspace, state)
+        save_state(layout, state)
 
     # Phase 4: Merge
     if state["phase"] == "merging":
         print("Phase 4: Merging findings...")
-        artifacts = workspace / "artifacts"
-        artifacts.mkdir(parents=True, exist_ok=True)
+        layout.artifacts_dir.mkdir(parents=True, exist_ok=True)
         run_script("merge.py", [
-            "--input-dir", str(workspace / "findings"),
-            "--output", str(artifacts / "findings_merged.json"),
+            "--input-dir", str(layout.findings_dir),
+            "--output", str(layout.merged_path),
         ])
         state["phase"] = "reporting"
-        save_state(workspace, state)
+        save_state(layout, state)
 
     # Phase 5: Report
     if state["phase"] == "reporting":
         print("Phase 5: Generating report...")
         run_script("synthesize.py", [
-            "--plan", str(workspace / "plan.json"),
-            "--findings-dir", str(workspace / "findings"),
-            "--output", str(workspace / "report.md"),
+            "--plan", str(layout.plan_path),
+            "--findings-dir", str(layout.findings_dir),
+            "--output", str(layout.report_path),
         ])
         state["phase"] = "polishing"
-        save_state(workspace, state)
+        save_state(layout, state)
 
     # Phase 5b: Polish (LLM-powered, pauses for agent)
     if state["phase"] == "polishing":
         print("Phase 5b: Preparing report for LLM polishing...")
-        report_path = workspace / "report.md"
-        artifacts = workspace / "artifacts"
-        artifacts.mkdir(parents=True, exist_ok=True)
-        raw_path = artifacts / "report_raw.md"
+        report_path = layout.report_path
+        layout.artifacts_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = layout.raw_report_path
 
         if report_path.exists():
             import shutil
             shutil.copy2(report_path, raw_path)
 
         plan: dict[str, Any] = {}
-        plan_path = workspace / "plan.json"
+        plan_path = layout.plan_path
         if plan_path.exists():
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
 
@@ -444,39 +529,38 @@ def run_all(
             "plan_context": plan_context,
             "prompt_file": str(polish_prompt),
             "instruction": (
-                "Read the raw report at artifacts/report_raw.md and the plan context above. "
+                f"Read the raw report at {raw_path} and the plan context above. "
                 "Rewrite the report into a polished, coherent narrative following "
-                "the polish prompt file. Save the polished version to report.md "
+                f"the polish prompt file. Save the polished version to {report_path} "
                 "(overwrite). Keep SVG charts and source citations intact. "
                 "After polishing, run: deep_research.py run-all --resume --workspace "
-                + str(workspace)
+                + command_arg(layout.workspace)
             ),
         }, indent=2, ensure_ascii=False))
         state["phase"] = "auditing"
-        save_state(workspace, state)
+        save_state(layout, state)
         return 0  # Pause - agent needs to polish
 
     # Phase 6: Audit
     if state["phase"] == "auditing":
         print("Phase 6: Running integrity audit...")
-        artifacts = workspace / "artifacts"
-        artifacts.mkdir(parents=True, exist_ok=True)
+        layout.artifacts_dir.mkdir(parents=True, exist_ok=True)
         run_script("audit.py", [
-            "--plan", str(workspace / "plan.json"),
-            "--findings-dir", str(workspace / "findings"),
-            "--output", str(artifacts / "audit_report.json"),
+            "--plan", str(layout.plan_path),
+            "--findings-dir", str(layout.findings_dir),
+            "--output", str(layout.audit_path),
         ])
         state["phase"] = "packaging"
-        save_state(workspace, state)
+        save_state(layout, state)
 
     # Phase 7: Package
     if state["phase"] == "packaging":
         print("Phase 7: Generating artifact package...")
-        run_script("package.py", ["--workspace", str(workspace)])
+        run_script("package.py", ["--workspace", str(layout.workspace)])
         state["phase"] = "done"
-        save_state(workspace, state)
+        save_state(layout, state)
         print(f"\n{'=' * 50}")
-        print(f"Research complete! Report: {workspace / 'report.md'}")
+        print(f"Research complete! Report: {layout.report_path}")
         print(f"{'=' * 50}")
         return 0
 
@@ -485,18 +569,19 @@ def run_all(
 
 def get_status(workspace: Path) -> dict[str, Any]:
     """Check workspace state and return current status."""
-    state = load_state(workspace)
+    layout = ResearchLayout.resolve(workspace)
+    state = load_state(layout)
     if state is None:
         return {
             "phase": "not_started",
             "message": "No orchestration state found. Run 'run-all' to start.",
         }
 
-    plan_exists = (workspace / "plan.json").exists()
-    report_exists = (workspace / "report.md").exists()
-    pre_research_exists = (workspace / "pre_research.json").exists()
-    audit_exists = (workspace / "artifacts" / "audit_report.json").exists()
-    package_exists = (workspace / "artifacts" / "package.json").exists()
+    plan_exists = layout.plan_path.exists()
+    report_exists = layout.report_path.exists()
+    pre_research_exists = layout.pre_research_path.exists()
+    audit_exists = layout.audit_path.exists()
+    package_exists = layout.package_path.exists()
 
     return {
         "phase": state.get("phase", "unknown"),
@@ -573,4 +658,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except LayoutError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)

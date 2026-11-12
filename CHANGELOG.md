@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Deep Research deliverable/state separation**: `--workspace` now contains only public deliverables and a human-readable `README.md` index. New runs store plans, raw findings, curated inputs, derived artifacts, checkpoints, and provenance under `.omagents/deep-research/<run-id>/`; main and pre-research loop queues are isolated by the same run ID. Existing legacy workspaces retain their original paths and loop keys without automatic migration.
+- **Deep Research packaging**: machine manifests track internal files separately from the public deliverable index. Custom Markdown deliverables are preserved, and README links resolve relative to the README's actual location.
+
+### Fixed
+
+- **Deep Research path consistency**: new provenance always uses `<run-dir>/logs/provenance.jsonl` instead of depending on whether `artifacts/` exists; legacy root/`artifacts/` timelines are combined on read. Gap analysis and audit readers now use the same canonical internal paths with legacy root fallback. Workspaces named `artifacts` keep their correct anchor.
+- **Deep Research input and instruction safety**: new runs whose public workspace would contain internal storage are rejected before writing. Agent output paths include shell-specific quoting and structured resume argv, Markdown deliverable links are URL-encoded, and malformed required plan/checkpoint JSON fails clearly instead of producing empty manifests or tracebacks.
+
 ## [0.12.0] - 2026-11-12
 
 ### Added

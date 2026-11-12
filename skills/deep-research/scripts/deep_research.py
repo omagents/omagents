@@ -7,23 +7,28 @@ merge, synthesize) into a single command-line entry point.
 Typical workflow:
 
     deep_research.py plan --query "..." --workspace agent-frameworks
-    # run research subagents, writing findings to <workspace>/findings/
+    # run research subagents, writing findings to the internal run's findings/
     deep_research.py gaps --workspace agent-frameworks   # optional loop
     deep_research.py merge --workspace agent-frameworks
     deep_research.py report --workspace agent-frameworks
 
-If --workspace is omitted, the CLI defaults to the current working directory.
+If --workspace is omitted, the CLI defaults to the current working directory for
+legacy operations. New runs reject a workspace that would contain .omagents.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+from layout import LayoutError, ResearchLayout
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
@@ -36,6 +41,17 @@ def resolve_workspace(args: argparse.Namespace) -> Path:
     return Path.cwd()
 
 
+def resolve_layout(args: argparse.Namespace) -> ResearchLayout:
+    return ResearchLayout.resolve(resolve_workspace(args))
+
+
+def command_arg(value: str | Path) -> str:
+    """Quote one path for a command printed to the user."""
+    if os.name == "nt":
+        return "'" + str(value).replace("'", "''") + "'"
+    return shlex.quote(str(value))
+
+
 def run_script(script_name: str, extra_args: list[str]) -> int:
     """Run a helper script with the current Python interpreter."""
     cmd = [sys.executable, str(SCRIPTS_DIR / script_name), *extra_args]
@@ -43,9 +59,9 @@ def run_script(script_name: str, extra_args: list[str]) -> int:
 
 
 def run_plan(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    workspace.mkdir(parents=True, exist_ok=True)
-    plan_path = workspace / "plan.json"
+    layout = resolve_layout(args)
+    layout.workspace.mkdir(parents=True, exist_ok=True)
+    plan_path = layout.plan_path
 
     cmd_args: list[str] = [
         "--query", args.query,
@@ -54,8 +70,11 @@ def run_plan(args: argparse.Namespace) -> int:
     ]
     if args.context:
         cmd_args.extend(["--context", args.context])
-    if args.pre_research:
-        cmd_args.extend(["--pre-research", args.pre_research])
+    pre_research = args.pre_research
+    if not pre_research and layout.pre_research_path.exists():
+        pre_research = str(layout.pre_research_path)
+    if pre_research:
+        cmd_args.extend(["--pre-research", pre_research])
     if args.max_loops is not None:
         cmd_args.extend(["--max-loops", str(args.max_loops)])
     if args.batch_size is not None:
@@ -68,11 +87,11 @@ def run_plan(args: argparse.Namespace) -> int:
 
 
 def run_add_items(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    plan_path = workspace / "plan.json"
+    layout = resolve_layout(args)
+    plan_path = layout.plan_path
 
     if not plan_path.exists():
-        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        print(f"Error: no plan.json found in {layout.workspace}", file=sys.stderr)
         return 1
 
     return run_script("plan.py", [
@@ -83,11 +102,11 @@ def run_add_items(args: argparse.Namespace) -> int:
 
 
 def run_add_fields(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    plan_path = workspace / "plan.json"
+    layout = resolve_layout(args)
+    plan_path = layout.plan_path
 
     if not plan_path.exists():
-        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        print(f"Error: no plan.json found in {layout.workspace}", file=sys.stderr)
         return 1
 
     return run_script("plan.py", [
@@ -97,32 +116,22 @@ def run_add_fields(args: argparse.Namespace) -> int:
     ])
 
 
-def _artifacts_dir(workspace: Path) -> Path:
-    """Return the artifacts directory, creating it if needed."""
-    d = workspace / "artifacts"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
 def run_merge(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    findings_dir = workspace / "findings"
-    output = _artifacts_dir(workspace) / "findings_merged.json"
-
+    layout = resolve_layout(args)
     return run_script("merge.py", [
-        "--input-dir", str(findings_dir),
-        "--output", str(output),
+        "--input-dir", str(layout.findings_dir),
+        "--output", str(layout.merged_path),
     ])
 
 
 def run_gaps(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    plan_path = workspace / "plan.json"
-    findings_dir = workspace / "findings"
-    output = _artifacts_dir(workspace) / "gap_report.json"
+    layout = resolve_layout(args)
+    plan_path = layout.plan_path
+    findings_dir = layout.findings_dir
+    output = layout.gap_path
 
     if not plan_path.exists():
-        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        print(f"Error: no plan.json found in {layout.workspace}", file=sys.stderr)
         return 1
 
     return run_script("gap_analysis.py", [
@@ -133,12 +142,12 @@ def run_gaps(args: argparse.Namespace) -> int:
 
 
 def run_validate(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    plan_path = workspace / "plan.json"
-    findings_path = workspace / "findings" / f"{args.task_id}.json"
+    layout = resolve_layout(args)
+    plan_path = layout.plan_path
+    findings_path = layout.findings_dir / f"{args.task_id}.json"
 
     if not plan_path.exists():
-        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        print(f"Error: no plan.json found in {layout.workspace}", file=sys.stderr)
         return 1
     if not findings_path.exists():
         print(f"Error: findings not found: {findings_path}", file=sys.stderr)
@@ -151,10 +160,10 @@ def run_validate(args: argparse.Namespace) -> int:
 
 
 def run_report(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    findings_dir = workspace / "findings"
-    plan_path = workspace / "plan.json"
-    output = workspace / "report.md"
+    layout = resolve_layout(args)
+    findings_dir = layout.findings_dir
+    plan_path = layout.plan_path
+    output = layout.report_path
 
     if not plan_path.exists() and not args.plan:
         print(
@@ -174,10 +183,11 @@ def run_report(args: argparse.Namespace) -> int:
 
 def run_polish(args: argparse.Namespace) -> int:
     """Prepare report for LLM polishing: backup raw, output instructions."""
-    workspace = resolve_workspace(args)
-    report_path = workspace / "report.md"
-    raw_path = _artifacts_dir(workspace) / "report_raw.md"
-    plan_path = workspace / "plan.json"
+    layout = resolve_layout(args)
+    report_path = layout.report_path
+    raw_path = layout.raw_report_path
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path = layout.plan_path
 
     if not report_path.exists():
         print("Error: no report.md found. Run `report` first.", file=sys.stderr)
@@ -207,9 +217,9 @@ def run_polish(args: argparse.Namespace) -> int:
         "plan_context": plan_context,
         "prompt_file": str(Path(__file__).resolve().parent.parent / "prompts" / "polish_report.md"),
         "instruction": (
-            "Read the raw report at report_raw.md and the plan context above. "
+            f"Read the raw report at {raw_path} and the plan context above. "
             "Rewrite the report into a polished, coherent narrative following "
-            "the polish prompt file. Save the polished version to report.md "
+            f"the polish prompt file. Save the polished version to {report_path} "
             "(overwrite). Keep SVG charts and source citations intact."
         ),
     }
@@ -228,13 +238,13 @@ def run_report_with_polish(args: argparse.Namespace) -> int:
 
 
 def run_audit(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    plan_path = workspace / "plan.json"
-    findings_dir = workspace / "findings"
-    output = _artifacts_dir(workspace) / "audit_report.json"
+    layout = resolve_layout(args)
+    plan_path = layout.plan_path
+    findings_dir = layout.findings_dir
+    output = layout.audit_path
 
     if not plan_path.exists():
-        print(f"Error: no plan.json found in {workspace}", file=sys.stderr)
+        print(f"Error: no plan.json found in {layout.workspace}", file=sys.stderr)
         return 1
 
     return run_script("audit.py", [
@@ -245,28 +255,28 @@ def run_audit(args: argparse.Namespace) -> int:
 
 
 def run_package(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    return run_script("package.py", ["--workspace", str(workspace)])
+    layout = resolve_layout(args)
+    return run_script("package.py", ["--workspace", str(layout.workspace)])
 
 
 def run_provenance(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
+    layout = resolve_layout(args)
     return run_script("provenance.py", [
-        "--workspace", str(workspace),
+        "--workspace", str(layout.workspace),
         "--format", args.format,
     ])
 
 
 def run_status(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
+    layout = resolve_layout(args)
     return run_script("orchestrate.py", [
-        "status", "--workspace", str(workspace),
+        "status", "--workspace", str(layout.workspace),
     ])
 
 
 def run_pipeline(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    extra_args = ["run-all", "--workspace", str(workspace)]
+    layout = resolve_layout(args)
+    extra_args = ["run-all", "--workspace", str(layout.workspace)]
     if args.resume:
         extra_args.append("--resume")
     elif args.query:
@@ -283,10 +293,11 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
 def run_scan(args: argparse.Namespace) -> int:
     """Run pre-research landscape scan."""
-    workspace = resolve_workspace(args)
-    workspace.mkdir(parents=True, exist_ok=True)
+    layout = resolve_layout(args)
+    layout.workspace.mkdir(parents=True, exist_ok=True)
+    workspace_arg = command_arg(layout.workspace)
 
-    extra_args = ["init", "-q", args.query, "-w", str(workspace)]
+    extra_args = ["init", "-q", args.query, "-w", str(layout.workspace)]
     if args.max_loops:
         extra_args.extend(["--max-loops", str(args.max_loops)])
     rc = run_script("pre_research.py", extra_args)
@@ -295,55 +306,56 @@ def run_scan(args: argparse.Namespace) -> int:
 
     print(
         f"\nPre-research initialized. Now:\n"
-        f"1. Run `deep_research.py scan-next --workspace {workspace}` to get the next search task\n"
-        f"2. Do the web search and write findings to {workspace}/pre_findings/\n"
-        f"3. Run `deep_research.py scan-complete <task_id> --workspace {workspace}`\n"
-        f"4. Run `deep_research.py scan-evaluate --workspace {workspace}`\n"
+        f"1. Run `deep_research.py scan-next --workspace {workspace_arg}` to get the next search task\n"
+        f"2. Do the web search and write findings to {layout.pre_findings_dir}/\n"
+        f"3. Run `deep_research.py scan-complete <task_id> --workspace {workspace_arg}`\n"
+        f"4. Run `deep_research.py scan-evaluate --workspace {workspace_arg}`\n"
         f"5. Repeat from step 1 until evaluate says should_continue=false\n"
-        f"6. Run `deep_research.py scan-finalize --workspace {workspace}`\n"
-        f"7. Run `deep_research.py plan --query '{args.query}' --workspace {workspace}`\n"
+        f"6. Run `deep_research.py scan-finalize --workspace {workspace_arg}`\n"
+        f"7. Run `deep_research.py plan --query {command_arg(args.query)} --workspace {workspace_arg}`\n"
     )
     return 0
 
 
 def run_scan_next(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    return run_script("pre_research.py", ["next", "-w", str(workspace)])
+    layout = resolve_layout(args)
+    return run_script("pre_research.py", ["next", "-w", str(layout.workspace)])
 
 
 def run_scan_complete(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    extra_args = ["complete", args.task_id, "-w", str(workspace)]
+    layout = resolve_layout(args)
+    extra_args = ["complete", args.task_id, "-w", str(layout.workspace)]
     if args.result:
         extra_args.extend(["--result", args.result])
     return run_script("pre_research.py", extra_args)
 
 
 def run_scan_evaluate(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    return run_script("pre_research.py", ["evaluate", "-w", str(workspace)])
+    layout = resolve_layout(args)
+    return run_script("pre_research.py", ["evaluate", "-w", str(layout.workspace)])
 
 
 def run_scan_finalize(args: argparse.Namespace) -> int:
-    workspace = resolve_workspace(args)
-    return run_script("pre_research.py", ["finalize", "-w", str(workspace)])
+    layout = resolve_layout(args)
+    return run_script("pre_research.py", ["finalize", "-w", str(layout.workspace)])
 
 
 def run_all(args: argparse.Namespace) -> int:
     """Plan + prompt for research."""
-    workspace = resolve_workspace(args)
-    workspace.mkdir(parents=True, exist_ok=True)
+    layout = resolve_layout(args)
+    layout.workspace.mkdir(parents=True, exist_ok=True)
 
     rc = run_plan(args)
     if rc != 0:
         return rc
 
+    workspace_arg = command_arg(layout.workspace)
     print(
         "\nPlan created. Now run your web/github/codebase subagents and write "
-        f"findings to {workspace / 'findings'}/. Then run:\n\n"
-        f"  deep_research.py gaps --workspace {workspace}\n"
-        f"  deep_research.py merge --workspace {workspace}\n"
-        f"  deep_research.py report --workspace {workspace}\n"
+        f"findings to {layout.findings_dir}/. Then run:\n\n"
+        f"  deep_research.py gaps --workspace {workspace_arg}\n"
+        f"  deep_research.py merge --workspace {workspace_arg}\n"
+        f"  deep_research.py report --workspace {workspace_arg}\n"
     )
     return 0
 
@@ -361,7 +373,7 @@ def main() -> int:
     plan_parser.add_argument("--context", "-c", default="", help="Additional research context")
     plan_parser.add_argument("--template", "-t", default="survey", choices=["comparison", "survey", "technical", "custom"],
                             help="Report template (default: survey)")
-    plan_parser.add_argument("--workspace", "-w", help="Working directory (default: current directory)")
+    plan_parser.add_argument("--workspace", "-w", help="Public deliverable directory (new runs must not contain .omagents)")
     plan_parser.add_argument("--pre-research", help="Path to pre_research.json for generating items from landscape scan")
     plan_parser.add_argument("--max-loops", type=int, help="Override max_research_loops")
     plan_parser.add_argument("--batch-size", type=int, help="Override batch_size")
@@ -486,4 +498,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except LayoutError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)

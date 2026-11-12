@@ -56,19 +56,34 @@ deep_research.py <subcommand> --workspace <workspace>
 
 New subcommands: `audit`, `package`, `provenance`, `status`, `polish`, `run-all`, `scan`, `scan-next`, `scan-complete`, `scan-evaluate`, `scan-finalize`.
 
+## Storage Layout
+
+`--workspace` is the **public deliverable directory**. It contains only files intended for the user: `report.md`, optional `summary.md`, promoted topic-specific documents, and the generated `README.md` index. A new run is rejected before writing if its workspace would contain the internal run or loop store (including the default project-root workspace); select a separate child workspace such as `research/topic`. Genuine legacy workspaces at the project root remain supported.
+
+Every new run stores its internal files under `.omagents/deep-research/<run-id>/` in the project root (the directory from which the CLI is invoked). The run ID is `<slug>-<digest>`. For the digest input, resolve the workspace to an absolute path, take its path relative to the resolved project root when possible (otherwise use the absolute path), and encode it with POSIX separators; hash that UTF-8 string with SHA-256 and take the first eight lowercase hex characters. The slug uses NFKD normalization, removes non-ASCII characters, lowercases the result, and replaces non-alphanumeric runs with hyphens (`research` is the fallback), so the ID is stable across project relocation and distinct for same-named workspaces in different directories. The dispatch JSON supplies absolute `findings_dir` and `pre_findings_dir` paths; agents MUST use those paths instead of reconstructing paths from `--workspace`. Each search also supplies `output_path`, `output_path_quoted`, and `shell` (`posix` or `powershell`). Use the quoted value in shell commands and the structured `resume_command` argv when bypassing a shell.
+
+- `plan.json`, `pre_research.json`, optional `pre_research_curated.json`, `findings/`, and `pre_findings/` are durable research inputs/evidence.
+- `state/` contains resume checkpoints. Loop queues use `deep-research-<run-id>` and `deep-research-pre-<run-id>` under the existing `.omagents/loops/` store.
+- `artifacts/` contains rebuildable derived files; they are retained by default, not treated as disposable cache.
+- `logs/provenance.jsonl` is the single append-only provenance log.
+- Cross-run reuse is explicit: pass an earlier run's consolidated or curated pre-research file as input. Never share writable evidence between runs.
+- Topic-specific Markdown drafts stay in internal `artifacts/`. To promote one, write the finished document to `<workspace>/<name>.md` while leaving the draft in place; the next `package` command indexes it automatically without rewriting its content.
+
+Existing legacy workspaces remain in their original layout and use the original unnamespaced loop keys. They are read and resumed without automatic migration or deletion.
+
 ## Workflow
 
 ### Phase 0: Landscape Scan (Pre-Research)
 
 **CRITICAL:** Before generating any plan, a pre-research landscape scan MUST run. This ensures research items are based on current, real-world data rather than potentially outdated model knowledge.
 
-The pre-research phase uses the loop engine (skill key: `deep-research-pre`) to iteratively scan the web for current entities. The current date is automatically injected into all task descriptions and search instructions to ensure the agent searches for the most recent information.
+The pre-research phase uses the loop engine (skill key: `deep-research-pre-<run-id>` for new runs; `deep-research-pre` only for legacy workspaces) to iteratively scan the web for current entities. The current date is automatically injected into all task descriptions and search instructions to ensure the agent searches for the most recent information.
 
 1. **Initialize**: `pre_research.py init --query "..." --workspace <dir>` creates a broad search task. Task description includes the current date (e.g., "Current date: July 2026").
-2. **Search**: Agent does web search (must include current year in queries), extracts candidates, writes to `pre_findings/<task_id>.json`.
+2. **Search**: Agent does web search (must include current year in queries), extracts candidates, writes to the exact `output_path` supplied by the orchestrator, using `output_path_quoted` in shell commands.
 3. **Evaluate**: `pre_research.py evaluate` checks if enough candidates/sources found. If not, adds targeted search tasks (also date-injected).
 4. **Loop**: Repeat steps 2-3 until coverage is sufficient or `max_pre_research_loops` (default 2) is reached.
-5. **Finalize**: `pre_research.py finalize` merges all pre-findings into `pre_research.json`.
+5. **Finalize**: `pre_research.py finalize` merges all pre-findings into `<run-dir>/pre_research.json`.
 
 `pre_research.json` format:
 ```json
@@ -85,11 +100,11 @@ The pre-research phase uses the loop engine (skill key: `deep-research-pre`) to 
 }
 ```
 
-This file feeds directly into Phase 1 to generate `items` from real candidates.
+This internal file feeds directly into Phase 1 to generate `items` from real candidates. Pre-research checkpoints live at `<run-dir>/state/pre_research_state.json`.
 
 ### Phase 1: Generate Plan (`/research <topic>`)
 
-Generate a `plan.json` with:
+Generate an internal `<run-dir>/plan.json` with:
 
 - `query`: original question
 - `items`: list of research objects (auto-populated from `pre_research.json` if available)
@@ -106,7 +121,7 @@ deep_research.py plan \
   --workspace agent-frameworks
 ```
 
-If `pre_research.json` exists in the workspace, items are automatically generated from its candidates. You can also explicitly pass `--pre-research <path>`.
+If `pre_research.json` exists in the internal run directory, items are automatically generated from its candidates. You can also explicitly pass `--pre-research <path>`, including an earlier run's file for deliberate reuse.
 
 Config overrides:
 ```bash
@@ -120,12 +135,14 @@ deep_research.py plan \
   --workspace agent-frameworks
 ```
 
-> `--workspace` is the output directory name. Use a slug of the research topic (lowercase, hyphenated, e.g. "AI Agent Frameworks" -> `ai-agent-frameworks`). It will be created in the current working directory.
+> `--workspace` is the public deliverable directory name. Use a slug of the research topic (lowercase, hyphenated, e.g. "AI Agent Frameworks" -> `ai-agent-frameworks`). It is created in the current working directory; plans and other internal files go to the resolved `.omagents/deep-research/<run-id>/` directory instead.
+
+For a new run, the orchestrator initializes the run-specific loop engine automatically. Advanced manual workflows use the run ID from the internal run directory:
 
 After generating the plan, initialize the loop engine with the research tasks:
 
 ```bash
-loop_engine.py init deep-research '[
+loop_engine.py init deep-research-<run-id> '[
   {"task_id": "task-1", "type": "web", "item_id": "item-1", "field_ids": ["field-1"], "focus": "...", "description": "Research LangGraph overview"},
   {"task_id": "task-2", "type": "github", "item_id": "item-2", "field_ids": ["field-2"], "focus": "...", "description": "Research AutoGPT license"}
 ]'
@@ -152,7 +169,7 @@ Managed by the loop engine. Get the next pending task, dispatch it as a subagent
 **Step 1: Get next task**
 
 ```bash
-loop_engine.py next deep-research
+loop_engine.py next deep-research-<run-id>
 ```
 
 If output is `null`, proceed to Phase 4 (gap detection).
@@ -164,7 +181,7 @@ For each task returned, launch a subagent using `task(background: true)`. Multip
 1. Searches the appropriate source (web, GitHub, or codebase).
 2. Reads key sources.
 3. Extracts data into `field_data` keyed by field IDs.
-4. Writes findings to `<workspace>/findings/<task_id>.json` **using bash** (e.g. `cat > <path> << 'EOF' ... EOF`), not the `write` tool — subagent sessions run in a temporary working directory, so the `write` tool may trigger a confirmation dialog for paths outside it.
+4. Writes findings to the absolute `{findings_dir}/<task_id>.json` from dispatch JSON **using bash** (e.g. `cat > <path> << 'EOF' ... EOF`), not the `write` tool — subagent sessions run in a temporary working directory, so the `write` tool may trigger a confirmation dialog for paths outside it.
 5. Runs validation.
 
 Do not wait for all subagents to return before proceeding. Background task completions are automatically injected via the Background Job Board. When all tasks are done, proceed to Phase 4.
@@ -183,6 +200,11 @@ Fields to collect:
 {for each field: "- {field_name} ({field_category}): {field_description} [required: {required}]"}
 Focus: {task_focus}
 Workspace: {workspace}
+Run ID: {run_id}
+Findings directory: {findings_dir}
+Output path: {task.output_path}
+Shell-quoted output path: {task.output_path_quoted}
+Shell: {shell}
 
 Instructions:
 1. Use websearch_web_search_exa to find relevant sources. Include the current year in queries.
@@ -191,10 +213,11 @@ Instructions:
 4. Mark uncertain values with [uncertain].
 5. If information is missing or contradictory, do additional targeted searches (up to 3 iterations).
 6. For each finding, record the publication date if available.
-7. Write findings to {workspace}/findings/{task_id}.json. IMPORTANT: Use a bash
-   command (e.g. `cat > {workspace}/findings/{task_id}.json << 'ENDOFFILE' ... ENDOFILE`)
-   instead of the `write` tool - subagent sessions run in a temporary directory, so
-   the `write` tool may trigger a confirmation dialog for paths outside it.
+7. Write findings to {task.output_path}. IMPORTANT: Use {task.output_path_quoted}
+   as the destination in a command for the supplied {shell} (for POSIX, e.g.
+   `cat > {task.output_path_quoted} << 'ENDOFFILE' ... ENDOFILE`) instead of the
+   `write` tool - subagent sessions run in a temporary directory, so the `write`
+   tool may trigger a confirmation dialog for paths outside it.
    Use this JSON schema:
    {
      "type": "web",
@@ -217,8 +240,9 @@ Instructions:
      ],
      "gaps": ["..."]
    }
-8. Validate:
-   validate.py --plan {workspace}/plan.json --findings {workspace}/findings/{task_id}.json
+8. Validate through the unified CLI so it resolves the same internal paths.
+   Use the supplied shell-quoted workspace value:
+   deep_research.py validate --task-id {task_id} --workspace {workspace_quoted}
 ```
 
 GitHub and codebase subagents follow the same structure but use their respective tools.
@@ -228,13 +252,13 @@ GitHub and codebase subagents follow the same structure but use their respective
 When a subagent finishes and its findings are written and validated:
 
 ```bash
-loop_engine.py complete deep-research <id> "Found 5 sources, coverage: high"
+loop_engine.py complete deep-research-<run-id> <id> "Found 5 sources, coverage: high"
 ```
 
 If the subagent fails (no findings, validation error):
 
 ```bash
-loop_engine.py fail deep-research <id> "No web sources found for this item"
+loop_engine.py fail deep-research-<run-id> <id> "No web sources found for this item"
 ```
 
 **Step 4: Loop**
@@ -249,14 +273,14 @@ Repeat from Step 1. When `next` returns `null`, all initial tasks are done. Proc
 deep_research.py gaps --workspace agent-frameworks
 ```
 
-This builds an `item x field` coverage matrix, identifies missing or low-confidence coverage, and outputs `gap_report.json` with `new_tasks` and `should_continue`.
+This builds an `item x field` coverage matrix, identifies missing or low-confidence coverage, and outputs `<run-dir>/artifacts/gap_report.json` with `new_tasks` and `should_continue`.
 
 **Step 2: Add gap tasks to loop engine**
 
 If `should_continue` is true, add each new task from the gap report:
 
 ```bash
-loop_engine.py add deep-research '{"task_id": "task-r1-1", "type": "web", "item_id": "item-1", "field_ids": ["field-2"], "focus": "Supplemental research for LangGraph on field License", "description": "Gap fill: LangGraph License"}'
+loop_engine.py add deep-research-<run-id> '{"task_id": "task-r1-1", "type": "web", "item_id": "item-1", "field_ids": ["field-2"], "focus": "Supplemental research for LangGraph on field License", "description": "Gap fill: LangGraph License"}'
 ```
 
 **Step 3: Loop back to Phase 3**
@@ -268,7 +292,7 @@ Return to Phase 3 to execute the new gap-fill tasks. The loop continues until:
 **Step 4: Check final status**
 
 ```bash
-loop_engine.py summary deep-research
+loop_engine.py summary deep-research-<run-id>
 ```
 
 When the loop is complete, proceed to Phase 5.
@@ -294,7 +318,7 @@ deep_research.py polish --workspace agent-frameworks
 
 This will:
 1. Generate the template-based report (if `--polish` is used with `report`)
-2. Back up the raw report to `report_raw.md`
+2. Back up the raw report to `<run-dir>/artifacts/report_raw.md`
 3. Output JSON instructions with plan context and the polish prompt file path
 
 **The agent then:**
@@ -446,7 +470,7 @@ SVG is embedded directly in Markdown. No external dependencies or JavaScript.
 
 ## Provenance
 
-Every research workspace tracks phase-level events in `artifacts/provenance.jsonl`:
+Every new research run tracks phase-level events in `<run-dir>/logs/provenance.jsonl`. Legacy root and `artifacts/` logs are combined when read:
 
 | Event | Trigger |
 |-------|---------|
@@ -474,7 +498,7 @@ deep_research.py audit --workspace agent-frameworks
 | `coverage_gaps` | Required fields with no data | error |
 | `source_duplicates` | Same source referenced by multiple tasks | warning |
 
-Output: `artifacts/audit_report.json` with overall score (0-100) and recommendations. Results are also embedded in the Markdown report.
+Output: `<run-dir>/artifacts/audit_report.json` with overall score (0-100) and recommendations. Results are also embedded in the Markdown report.
 
 ## Artifact Package
 
@@ -485,26 +509,39 @@ deep_research.py package --workspace agent-frameworks
 ```
 
 Produces:
-- `artifacts/package.json` - manifest with metadata, file list, and stats
-- `artifacts/README.md` - quick index of all artifacts
+- `<run-dir>/artifacts/package.json` - machine manifest with metadata, internal file list, and stats
+- `<workspace>/README.md` - human index containing only public deliverables (legacy workspaces keep `artifacts/README.md`)
 
-Workspace structure:
+New-run storage structure:
 ```
-<workspace>/
-  pre_research.json       # Pre-research landscape scan results
-  pre_findings/           # Pre-research search findings (per task)
-  plan.json              # Research plan
-  findings/              # Raw findings JSON from subagents
-  artifacts/             # Intermediate/derived artifacts
-    findings_merged.json # Merged findings
-    gap_report.json      # Gap analysis results
-    audit_report.json    # Integrity audit
-    provenance.jsonl     # Provenance trail
-    report_raw.md        # Pre-polish report backup
-    package.json         # Package manifest
-    README.md            # Quick index
-  report.md              # Final deliverable: polished report (Markdown + SVG)
-  summary.md             # Final deliverable: executive summary
+<project>/
+  <workspace>/                    # Public deliverables only
+    report.md                    # Polished report (Markdown + SVG)
+    summary.md                   # Optional executive summary
+    README.md                    # Public deliverable index
+    execution_roadmap.md         # Optional promoted custom deliverable
+    tco_model.md                 # Optional promoted custom deliverable
+  .omagents/
+    deep-research/<run-id>/
+      plan.json                  # Research definition
+      pre_research.json          # Consolidated pre-research input
+      pre_research_curated.json  # Optional curated input
+      pre_findings/              # Raw pre-research evidence
+      findings/                  # Raw research evidence
+      artifacts/                 # Derived files; retained by default
+        findings_merged.json
+        gap_report.json
+        audit_report.json
+        report_raw.md
+        package.json
+      state/
+        orchestration_state.json
+        pre_research_state.json
+      logs/
+        provenance.jsonl
+    loops/
+      deep-research-<run-id>/tasks.json
+      deep-research-pre-<run-id>/tasks.json
 ```
 
 ## Run-All (Meta-Orchestration)
@@ -531,7 +568,7 @@ The orchestrator (`orchestrate.py`) is a pausable state machine:
 6. **audit** - Runs integrity audit with configurable weights (automatic)
 7. **package** - Generates artifact package (automatic)
 
-The agent calls `--resume` after subagents complete. The state machine picks up from where it left off via `orchestration_state.json`.
+The agent calls `--resume` after subagents complete. The state machine picks up from where it left off via `<run-dir>/state/orchestration_state.json`. Resume from the same project root and workspace; if no checkpoint exists, the command fails instead of silently creating a replacement run.
 
 To skip pre-research (not recommended): `--skip-pre-research`
 

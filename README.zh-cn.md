@@ -177,6 +177,8 @@ Phase 1: Build Task Queue          Phase 2: Execute Loop           Phase 3: Repo
 
 **状态持久化**于 `.omagents/loops/<skill>/tasks.json` —— 如果 agent 的上下文在任务执行中途被清除，它可以从中断处精确恢复。
 
+对于 Deep Research，`--workspace <dir>` 是仅存放交付物的目录，包含报告、可选自定义文档和公开的 `README.md` 索引。每次运行的计划、原始发现、检查点、派生产物和 provenance 均保存在 `.omagents/deep-research/<run-id>/`，任务队列也按 run ID 隔离。如果 workspace 会包含这些内部存储（例如项目根目录本身），新运行会在写入前失败并要求选择独立的子工作区。既有旧布局工作区仍可读取和恢复，不会自动迁移。
+
 **重试逻辑：** 失败的任务最多重试 3 次，之后标记为 blocked。
 
 **压缩安全：** `experimental.session.compacting` hook 会将 loop engine 状态注入压缩提示中，确保 agent 在上下文清除后知道如何恢复。

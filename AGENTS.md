@@ -42,7 +42,7 @@ omagents/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/         # bug_report.md, feature_request.md
 │   └── workflows/
-│       ├── ci.yml              # Syntax check on push/PR
+│       ├── ci.yml              # Syntax checks + isolated Python/Node tests on push/PR
 │       └── publish.yml         # OIDC trusted publishing on tag push
 ├── hooks/
 │   ├── python-env.js           # Shared persistent base + project overlay management
@@ -53,7 +53,7 @@ omagents/
 │   ├── deep-research/          # Multi-source research workflow
 │   │   ├── SKILL.md
 │   │   ├── agents/
-│   │   ├── scripts/            # Python scripts (deep_research.py, plan.py, etc.)
+│   │   ├── scripts/            # Pipeline scripts + layout.py canonical run paths
 │   │   └── templates/          # Jinja2 report templates (comparison, survey, technical)
 │   ├── parallel-execution/     # Background task dispatch guide
 │   │   └── SKILL.md
@@ -145,7 +145,7 @@ On the V2 path, local servers are registered with `timeout: { startup: 180s }` (
 
 | Skill | Description | Has scripts? | Has agents/? | Loop? |
 |-------|-------------|-------------|-------------|-------|
-| `deep-research` | Multi-source iterative research with items x fields, gap detection, Jinja2 reports | Yes (6 Python files) | Yes | Yes (loop_engine + gap loop) |
+| `deep-research` | Multi-source iterative research with items x fields, gap detection, Jinja2 reports | Yes (pipeline + canonical path layout) | Yes | Yes (run-scoped loop_engine + gap loop) |
 | `parallel-execution` | Background task dispatch with Job Board tracking | No | No | No |
 | `agents-python-tools` | Route Python tooling to `~/.venvs/omagents` | No | Yes | No |
 | `markitdown-converter` | Convert documents (PDF/DOCX/XLSX/...) to Markdown | Yes | Yes | No |
@@ -197,7 +197,7 @@ The `agents-python-tools` skill has full documentation on venv paths, cross-plat
 
 ## Loop Engine
 
-Skills that process items iteratively (remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit) use a shared loop engine at `skills/_shared/scripts/loop_engine.py`.
+Skills that process items iteratively (deep-research, remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit) use a shared loop engine at `skills/_shared/scripts/loop_engine.py`.
 
 The loop engine provides a durable task queue stored in `.omagents/loops/<skill>/tasks.json` within the project directory. State survives context clearing and can be resumed.
 
@@ -216,12 +216,18 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 
 **Task state machine:** `pending` -> (execute) -> `completed` (success) or `pending`/retry (fail, attempts < 3) or `blocked` (fail, attempts >= 3)
 
+### Deep Research Storage
+
+`skills/deep-research/scripts/layout.py` is the single path resolver for all deep-research commands. For new runs, `--workspace` contains only public deliverables; internal plans, raw evidence, derived artifacts, checkpoints, and provenance live under `.omagents/deep-research/<run-id>/`. Main and pre-research loop keys are suffixed with the same run ID (`deep-research-<run-id>` and `deep-research-pre-<run-id>`), while the shared loop engine itself is unchanged.
+
+Raw evidence and state are durable. Derived `artifacts/` are rebuildable but retained by default. New provenance always goes to `<run-dir>/logs/provenance.jsonl`; legacy root/`artifacts/` logs are combined on read. Reject new runs whose public workspace would contain the internal run or loop store (including the default project root) before any writes; require a separate child workspace. Existing legacy workspaces retain their original paths and unnamespaced loop keys—never migrate or delete them automatically.
+
 ## Development
 
 - **No build step.** Plugin code is plain JavaScript (ESM). Skills are plain Markdown + optional Python.
 - **Syntax check:** `node --check .opencode/plugins/index.js`
 - **Python check:** `python3 -m py_compile skills/deep-research/scripts/*.py`
-- **Unit tests:** `node --test tests/*.test.js` (plugin structure, skills frontmatter, loop engine workflow)
+- **Unit tests:** `node --test tests/*.test.js` (plugin structure, skills frontmatter, loop engine, deep-research storage/legacy/pipeline integration). Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
 - **Local testing:** Point OpenCode config to local clone:
   ```json
   { "plugin": ["omagents@git+file:///path/to/omagents"] }
@@ -229,7 +235,7 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Syntax check JS + Python on push/PR to main. Node 24.
+- **CI** (`ci.yml`): Syntax check JS + Python and run Node/Python tests on push/PR to main. Node 24; Jinja2 is installed only into `.omagents/ci-venv` for deep-research integration tests.
 - **Publish** (`publish.yml`): OIDC trusted publishing on `v*` tag push. No npm token needed.
 
 ## Publishing
@@ -313,3 +319,4 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 12. **Don't export a bare function as `default` from `.opencode/plugins/*.js`.** OpenCode V2 requires the default export to be a `{ id, setup }` descriptor object and hard-fails the plugin otherwise (`PluginModule.LoadError`). Keep the dual shape `{ id, server, setup }`: `server` is the V1 plugin function, `setup` the V2 one. V1 hosts may invoke exported functions (including `setup`) with a V1-shaped ctx — guard V2 entry points by checking V2-only domains (e.g. `typeof ctx.session?.hook === "function"`) and return quietly.
 13. **Don't import `@opencode/plugin` (V2 SDK) or `@opencode-ai/plugin` (V1 SDK) in plugin code.** The dual entry point is a plain object; importing a host SDK package breaks the other runtime. superpowers does the same.
 14. **Don't run project pip with the base overlay enabled or auto-delete either venv.** Project dependencies must use `project-venv.js pip` (`OMAGENTS_PROJECT_ONLY=1`). Do not use `--system-site-packages` as a base-venv inheritance mechanism. Existing base/project environments are repaired only with explicit user confirmation.
+15. **Don't assemble deep-research paths ad hoc or write internal files into `--workspace`.** Use `layout.py` and the absolute paths in dispatch JSON. Only final deliverables belong in the public workspace; legacy workspaces must not be migrated implicitly.

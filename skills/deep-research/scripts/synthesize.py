@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from layout import ResearchLayout
+
 try:
     from jinja2 import Environment, FileSystemLoader, select_autoescape
 except ImportError as exc:
@@ -74,8 +76,11 @@ def load_findings(findings_dir: Path) -> list[dict[str, Any]]:
 
 
 def load_gap_report(workspace: Path) -> dict[str, Any] | None:
-    # Try artifacts/ first, fall back to root for backward compat
-    for gap_path in [workspace / "artifacts" / "gap_report.json", workspace / "gap_report.json"]:
+    layout = ResearchLayout.resolve(workspace)
+    candidates = [layout.gap_path]
+    if layout.legacy:
+        candidates.append(layout.storage_dir / "gap_report.json")
+    for gap_path in candidates:
         if gap_path.exists():
             try:
                 return load_json(gap_path)
@@ -402,10 +407,14 @@ def generate_report(
         if events:
             svg_charts["timeline"] = research_timeline(events)
 
-    # Load audit report if it exists (try artifacts/ first, then root)
+    # Load audit report if it exists (try canonical path first, then legacy root)
     audit_report: dict[str, Any] | None = None
     workspace = output_path.parent
-    for audit_path in [workspace / "artifacts" / "audit_report.json", workspace / "audit_report.json"]:
+    layout = ResearchLayout.resolve(workspace)
+    audit_candidates = [layout.audit_path]
+    if layout.legacy:
+        audit_candidates.append(layout.storage_dir / "audit_report.json")
+    for audit_path in audit_candidates:
         if audit_path.exists():
             try:
                 audit_report = load_json(audit_path)

@@ -11,46 +11,81 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from layout import ResearchLayout, internal_run_root
+
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _provenance_path(workspace: Path) -> Path:
-    """Return provenance file path, preferring artifacts/ dir."""
-    artifacts = workspace / "artifacts"
-    if artifacts.exists():
-        return artifacts / "provenance.jsonl"
-    return workspace / "provenance.jsonl"
+def _anchor_layout(anchor: Path) -> ResearchLayout:
+    layout = ResearchLayout.resolve(anchor)
+    if layout.legacy or anchor.name != "artifacts":
+        return layout
+
+    parent = anchor.parent
+    legacy_markers = (
+        parent / "plan.json",
+        parent / "orchestration_state.json",
+        parent / "pre_research_state.json",
+    )
+    if any(path.exists() for path in legacy_markers):
+        return ResearchLayout.resolve(parent)
+    return layout
 
 
-def log_event(workspace: Path, event_type: str, **details: Any) -> None:
-    """Append a provenance event to <workspace>/artifacts/provenance.jsonl."""
+def _provenance_path(anchor: Path) -> Path:
+    """Return the single canonical write path for a run or workspace anchor."""
+    run_root = internal_run_root(anchor)
+    if run_root is not None:
+        return run_root / "logs" / "provenance.jsonl"
+
+    return _anchor_layout(anchor).provenance_path
+
+
+def _read_paths(anchor: Path) -> list[Path]:
+    run_root = internal_run_root(anchor)
+    if run_root is not None:
+        return [run_root / "logs" / "provenance.jsonl"]
+
+    layout = _anchor_layout(anchor)
+    if not layout.legacy:
+        return [layout.provenance_path]
+    return [layout.workspace / "provenance.jsonl", layout.provenance_path]
+
+
+def log_event(anchor: Path, event_type: str, **details: Any) -> None:
+    """Append a provenance event to the canonical log for anchor."""
     event: dict[str, Any] = {
         "timestamp": now(),
         "event_type": event_type,
     }
     event.update(details)
-    provenance_path = _provenance_path(workspace)
+    provenance_path = _provenance_path(anchor)
     provenance_path.parent.mkdir(parents=True, exist_ok=True)
     with provenance_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
-def load_events(workspace: Path) -> list[dict[str, Any]]:
-    """Load all provenance events from a workspace."""
-    provenance_path = _provenance_path(workspace)
-    if not provenance_path.exists():
-        return []
+def load_events(anchor: Path) -> list[dict[str, Any]]:
+    """Load all provenance events, including split legacy timelines."""
     events: list[dict[str, Any]] = []
-    for line in provenance_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
+    seen_paths: set[Path] = set()
+    for provenance_path in _read_paths(anchor):
+        resolved = provenance_path.resolve()
+        if resolved in seen_paths or not provenance_path.exists():
             continue
-        try:
-            events.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
+        seen_paths.add(resolved)
+        for line in provenance_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    events.sort(key=lambda event: event.get("timestamp", ""))
     return events
 
 
@@ -79,7 +114,7 @@ def export_summary(workspace: Path) -> dict[str, Any]:
     }
 
 
-def main() -> int:
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="View provenance for a deep-research workspace.")
@@ -109,9 +144,8 @@ def main() -> int:
             for etype, count in summary["event_types"].items():
                 print(f"    {etype}: {count}")
 
-    return 0
-
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

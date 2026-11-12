@@ -183,6 +183,8 @@ Phase 1: Build Task Queue          Phase 2: Execute Loop           Phase 3: Repo
 
 **State persists** in `.omagents/loops/<skill>/tasks.json` -- if the agent's context is cleared mid-task, it can resume exactly where it left off.
 
+For Deep Research, `--workspace <dir>` is a deliverables-only directory containing the report, optional custom documents, and a public `README.md` index. Each run's plan, raw findings, checkpoints, derived artifacts, and provenance live under `.omagents/deep-research/<run-id>/`, with run-specific loop queues. If the workspace would contain that internal storage (for example, the project root itself), a new run fails before writing and asks for a separate child workspace. Existing legacy workspaces remain readable and resumable without automatic migration.
+
 **Retry logic:** Failed tasks retry up to 3 times before being marked blocked.
 
 **Compaction safe:** The `experimental.session.compacting` hook injects loop engine state into the compaction prompt, so the agent knows to resume after context clearing.

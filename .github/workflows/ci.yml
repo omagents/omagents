@@ -37,16 +37,18 @@ jobs:
 
       - name: Check Python scripts
         run: |
-          python3 -m py_compile skills/deep-research/scripts/deep_research.py
-          python3 -m py_compile skills/deep-research/scripts/plan.py
-          python3 -m py_compile skills/deep-research/scripts/merge.py
-          python3 -m py_compile skills/deep-research/scripts/synthesize.py
-          python3 -m py_compile skills/deep-research/scripts/gap_analysis.py
-          python3 -m py_compile skills/deep-research/scripts/validate.py
+          python3 -m py_compile skills/deep-research/scripts/*.py
           python3 -m py_compile skills/_shared/scripts/loop_engine.py
+
+      - name: Prepare isolated Python test environment
+        run: |
+          python3 -m venv .omagents/ci-venv
+          .omagents/ci-venv/bin/python -m pip install jinja2
 
       - name: Check formatting
         run: npx prettier --check ".opencode/plugins/*.js" "tests/*.js" "index.js" ".codex/plugins/*.js" "hooks/*.js"
 
       - name: Run tests
+        env:
+          OMAGENTS_TEST_PYTHON: .omagents/ci-venv/bin/python
         run: node --test tests/*.test.js

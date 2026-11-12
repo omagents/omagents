@@ -177,6 +177,8 @@ Phase 1: Build Task Queue          Phase 2: Execute Loop           Phase 3: Repo
 
 **상태가 유지됩니다** — `.omagents/loops/<skill>/tasks.json`에 저장됩니다. 작업 중간에 agent의 context가 clear되어도, 정확히 중단한 지점에서 재개할 수 있습니다.
 
+Deep Research에서 `--workspace <dir>`는 보고서, 선택적 사용자 문서, 공개 `README.md` 인덱스만 포함하는 결과물 전용 디렉터리입니다. 각 run의 plan, raw findings, checkpoint, 파생 artifact, provenance는 `.omagents/deep-research/<run-id>/`에 저장되며 loop queue도 run ID별로 격리됩니다. workspace가 프로젝트의 internal storage를 포함하는 경우(예: 프로젝트 루트 자체) 새 run은 쓰기 전에 실패하고 독립된 하위 workspace를 요구합니다. 기존 legacy workspace는 자동 마이그레이션 없이 그대로 읽고 재개할 수 있습니다.
+
 **Retry logic:** 실패한 task는 blocked 상태로 표시되기 전에 최대 3번 재시도됩니다.
 
 **Compaction safe:** `experimental.session.compacting` hook이 loop engine 상태를 compaction prompt에 주입하므로, agent는 context clear 후 재개 방법을 알고 있습니다.
