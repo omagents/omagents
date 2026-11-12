@@ -1,81 +1,84 @@
 ---
 name: agents-python-tools
-description: "Route agent Python tooling to a dedicated venv at ~/.venvs/omagents, separate from any project's Python environment. Use whenever the agent needs to install or run a Python tool/library to complete a task — e.g. openpyxl to generate Excel, pdf2md/pdfplumber to convert PDFs to Markdown, Pillow to generate images, qrcode, reportlab, or any pip-installable utility. Also use when deciding where a Python dependency belongs: agent's own tools vs. the current project's dependencies. Do NOT use for installing the project's own dependencies (those go in the project venv)."
+description: "Route agent Python tooling to a dedicated venv at ~/.venvs/omagents, separate from any project's Python environment. Use whenever the agent needs to install or run a Python tool/library to complete a task — e.g. openpyxl to generate Excel, pdf2md/pdfplumber to convert PDFs to Markdown, Pillow to generate images, qrcode, reportlab, or any pip-installable utility. Also use when deciding where a Python dependency belongs or when installing the current project's own dependencies into its OmAgents project overlay."
 ---
 
 # Agent Python Tools
 
-Two Python environments, never mixed:
+Use a persistent base for agent tools and an isolated project overlay for project dependencies:
 
-| Purpose | Venv location | Activated by |
+| Purpose | Venv location | Used by |
 |---|---|---|
-| Agent's own tools (openpyxl, Pillow, pdfplumber, reportlab, qrcode, pandoc, ...) | `~/.venvs/omagents` | Agent, for any task |
-| The current project's dependencies | `<project-root>/.venv` | The project / developer |
+| Agent tools (openpyxl, Pillow, pdfplumber, reportlab, qrcode, ...) | `~/.venvs/omagents` | Agent, for any task |
+| Current project's declared dependencies | `<project-root>/.omagents/venv` | Project / developer |
 
 ## Rule: Agent tools go in ~/.venvs/omagents
 
-Install every Python tool the agent itself needs into `~/.venvs/omagents`. Never install these into the project venv or the system Python.
+Install every Python tool the agent itself needs into the persistent base. Never install these into a project venv or system Python. Existing base environments are reused, never automatically deleted.
 
-If `~/.venvs/omagents` does not exist yet, create it automatically — do not ask the user for permission, this is an expected one-time setup:
+Create base only if its interpreter is missing:
 
 ```bash
 python3 -m venv ~/.venvs/omagents
 ```
 
-Install a tool:
-
-```bash
-~/.venvs/omagents/bin/pip install <package>
-```
-
-Run a tool — always invoke the interpreter or entry point from the venv so the import resolves there:
+Check before installing, then use base Python explicitly:
 
 ```bash
 ~/.venvs/omagents/bin/python -c "import openpyxl; ..."
-# or, for console scripts:
-~/.venvs/omagents/bin/<script> ...
+~/.venvs/omagents/bin/python -m pip install <package>
 ```
 
-Prefer the absolute venv path (`~/.venvs/omagents/bin/...`) over `source activate`, so the project's own `.venv` (if active) is not shadowed or polluted.
+Use the absolute base interpreter or base console script so an active project venv cannot redirect the command. Do not install agent tools into a project venv, system Python, or `pipx`.
 
-Do not install agent tools into:
-- the project's `.venv`
-- the system / apt Python
-- `pipx` (it creates per-tool venvs; keep agent tools together in one venv for reuse)
+## Rule: Project dependencies go in .omagents/venv
 
-## Rule: Project dependencies go in <project-root>/.venv
+Create the project environment only when a project dependency is needed. An existing project `.venv` is left untouched.
 
-When the task is to install or run the current project's own dependencies (from `requirements.txt`, `pyproject.toml`, etc.), use the project venv at `<project-root>/.venv`, not `~/.venvs/omagents`.
+The CLI is at `<omagents-root>/hooks/project-venv.js` (`${PLUGIN_ROOT}` is the root for Codex):
 
-- If `<project-root>/.venv` does not exist, create it automatically without asking: `python3 -m venv .venv`
-- Install into it: `.venv/bin/pip install -e .` or `.venv/bin/pip install -r requirements.txt`
-- Run the project with `.venv/bin/python ...`
+```bash
+# Create or reuse the project environment and base overlay
+node <omagents-root>/hooks/project-venv.js ensure --root <project-root>
+
+# Install project-declared dependencies locally
+node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
+node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -e .
+
+# Run with project packages first, then base tool packages
+node <omagents-root>/hooks/project-venv.js run --root <project-root> -- script.py
+```
+
+Project dependencies declared in `pyproject.toml`, `requirements.txt`, or equivalent files must be installed locally **even when base already contains the same package**. Base is only a tool overlay, not a source of undeclared project dependencies.
+
+**Do not run pip directly in a project overlay.** `project-venv.js pip` sets `OMAGENTS_PROJECT_ONLY=1`, which disables the base overlay so pip cannot mistake base packages for project-local installations. Normal `run` removes that variable and enables base imports.
+
+The overlay shares Python imports, not console scripts. Invoke base tools from base `bin/Scripts`; project packages always override same-named base packages.
 
 ## How to decide which environment to use
 
-1. Is the package needed for the project to build/run/test (declared in `pyproject.toml` / `requirements.txt`)? → project `.venv`.
-2. Is the package a utility the agent uses to produce an artifact for the user (generate an Excel, convert a PDF, render an image, scrape a page)? → `~/.venvs/omagents`.
-3. If both apply, install it in BOTH environments independently. Never share or symlink between them.
+1. Needed for the project to build/run/test or declared by the project → project `.omagents/venv` via `project-venv.js pip`.
+2. Used by the agent to scrape, convert, or generate an artifact → base.
+3. Both roles apply → manage both environments independently; the project dependency remains local.
+4. Project build, test, release, and CI configuration must still declare its complete dependencies.
 
 ## Cross-Platform Paths
 
-Venv executable paths differ by OS. All commands in this skill use the Unix path (`bin/`). On Windows, substitute as follows:
+| OS | Base Python | Project Python | Console scripts |
+|---|---|---|---|
+| macOS / Linux | `~/.venvs/omagents/bin/python` | `.omagents/venv/bin/python` | `bin/<script>` |
+| Windows | `~/.venvs/omagents/Scripts/python.exe` | `.omagents/venv/Scripts/python.exe` | `Scripts/<script>.exe` |
 
-| OS | Python | pip | Console scripts |
-|----|--------|-----|-----------------|
-| macOS / Linux | `~/.venvs/omagents/bin/python` | `~/.venvs/omagents/bin/pip` | `~/.venvs/omagents/bin/<script>` |
-| Windows | `~/.venvs/omagents/Scripts/python.exe` | `~/.venvs/omagents/Scripts/pip.exe` | `~/.venvs/omagents/Scripts/<script>.exe` |
+Use `<python> -m pip` rather than a pip launcher. Node CLI commands work unchanged on all platforms; only direct interpreter paths differ.
 
-The same applies to project venvs: `.venv/bin/` on Unix, `.venv/Scripts/` on Windows.
+## Keeping environments healthy
 
-## Keeping ~/.venvs/omagents healthy
+- Check base packages: `~/.venvs/omagents/bin/python -m pip list`.
+- If a tool is missing, install only that tool; base persists across sessions.
+- If base or project Python is broken, do not auto-delete it. Report the problem and repair explicitly.
+- Project and base Python `majorMinor` must match, especially for native extensions.
+- If a system dependency is missing, use the platform package manager; do not fall back to system Python.
 
-- Check what's installed: `~/.venvs/omagents/bin/pip list`
-- If a tool is missing, just install it; the venv persists across sessions.
-- If an install fails on a system dependency, install the OS-level dev package separately — do not fall back to the system Python. Use the platform's package manager (`apt-get` on Debian/Ubuntu, `brew` on macOS, `choco` or `scoop` on Windows).
+## Package provisioning
 
-## Pre-installed packages
-
-The plugin auto-installs `jinja2` on first session (used by deep-research report templates).
-
-Other tools (markitdown, playwright, etc.) are installed on-demand by their respective skills when first needed. They are not pre-installed.
+The plugin auto-installs `jinja2` on first session (used by deep-research report templates). Other tools (markitdown, playwright, Office libraries, etc.) are installed on-demand by their respective skills when first needed. They are not eagerly pre-installed.

@@ -1,6 +1,6 @@
 {
   "name": "@omagents/omagents",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
   "type": "module",
   "main": ".opencode/plugins/index.js",
@@ -30,8 +30,8 @@
   "scripts": {
     "build:pack": "npm pack",
     "test": "node --test tests/*.test.js",
-    "format": "prettier --write .opencode/plugins/*.js setup/*.js tests/*.js index.js .codex/plugins/*.js hooks/setup-venv.js",
-    "format:check": "prettier --check .opencode/plugins/*.js setup/*.js tests/*.js index.js .codex/plugins/*.js hooks/setup-venv.js"
+    "format": "prettier --write .opencode/plugins/*.js setup/*.js tests/*.js index.js .codex/plugins/*.js hooks/*.js",
+    "format:check": "prettier --check .opencode/plugins/*.js setup/*.js tests/*.js index.js .codex/plugins/*.js hooks/*.js"
   },
   "devDependencies": {
     "prettier": "^3.9.9"

@@ -41,15 +41,24 @@ test("SKILL_SCRIPT_DIRS includes _shared/scripts", () => {
   )
 })
 
-test("Python prerequisite check exists", () => {
+test("OpenCode delegates Python provisioning to the shared environment module", () => {
   const indexSource = fs.readFileSync(path.join(PLUGINS_DIR, "index.js"), "utf-8")
   assert.ok(
-    indexSource.includes("PYTHON_CMD"),
-    "Plugin should use platform-aware PYTHON_CMD for Python availability check"
+    indexSource.includes("ensureBaseEnvironment"),
+    "Plugin should delegate base provisioning"
+  )
+  assert.ok(indexSource.includes("AGENT_VENV_BIN"), "Plugin should use the shared venv bin path")
+  assert.ok(
+    indexSource.includes("_provisioning"),
+    "Plugin should retain once-per-process deduplication"
   )
   assert.ok(
-    indexSource.includes("Python 3 is not installed"),
-    "Plugin should warn when Python is missing"
+    !indexSource.includes("REQUIRED_PYTHON_PACKAGES"),
+    "Package definitions should be shared"
+  )
+  assert.ok(
+    !indexSource.includes('["-m", "venv", AGENT_VENV]'),
+    "Plugin should not create venvs itself"
   )
 })
 

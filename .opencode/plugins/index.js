@@ -9,26 +9,13 @@
 import path from "path"
 import fs from "fs"
 import { fileURLToPath } from "url"
-import os from "os"
-import { execFile } from "node:child_process"
-import { promisify } from "node:util"
 import { createParallelHooks, setupParallelV2 } from "./parallel.js"
 import baseMcps from "../../mcp-servers/base.json" with { type: "json" }
-
-const execFileAsync = promisify(execFile)
+import { AGENT_VENV_BIN, ensureBaseEnvironment } from "../../hooks/python-env.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const OMAGENTS_DIR = path.resolve(__dirname, "../..")
 const SKILLS_DIR = path.join(OMAGENTS_DIR, "skills")
-
-// Dedicated venv for tools bundled by OmAgents
-const IS_WIN = process.platform === "win32"
-const VENV_BIN = IS_WIN ? "Scripts" : "bin"
-const PYTHON_CMD = IS_WIN ? "python" : "python3"
-const PATH_SEP = IS_WIN ? ";" : ":"
-const AGENT_VENV = path.join(os.homedir(), ".venvs", "omagents")
-const AGENT_PYTHON = path.join(AGENT_VENV, VENV_BIN, IS_WIN ? "python.exe" : "python")
-const AGENT_PIP = path.join(AGENT_VENV, VENV_BIN, IS_WIN ? "pip.exe" : "pip")
 
 // Directories containing skill helper scripts to expose on PATH
 const SKILL_SCRIPT_DIRS = [
@@ -85,9 +72,6 @@ if (process.env.GITHUB_TOKEN) {
   }
 }
 
-// Python packages required by bundled skills
-const REQUIRED_PYTHON_PACKAGES = ["jinja2"]
-
 function warnIfDebug(...args) {
   if (process.env.OMAGENTS_DEBUG === "1") {
     console.warn(...args)
@@ -101,11 +85,10 @@ function warnIfDebug(...args) {
  */
 function buildPathWithAgentTools(currentPath) {
   const current = currentPath || process.env.PATH || ""
-  const existing = current.split(PATH_SEP)
+  const existing = current.split(path.delimiter)
 
   const parts = []
-  const venvBin = path.join(AGENT_VENV, VENV_BIN)
-  if (!existing.includes(venvBin)) parts.push(venvBin)
+  if (!existing.includes(AGENT_VENV_BIN)) parts.push(AGENT_VENV_BIN)
   for (const dir of SKILL_SCRIPT_DIRS) {
     if (fs.existsSync(dir) && !existing.includes(dir)) {
       parts.push(dir)
@@ -113,7 +96,7 @@ function buildPathWithAgentTools(currentPath) {
   }
   parts.push(current)
 
-  return parts.join(PATH_SEP)
+  return parts.join(path.delimiter)
 }
 
 // Extra context appended to compaction requests (V1 experimental.session
@@ -126,15 +109,6 @@ const COMPACTION_NOTE =
   "to resume where you left off.\n" +
   "If you had background tasks running, use parallel_status to check their state."
 
-async function tryRun(cmd, args) {
-  try {
-    await execFileAsync(cmd, args)
-    return true
-  } catch {
-    return false
-  }
-}
-
 // Provisioning runs at most once per process, no matter how many times the
 // host invokes the plugin entry point (V1 may call both the named export and
 // default.server; V2 calls setup once).
@@ -143,44 +117,23 @@ let _provisioning = null
 /**
  * Ensure the dedicated agent venv exists and has the required Python packages.
  * If Python 3 is not found, logs a clear warning with install instructions.
- * Uses node:child_process so it works in both the V1 (Bun) and V2 runtimes.
  * Never rejects.
  */
-function ensurePythonDependencies() {
+function ensurePythonDependencies(provisionBase = ensureBaseEnvironment) {
   if (_provisioning) return _provisioning
   _provisioning = (async () => {
     try {
-      if (!(await tryRun(PYTHON_CMD, ["--version"]))) {
-        warnIfDebug(
-          "[omagents] Python 3 is not installed or not on PATH.\n" +
-            "  OmAgents requires Python 3.11+ for the following features:\n" +
-            "    - Deep Research (Jinja2 report templates)\n" +
-            "    - MarkItDown converter\n" +
-            "    - Playwright web scraping\n" +
-            "    - Loop engine (remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit)\n" +
-            "  Install Python: https://www.python.org/downloads/\n" +
-            "  After installing, restart OpenCode."
-        )
-        return
-      }
-
-      if (!fs.existsSync(AGENT_PYTHON)) {
-        if (!(await tryRun(PYTHON_CMD, ["-m", "venv", AGENT_VENV]))) {
-          warnIfDebug("[omagents] Could not create venv at", AGENT_VENV)
-          return
-        }
-      }
-
-      for (const pkg of REQUIRED_PYTHON_PACKAGES) {
-        if (await tryRun(AGENT_PYTHON, ["-c", `import ${pkg}`])) {
-          continue
-        }
-        if (!(await tryRun(AGENT_PIP, ["install", pkg]))) {
-          warnIfDebug(`[omagents] Could not install ${pkg}`)
-        }
-      }
+      await provisionBase({
+        logger: (message) => warnIfDebug(`[omagents] ${message}`),
+      })
     } catch (error) {
-      warnIfDebug("[omagents] Python dependency check failed:", error.message)
+      warnIfDebug(
+        "[omagents] Python dependency check failed:",
+        error.message,
+        "\n  OmAgents requires Python 3.11+ for Python skills." +
+          "\n  Install Python: https://www.python.org/downloads/" +
+          "\n  After installing, restart OpenCode."
+      )
     }
   })()
   return _provisioning
@@ -607,7 +560,7 @@ async function setupV2(ctx) {
   }
 
   // Provision the Python venv in the background (never blocks plugin load)
-  void ensurePythonDependencies()
+  void ensurePythonDependencies(ctx.omagents?.ensureBaseEnvironment)
 
   return () => {
     try {

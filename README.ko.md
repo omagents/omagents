@@ -61,7 +61,7 @@ open -e ~/.config/opencode/opencode.json
 - 모든 **skill** 등록 (OmAgents + Superpowers)
 - 모든 **MCP server** 등록 (agentmemory, codegraph, context7, websearch, github/grep_app)
 - **병렬 실행** 활성화 (`/ps` 및 `cancel_task`를 통한 background agent)
-- `~/.venvs/omagents`에 **Python venv** 설정 (보고서 템플릿용 `jinja2` 설치)
+- 영구적인 **Python base venv** `~/.venvs/omagents`를 재사용하거나 생성 (`jinja2`처럼 누락된 core package만 설치)
 - **Python 사전 요구 사항** 확인 (Python이 없는 경우 설치 안내와 함께 경고)
 
 ### LLM Agent용 가이드
@@ -133,7 +133,7 @@ OpenCode 전용 병렬 실행 엔진은 사용할 수 없습니다. Codex의 네
 | 🔍 | **Deep Research** | 다중 소스 반복 연구, items × fields 매트릭스, gap detection loop, Jinja2 보고서 |
 | ⚡ | **Parallel Execution**(병렬 실행) | `task(background: true)`를 통한 background task 분배, 지속성 + session 격리를 갖춘 Job Board, `/ps` 명령어 |
 | 📚 | **내장 MCP** | agentmemory, codegraph, context7, websearch, github/grep_app - 모두 자동 등록 |
-| 🐍 | **Python Tooling** | `~/.venvs/omagents` 전용 venv, jinja2 및 skill 의존성 자동 설치 |
+| 🐍 | **Python Tooling** | 영구 base는 `~/.venvs/omagents`, project overlay는 필요 시 `.omagents/venv` 사용. core/skill 의존성은 누락된 경우에만 설치 |
 | 📄 | **MarkItDown** | PDF, DOCX, XLSX, PPTX, HTML을 Markdown으로 변환 |
 | 📊 | **OfficeCLI** | officecli로 .docx/.xlsx/.pptx 생성/분석/교정/편집 |
 | 🌐 | **Web Scraping** | Playwright 기반 페이지 가져오기 및 스크래핑 |
@@ -141,6 +141,20 @@ OpenCode 전용 병렬 실행 엔진은 사용할 수 없습니다. Codex의 네
 | 🏗️ | **Refactor** | loop engine 검증을 통한 체계적 코드 리팩토링 |
 | 🛡️ | **Hyperplan** | 3개 병렬 critic을 활용한 대립적 plan 검토 (보안, 아키텍처, edge case) |
 | 🔧 | **Code Intelligence** | LSP guide + AST-grep을 통한 구조적 code search 및 rewrite |
+
+---
+
+## Python 환경
+
+`~/.venvs/omagents`는 agent 도구를 위한 영구 base입니다. 프로젝트 의존성은 필요할 때 생성되는 `<project-root>/.omagents/venv`를 사용하며, 기존 프로젝트 `.venv`는 마이그레이션하거나 수정하지 않습니다. base와 프로젝트의 Python `majorMinor`는 일치해야 합니다. `jinja2`만 미리 provision되고 다른 도구는 on-demand로 설치됩니다.
+
+```bash
+node <omagents-root>/hooks/project-venv.js ensure --root <project-root>
+node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
+node <omagents-root>/hooks/project-venv.js run --root <project-root> -- script.py
+```
+
+`pip` 명령은 `OMAGENTS_PROJECT_ONLY=1`을 설정하여 base 패키지가 프로젝트 의존성을 이미 충족했다고 잘못 판단하는 것을 방지합니다. `run`은 base overlay를 다시 활성화하며 프로젝트 패키지가 우선합니다. project overlay에서 pip를 직접 실행하지 마세요.
 
 ---
 
@@ -203,7 +217,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 |-------|------|-------|------|
 | `deep-research` | OmAgents | Yes | 다중 소스, items × fields, gap detection, Jinja2 보고서를 활용한 반복 연구 |
 | `parallel-execution` | OmAgents | - | Job Board 추적을 통한 background 병렬 task 분배 |
-| `agents-python-tools` | OmAgents | - | Python tooling을 전용 `~/.venvs/omagents` venv로 라우팅 |
+| `agents-python-tools` | OmAgents | - | agent 도구는 `~/.venvs/omagents`로, 프로젝트 의존성은 `.omagents/venv`로 라우팅하고 안전한 base overlay 제공 |
 | `markitdown-converter` | OmAgents | - | 문서(PDF, DOCX, XLSX 등)를 Markdown으로 변환 |
 | `officecli` | OmAgents | - | officecli CLI로 Office 문서(.docx, .xlsx, .pptx) 생성/분석/교정/편집 |
 | `playwright-web-scraping` | OmAgents | - | Playwright를 활용한 web scraping 및 페이지 가져오기 |
@@ -305,9 +319,11 @@ omagents/
 │   ├── index.js              # OpenCode 플러그인 (superpowers + omagents hooks 병합)
 │   └── parallel.js           # 병렬 실행 엔진
 ├── .codex/plugins/
-│   └── install.js            # Codex 설치기 (npx @omagents/omagents로 실행)
+│   └── setup.js              # Codex 설치기 (npx @omagents/omagents로 실행)
 ├── hooks/
-│   └── setup-venv.sh         # 공유 venv 설정 hook (OpenCode + Codex)
+│   ├── python-env.js         # 공유 base/프로젝트 Python 환경 모듈
+│   ├── project-venv.js       # 프로젝트 overlay CLI (ensure/python/pip/run)
+│   └── setup-venv.js         # Codex SessionStart base 설정 hook
 ├── skills/                   # 번들된 skills (18 OmAgents + 15 Superpowers)
 │   ├── _shared/scripts/      # 공유 스크립트 (loop_engine.py)
 │   ├── deep-research/        # gap detection 연구 워크플로

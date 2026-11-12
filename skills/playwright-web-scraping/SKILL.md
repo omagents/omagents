@@ -97,12 +97,16 @@ for item in items:
 
 Playwright runs in the omagents Python venv (see agents-python-tools skill for setup and cross-platform paths):
 
+Check the Python package and Chromium separately through the base interpreter:
+
 ```bash
-pip install playwright 2>/dev/null
-python -m playwright install chromium 2>/dev/null
+~/.venvs/omagents/bin/python -c "from playwright.async_api import async_playwright" 2>/dev/null && echo "OK" || echo "NEED_INSTALL"
+~/.venvs/omagents/bin/python -c "from pathlib import Path; from playwright.sync_api import sync_playwright; p=sync_playwright().start(); executable=p.chromium.executable_path; p.stop(); print('OK' if Path(executable).exists() else 'NEED_INSTALL')"
 ```
 
-If Playwright and chromium are already installed, skip the install steps. Always check first with:
+Run only the installation step whose check reports `NEED_INSTALL`:
+
 ```bash
-python -c "from playwright.async_api import async_playwright" 2>/dev/null && echo "OK" || echo "NEED_INSTALL"
+~/.venvs/omagents/bin/python -m pip install playwright
+~/.venvs/omagents/bin/python -m playwright install chromium
 ```

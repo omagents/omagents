@@ -59,6 +59,27 @@ ls ~/.venvs/omagents/bin/python
 - **PASS**: venv exists and jinja2 is importable
 - **FAIL**: venv missing or jinja2 not installed. Tell user to restart OpenCode (the plugin provisions it on session.created).
 
+For a project using `.omagents/venv`, also inspect the overlay:
+
+1. Run `node <omagents-root>/hooks/project-venv.js ensure --root <project-root>` to validate or idempotently repair the overlay. A broken interpreter or Python `majorMinor` mismatch is a **FAIL** and must not trigger automatic deletion. Read the versions and site paths directly when diagnosing a failure (use `Scripts/python.exe` on Windows):
+   ```bash
+   ~/.venvs/omagents/bin/python -c "import sys,sysconfig; print('.'.join(map(str,sys.version_info[:2]))); print(sysconfig.get_path('purelib')); print(sysconfig.get_path('platlib'))"
+   <project-root>/.omagents/venv/bin/python -c "import sys,sysconfig; print('.'.join(map(str,sys.version_info[:2]))); print(sysconfig.get_path('purelib')); print(sysconfig.get_path('platlib'))"
+   ```
+2. Inspect project `pyvenv.cfg`: `include-system-site-packages` must be `false`.
+3. Locate the project `purelib` and confirm `omagents-base.pth` exists and points to the base `purelib`/`platlib` reported by `sysconfig`. When `purelib` and `platlib` differ, both must be present. Compare paths after `os.path.normcase(os.path.realpath(...))` normalization.
+4. **Normal mode** must import base-only tools through the project interpreter:
+   ```bash
+   node <omagents-root>/hooks/project-venv.js run --root <project-root> -- -c "import jinja2; print(jinja2.__file__)"
+   ```
+   **PASS** only when the normalized `jinja2.__file__` is beneath base `purelib`/`platlib` for a base-only package. If the project declares Jinja2 locally, its normalized path must instead be beneath the project `purelib`, proving the project copy wins.
+5. Project-only isolation must remove both base paths. On Unix, substitute the reported paths and run:
+   ```bash
+   OMAGENTS_PROJECT_ONLY=1 BASE_PURELIB='<base-purelib>' BASE_PLATLIB='<base-platlib>' <project-root>/.omagents/venv/bin/python -c "import os,sys; paths={os.path.normcase(os.path.realpath(p)) for p in sys.path}; assert all(os.path.normcase(os.path.realpath(p)) not in paths for p in [os.environ['BASE_PURELIB'], os.environ['BASE_PLATLIB']])"
+   ```
+   On Windows, set all three variables for the command session and use `Scripts/python.exe`. Also run `node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- show jinja2`: base-only Jinja2 must be reported as not installed; a project-local copy must have its `Location` inside the project `purelib`.
+6. Compare project and base `majorMinor`; mismatch can break native extensions and requires explicit project recreation after user confirmation.
+
 ### 4. Skill Discovery
 
 Verify the skills directory exists and contains SKILL.md files:

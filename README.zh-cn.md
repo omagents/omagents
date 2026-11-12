@@ -61,7 +61,7 @@ open -e ~/.config/opencode/opencode.json
 - 注册所有 **skills**（OmAgents + Superpowers）
 - 注册所有 **MCP servers**（agentmemory、codegraph、context7、websearch、github/grep_app）
 - 启用 **parallel execution**（后台 agent，支持 `/ps` 和 `cancel_task`）
-- 设置 **Python venv** 于 `~/.venvs/omagents`（安装 `jinja2` 用于报告模板）
+- 复用或创建持久的 **Python base venv** `~/.venvs/omagents`（仅安装缺失的核心包，例如 `jinja2`）
 - 检查 **Python 前置条件**（如果缺少 Python，会给出安装提示）
 
 ### 面向 LLM Agent
@@ -133,7 +133,7 @@ OpenCode 独有的并行执行引擎不可用；请使用 Codex 原生的 subage
 | 🔍 | **Deep Research** | 多来源迭代研究，支持 items × fields 矩阵、gap detection loop、Jinja2 报告 |
 | ⚡ | **Parallel Execution** | 通过 `task(background: true)` 进行后台任务分发，Job Board 支持持久化和 session 隔离，`/ps` 命令 |
 | 📚 | **内置 MCPs** | agentmemory、codegraph、context7、websearch、github/grep_app —— 全部自动注册 |
-| 🐍 | **Python 工具链** | 专用 venv 于 `~/.venvs/omagents`，自动安装 jinja2 和 skill 依赖 |
+| 🐍 | **Python 工具链** | 持久 base 位于 `~/.venvs/omagents`，项目 overlay 按需位于 `.omagents/venv`；核心包和 skill 依赖仅在缺失时安装 |
 | 📄 | **MarkItDown** | 将 PDF、DOCX、XLSX、PPTX、HTML 转换为 Markdown |
 | 📊 | **OfficeCLI** | 通过 officecli 创建、分析、校对和修改 .docx/.xlsx/.pptx |
 | 🌐 | **Web Scraping** | 基于 Playwright 的页面抓取和数据采集 |
@@ -141,6 +141,20 @@ OpenCode 独有的并行执行引擎不可用；请使用 Codex 原生的 subage
 | 🏗️ | **Refactor** | 通过 loop engine 验证进行系统性代码重构 |
 | 🛡️ | **Hyperplan** | 对抗式 plan 审查，3 个并行 critics（安全、架构、边界情况） |
 | 🔧 | **Code Intelligence** | LSP guide + AST-grep，用于结构化代码搜索和重写 |
+
+---
+
+## Python 环境
+
+`~/.venvs/omagents` 是 agent 工具的持久 base。项目依赖使用按需创建的 `<project-root>/.omagents/venv`，不会迁移或修改已有项目 `.venv`。base 与项目的 Python `majorMinor` 必须一致。只有 `jinja2` 会预先配置，其他工具均按需安装。
+
+```bash
+node <omagents-root>/hooks/project-venv.js ensure --root <project-root>
+node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
+node <omagents-root>/hooks/project-venv.js run --root <project-root> -- script.py
+```
+
+`pip` 命令会设置 `OMAGENTS_PROJECT_ONLY=1`，避免 base 中已有的包被误认为项目依赖。`run` 会重新启用 base overlay，并让项目包优先。不要在项目 overlay 中直接运行 pip。
 
 ---
 
@@ -203,7 +217,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 |-------|--------|-------|-------------|
 | `deep-research` | OmAgents | 是 | 多来源、迭代式研究，支持 items × fields、gap detection、Jinja2 报告 |
 | `parallel-execution` | OmAgents | - | 通过 Job Board 跟踪的后台并行任务分发 |
-| `agents-python-tools` | OmAgents | - | 将 Python 工具链路由到专用 `~/.venvs/omagents` venv |
+| `agents-python-tools` | OmAgents | - | 将 agent 工具路由到 `~/.venvs/omagents`，项目依赖路由到 `.omagents/venv`，并提供安全的 base overlay |
 | `markitdown-converter` | OmAgents | - | 将文档（PDF、DOCX、XLSX 等）转换为 Markdown |
 | `officecli` | OmAgents | - | 使用 officecli 创建、分析、校对和修改 Office 文档（.docx、.xlsx、.pptx）|
 | `playwright-web-scraping` | OmAgents | - | 使用 Playwright 进行 web scraping 和页面抓取 |
@@ -305,9 +319,11 @@ omagents/
 │   ├── index.js              # OpenCode 插件（合并 superpowers + omagents hooks）
 │   └── parallel.js           # 并行执行引擎
 ├── .codex/plugins/
-│   └── install.js            # Codex 安装器（通过 npx @omagents/omagents 执行）
+│   └── setup.js              # Codex 安装器（通过 npx @omagents/omagents 执行）
 ├── hooks/
-│   └── setup-venv.sh         # 共享 venv 设置 hook（OpenCode + Codex）
+│   ├── python-env.js         # 共享 base/项目 Python 环境模块
+│   ├── project-venv.js       # 项目 overlay CLI（ensure/python/pip/run）
+│   └── setup-venv.js         # Codex SessionStart base 设置 hook
 ├── skills/                   # 打包的 skills（18 OmAgents + 15 Superpowers）
 │   ├── _shared/scripts/      # 共享脚本（loop_engine.py）
 │   ├── deep-research/        # 带有 gap detection 的研究工作流

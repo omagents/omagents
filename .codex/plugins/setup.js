@@ -279,9 +279,11 @@ export async function installCodex() {
   const hooksDir = path.join(cacheDir, "hooks")
   mkdirp(hooksDir)
   fs.writeFileSync(path.join(hooksDir, "hooks.json"), JSON.stringify(HOOKS_CONFIG, null, 2) + "\n")
-  const venvHookSrc = path.join(PKG_ROOT, "hooks", "setup-venv.js")
-  if (fs.existsSync(venvHookSrc)) {
-    fs.copyFileSync(venvHookSrc, path.join(hooksDir, "setup-venv.js"))
+  for (const hookName of ["python-env.js", "setup-venv.js", "project-venv.js"]) {
+    const hookSrc = path.join(PKG_ROOT, "hooks", hookName)
+    if (fs.existsSync(hookSrc)) {
+      fs.copyFileSync(hookSrc, path.join(hooksDir, hookName))
+    }
   }
 
   // 4. skills (with tool mapping)

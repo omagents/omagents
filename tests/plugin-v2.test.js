@@ -23,9 +23,16 @@ function makeFakeV2Context() {
     toolHooks: {},
     sessionHooks: {},
     shellHooks: {},
+    pythonProvisions: 0,
   }
 
   const ctx = {
+    omagents: {
+      ensureBaseEnvironment: async () => {
+        captured.pythonProvisions += 1
+        return { status: "reused" }
+      },
+    },
     skill: {
       transform: async (cb) =>
         cb({
@@ -88,6 +95,17 @@ test("V2 setup returns quietly for a V1-shaped context", async () => {
   await assert.doesNotReject(() => mod.default.setup(null))
   await assert.doesNotReject(() => mod.default.setup({}))
   await assert.doesNotReject(() => mod.default.setup({ session: {} }))
+})
+
+test("V2 setup uses the injected Python provisioner", async () => {
+  const mod = await import(path.join(PLUGINS_DIR, "index.js"))
+  const { ctx, captured } = makeFakeV2Context()
+  const cleanup = await mod.default.setup(ctx)
+  try {
+    assert.equal(captured.pythonProvisions, 1)
+  } finally {
+    if (typeof cleanup === "function") await cleanup()
+  }
 })
 
 test("V2 setup registers bundled skills via ctx.skill.transform", async () => {
@@ -349,9 +367,14 @@ function makeInstalledCopy(t) {
   const pkgDir = path.join(tmp, "node_modules", "@omagents", "omagents")
   fs.mkdirSync(path.join(pkgDir, ".opencode", "plugins"), { recursive: true })
   fs.mkdirSync(path.join(pkgDir, "mcp-servers"), { recursive: true })
+  fs.mkdirSync(path.join(pkgDir, "hooks"), { recursive: true })
   for (const f of ["index.js", "parallel.js"]) {
     fs.copyFileSync(path.join(PLUGINS_DIR, f), path.join(pkgDir, ".opencode", "plugins", f))
   }
+  fs.copyFileSync(
+    path.join(ROOT, "hooks", "python-env.js"),
+    path.join(pkgDir, "hooks", "python-env.js")
+  )
   fs.copyFileSync(
     path.join(ROOT, "mcp-servers", "base.json"),
     path.join(pkgDir, "mcp-servers", "base.json")

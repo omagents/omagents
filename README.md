@@ -67,7 +67,7 @@ That's it. At session start OmAgents will automatically:
 - Register all **skills** (OmAgents + Superpowers)
 - Register all **MCP servers** (agentmemory, codegraph, context7, websearch, github/grep_app)
 - Enable **parallel execution** (background agents with `/ps` and `cancel_task`)
-- Set up **Python venv** at `~/.venvs/omagents` (installs `jinja2` for report templates)
+- Reuse or create the persistent **Python base venv** at `~/.venvs/omagents` (installs only missing core packages such as `jinja2`)
 - Check **Python prerequisite** (warns with install instructions if Python is missing)
 
 ### For LLM Agents
@@ -139,7 +139,7 @@ The OpenCode-only parallel execution engine is not available; use Codex's native
 | 🔍 | **Deep Research** | Multi-source iterative research with items × fields matrix, gap detection loop, Jinja2 reports |
 | ⚡ | **Parallel Execution** | Background task dispatch via `task(background: true)`, Job Board with persistence + session isolation, `/ps` command |
 | 📚 | **Built-in MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app - all auto-registered |
-| 🐍 | **Python Tooling** | Dedicated venv at `~/.venvs/omagents`, auto-installs jinja2 and skill dependencies |
+| 🐍 | **Python Tooling** | Persistent base at `~/.venvs/omagents` plus on-demand project overlays at `.omagents/venv`; core/skill dependencies install only when missing |
 | 📄 | **MarkItDown** | Convert PDF, DOCX, XLSX, PPTX, HTML to Markdown |
 | 📊 | **OfficeCLI** | Create, analyze, proofread, and modify .docx/.xlsx/.pptx via officecli |
 | 🌐 | **Web Scraping** | Playwright-based page fetching and scraping |
@@ -147,6 +147,20 @@ The OpenCode-only parallel execution engine is not available; use Codex's native
 | 🏗️ | **Refactor** | Systematic code refactoring with loop engine verification |
 | 🛡️ | **Hyperplan** | Adversarial plan review with 3 parallel critics (security, architecture, edge cases) |
 | 🔧 | **Code Intelligence** | LSP guide + AST-grep for structural code search and rewrite |
+
+---
+
+## Python Environments
+
+`~/.venvs/omagents` is the persistent base for agent-owned tools. Project dependencies use `<project-root>/.omagents/venv`, created only when needed; an existing project `.venv` is never migrated or modified. Base and project Python `majorMinor` must match. Only `jinja2` is eagerly provisioned—other tools install on-demand.
+
+```bash
+node <omagents-root>/hooks/project-venv.js ensure --root <project-root>
+node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
+node <omagents-root>/hooks/project-venv.js run --root <project-root> -- script.py
+```
+
+The `pip` command sets `OMAGENTS_PROJECT_ONLY=1` so base packages cannot satisfy project dependencies accidentally. `run` enables the base overlay again, with project packages taking precedence. Do not run pip directly in a project overlay.
 
 ---
 
@@ -209,7 +223,7 @@ loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
 |-------|--------|-------|-------------|
 | `deep-research` | OmAgents | Yes | Multi-source, iterative research with items × fields, gap detection, Jinja2 reports |
 | `parallel-execution` | OmAgents | - | Background parallel task dispatch with Job Board tracking |
-| `agents-python-tools` | OmAgents | - | Routes Python tooling to the dedicated `~/.venvs/omagents` venv |
+| `agents-python-tools` | OmAgents | - | Routes agent tools to `~/.venvs/omagents` and project dependencies to `.omagents/venv` with a safe base overlay |
 | `markitdown-converter` | OmAgents | - | Convert documents (PDF, DOCX, XLSX, etc.) to Markdown |
 | `officecli` | OmAgents | - | Create, analyze, proofread, and modify Office documents (.docx, .xlsx, .pptx) via officecli |
 | `playwright-web-scraping` | OmAgents | - | Web scraping and page fetching with Playwright |
@@ -311,9 +325,11 @@ omagents/
 │   ├── index.js              # OpenCode plugin (merges superpowers + omagents hooks)
 │   └── parallel.js           # Parallel execution engine
 ├── .codex/plugins/
-│   └── install.js            # Codex installer (run via npx @omagents/omagents)
+│   └── setup.js              # Codex installer (run via npx @omagents/omagents)
 ├── hooks/
-│   └── setup-venv.sh         # Shared venv setup hook (OpenCode + Codex)
+│   ├── python-env.js         # Shared base/project Python environment module
+│   ├── project-venv.js       # Project overlay CLI (ensure/python/pip/run)
+│   └── setup-venv.js         # Codex SessionStart base setup hook
 ├── skills/                   # Bundled skills (18 OmAgents + 15 Superpowers)
 │   ├── _shared/scripts/      # Shared scripts (loop_engine.py)
 │   ├── deep-research/        # Research workflow with gap detection

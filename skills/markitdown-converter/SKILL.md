@@ -74,9 +74,9 @@ print(result.text_content)
 MarkItDown runs in the omagents Python venv (see agents-python-tools skill for setup and cross-platform paths):
 
 ```bash
-# Check installation
-python -c "from markitdown import MarkItDown; print('OK')"
+# Check installation through the base interpreter
+~/.venvs/omagents/bin/python -c "from markitdown import MarkItDown; print('OK')"
 
-# Install if missing
-pip install markitdown
+# Install only if the import check fails
+~/.venvs/omagents/bin/python -m pip install markitdown
 ```

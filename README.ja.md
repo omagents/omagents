@@ -61,7 +61,7 @@ open -e ~/.config/opencode/opencode.json
 - すべての**skills**を登録（OmAgents + Superpowers）
 - すべての**MCP servers**を登録（agentmemory、codegraph、context7、websearch、github/grep_app）
 - **並列実行**を有効化（background agents、`/ps`コマンド、`cancel_task`）
-- `~/.venvs/omagents`に**Python venv**をセットアップ（report templates用に`jinja2`をインストール）
+- 永続的な**Python base venv** `~/.venvs/omagents`を再利用または作成（`jinja2`など不足しているcore packageのみをインストール）
 - **Pythonの前提条件**をチェック（Pythonが未インストールの場合はインストール手順を警告表示）
 
 ### LLM Agent向け
@@ -133,7 +133,7 @@ OpenCode 独自の並列実行エンジンは利用できません。Codex の�
 | 🔍 | **Deep Research** | items × fieldsマトリクスによるマルチソース反復research、gap detectionループ、Jinja2レポート |
 | ⚡ | **並列実行** | `task(background: true)`によるbackground taskディスパッチ、永続化とsession isolation付きJob Board、`/ps`コマンド |
 | 📚 | **組み込みMCP** | agentmemory、codegraph、context7、websearch、github/grep_app — すべて自動登録 |
-| 🐍 | **Python Tooling** | `~/.venvs/omagents`に専用venv、jinja2およびskill依存関係を自動インストール |
+| 🐍 | **Python Tooling** | 永続baseは`~/.venvs/omagents`、project overlayは必要時に`.omagents/venv`を使用。core/skill依存関係は不足時のみインストール |
 | 📄 | **MarkItDown** | PDF、DOCX、XLSX、PPTX、HTMLをMarkdownに変換 |
 | 📊 | **OfficeCLI** | officecli を使って .docx/.xlsx/.pptx を作成・分析・校正・編集 |
 | 🌐 | **Web Scraping** | Playwrightベースのページ取得・スクレイピング |
@@ -141,6 +141,20 @@ OpenCode 独自の並列実行エンジンは利用できません。Codex の�
 | 🏗️ | **Refactor** | loop engine検証付きの体系的コードリファクタリング |
 | 🛡️ | **Hyperplan** | 3つの並列criticによる対抗的planレビュー（security、architecture、edge cases） |
 | 🔧 | **Code Intelligence** | LSP guide + AST-grepによる構造的コード検索・書き換え |
+
+---
+
+## Python環境
+
+`~/.venvs/omagents`はagentツール用の永続baseです。project依存関係には必要時に作成される`<project-root>/.omagents/venv`を使用し、既存のproject `.venv`は移行・変更しません。baseとprojectのPython `majorMinor`は一致している必要があります。事前 provisionは`jinja2`のみで、他のツールはon-demandでインストールされます。
+
+```bash
+node <omagents-root>/hooks/project-venv.js ensure --root <project-root>
+node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
+node <omagents-root>/hooks/project-venv.js run --root <project-root> -- script.py
+```
+
+`pip`コマンドは`OMAGENTS_PROJECT_ONLY=1`を設定し、baseのpackageがproject依存関係を満たしたと誤判定されるのを防ぎます。`run`はbase overlayを再度有効化し、project packageを優先します。project overlay内でpipを直接実行しないでください。
 
 ---
 
@@ -203,7 +217,7 @@ loop_engine.py add <skill> '<task_json>'      # 既存キューにタスクを�
 |-------|--------|-------|------|
 | `deep-research` | OmAgents | Yes | マルチソース反復research、items × fields、gap detection、Jinja2レポート |
 | `parallel-execution` | OmAgents | - | Job Board追跡付きbackground並列taskディスパッチ |
-| `agents-python-tools` | OmAgents | - | Python toolingを専用`~/.venvs/omagents` venvにルーティング |
+| `agents-python-tools` | OmAgents | - | agentツールは`~/.venvs/omagents`、project依存関係は`.omagents/venv`へルーティングし、安全なbase overlayを提供 |
 | `markitdown-converter` | OmAgents | - | ドキュメント（PDF、DOCX、XLSX等）をMarkdownに変換 |
 | `officecli` | OmAgents | - | officecli CLI で Office 文書（.docx/.xlsx/.pptx）の作成・分析・校正・編集 |
 | `playwright-web-scraping` | OmAgents | - | PlaywrightによるWeb scraping・ページ取得 |
@@ -305,9 +319,11 @@ omagents/
 │   ├── index.js              # OpenCode プラグイン（superpowers + omagents hooks をマージ）
 │   └── parallel.js           # 並列実行エンジン
 ├── .codex/plugins/
-│   └── install.js            # Codex インストーラー（npx @omagents/omagents で実行）
+│   └── setup.js              # Codex インストーラー（npx @omagents/omagents で実行）
 ├── hooks/
-│   └── setup-venv.sh         # 共有 venv セットアップ hook（OpenCode + Codex）
+│   ├── python-env.js         # 共有base/project Python環境モジュール
+│   ├── project-venv.js       # Project overlay CLI（ensure/python/pip/run）
+│   └── setup-venv.js         # Codex SessionStart baseセットアップhook
 ├── skills/                   # バンドルされた skills（18 OmAgents + 15 Superpowers）
 │   ├── _shared/scripts/      # 共有スクリプト（loop_engine.py）
 │   ├── deep-research/        # gap detection 付きリサーチワークフロー

@@ -131,3 +131,62 @@ test("agents-python-tools does not claim tools are pre-installed", () => {
     "agents-python-tools should clarify other tools are installed on-demand"
   )
 })
+
+test("agents-python-tools routes project dependencies through the overlay CLI", () => {
+  const content = fs.readFileSync(path.join(SKILLS_DIR, "agents-python-tools", "SKILL.md"), "utf-8")
+  for (const expected of [
+    "<project-root>/.omagents/venv",
+    "project-venv.js pip",
+    "OMAGENTS_PROJECT_ONLY",
+    "Do not run pip directly",
+  ]) {
+    assert.ok(content.includes(expected), `agents-python-tools should include ${expected}`)
+  }
+  assert.ok(
+    !content.includes("<project-root>/.venv"),
+    "project dependencies should not be routed to the old project .venv path"
+  )
+  assert.ok(
+    !content.includes("Do NOT use for installing the project's own dependencies"),
+    "the skill trigger must not exclude its project-dependency use case"
+  )
+})
+
+test("document conversion and scraping tools install through base Python", () => {
+  const markitdown = fs.readFileSync(
+    path.join(SKILLS_DIR, "markitdown-converter", "SKILL.md"),
+    "utf-8"
+  )
+  const playwright = fs.readFileSync(
+    path.join(SKILLS_DIR, "playwright-web-scraping", "SKILL.md"),
+    "utf-8"
+  )
+  const cases = [
+    [markitdown, "from markitdown import MarkItDown", "markitdown"],
+    [playwright, "from playwright.async_api import async_playwright", "playwright"],
+  ]
+  for (const [content, importCheck, packageName] of cases) {
+    const check = content.indexOf(`~/.venvs/omagents/bin/python -c`)
+    const install = content.indexOf(`~/.venvs/omagents/bin/python -m pip install ${packageName}`)
+    assert.ok(check >= 0, `${packageName} should check through base Python`)
+    assert.ok(install > check, `${packageName} should install only after its import check`)
+    assert.ok(content.includes(importCheck), `${packageName} should retain its import check`)
+  }
+  assert.ok(
+    playwright.includes("~/.venvs/omagents/bin/python -m playwright install chromium"),
+    "Chromium should be installed through base Python"
+  )
+})
+
+test("doctor diagnoses project overlay health and isolation", () => {
+  const content = fs.readFileSync(path.join(SKILLS_DIR, "doctor", "SKILL.md"), "utf-8")
+  for (const expected of [
+    "project-venv.js",
+    "omagents-base.pth",
+    "majorMinor",
+    "OMAGENTS_PROJECT_ONLY=1",
+    "Normal mode",
+  ]) {
+    assert.ok(content.includes(expected), `doctor should include ${expected}`)
+  }
+})

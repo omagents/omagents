@@ -44,6 +44,10 @@ omagents/
 │   └── workflows/
 │       ├── ci.yml              # Syntax check on push/PR
 │       └── publish.yml         # OIDC trusted publishing on tag push
+├── hooks/
+│   ├── python-env.js           # Shared persistent base + project overlay management
+│   ├── project-venv.js         # Project CLI: ensure/python/pip/run
+│   └── setup-venv.js           # Codex SessionStart base provisioning hook
 ├── skills/                     # Bundled OpenCode skills
 │   ├── _shared/scripts/        # Shared scripts (loop_engine.py)
 │   ├── deep-research/          # Multi-source research workflow
@@ -96,14 +100,14 @@ On load the plugin:
 2. **Register skills** from `skills/` (V1: `config.skills.paths`; V2: per-skill `ctx.skill.transform` with frontmatter parsing)
 3. **Register MCP servers** (V1: `config.mcp` with `enabled`; V2: `ctx.mcp.transform` with the `enabled` key stripped). User config takes precedence (won't override existing)
 4. **Merge hooks** from superpowers + parallel execution engine (V1)
-5. **Provision Python venv** at `~/.venvs/omagents`, auto-installs `jinja2` (V1: on `session.created`; V2: at plugin setup, non-blocking). Uses `node:child_process`, runs once per process
+5. **Provision the persistent Python base** at `~/.venvs/omagents` through `hooks/python-env.js`, auto-installing only missing core packages (`jinja2`). V1 runs on `session.created`; V2 runs at plugin setup, non-blocking. Uses `node:child_process`, runs once per process, and never auto-deletes the base. Project overlays are created separately on demand, never at plugin startup.
 6. **Inject PATH** via shell hook: venv bin + skill script dirs + existing PATH (deduped)
 
 Key variables:
 - `OMAGENTS_DIR` = project root (parent of `.opencode/`)
 - `SKILLS_DIR` = `OMAGENTS_DIR/skills`
-- `AGENT_VENV` = `~/.venvs/omagents`
-- `AGENT_PYTHON` = `~/.venvs/omagents/bin/python`
+- `AGENT_VENV` / `AGENT_VENV_BIN` = persistent base path and its platform-specific executable directory, defined in `hooks/python-env.js`
+- `getProjectVenvPath(projectRoot)` = `<project-root>/.omagents/venv`, the on-demand project overlay
 - `SKILL_SCRIPT_DIRS` = script directories from deep-research, markitdown-converter, playwright-web-scraping, _shared
 
 ## Parallel Execution Engine (`.opencode/plugins/parallel.js`)
@@ -168,10 +172,13 @@ brainstorming, test-driven-development, systematic-debugging, writing-plans, exe
 
 **IMPORTANT - Common mistake:** Only `jinja2` is auto-installed by the plugin. Other tools (markitdown, playwright, etc.) are installed ON-DEMAND by their respective skills when first needed. Do NOT claim they are "pre-installed".
 
-- Agent tools venv: `~/.venvs/omagents` (managed by plugin + agents-python-tools skill)
-- Project deps venv: `<project-root>/.venv` (managed by the project, never mixed)
+- Agent tools base: `~/.venvs/omagents` (persistent; managed by plugin + agents-python-tools skill)
+- Project deps overlay: `<project-root>/.omagents/venv` (created on demand; existing `.venv` directories are untouched)
+- Project overlay CLI: `hooks/project-venv.js` with `ensure`, `python`, `pip`, and `run` commands
 
-The `agents-python-tools` skill has full documentation on venv paths, cross-platform paths, and decision rules. Do not duplicate that information elsewhere - reference the skill instead.
+The project overlay uses `omagents-base.pth`, not `--system-site-packages`. Internal inspection/venv/pip commands use Python `-I` to prevent cwd module shadowing. Project ensure removes inherited `OMAGENTS_PROJECT_ONLY` for its internal normal-mode verification; only `project-venv.js pip` sets it again so project dependencies always install locally even when base contains them. Normal `run` does not use `-I` and enables base imports with project packages taking precedence. Project/base Python `majorMinor` must match. Neither environment is automatically deleted.
+
+The `agents-python-tools` skill has full documentation on venv paths, cross-platform paths, CLI usage, and decision rules. Do not duplicate that information elsewhere - reference the skill instead.
 
 ## How to Add a New Skill
 
@@ -272,6 +279,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | 0.10.1 | v0.10.1 | Fix: self-repo dedup guard — published package yields to the repo's local checkout when running inside this repo |
 | 0.11.0 | v0.11.0 | Local-first MCP registration: context7 always local (`@upstash/context7-mcp`), websearch local (`exa-mcp-server`) when `EXA_API_KEY` is set |
 | 0.11.1 | v0.11.1 | Fix: V2 local MCP servers get `timeout: { startup: 180s }` (cold npx cache exceeded the host startup timeout, killing the download mid-way so every startup failed); doctor skill stdio probes no longer hang |
+| 0.12.0 | v0.12.0 | Persistent Python base + on-demand project overlays, shared OpenCode/Codex provisioning, project-only pip, overlay diagnostics and regression coverage |
 
 ## Design Principles
 
@@ -304,3 +312,4 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 11. **Don't point package `main` at the CLI wrapper.** OpenCode imports the plugin via `main`; module-level `process.argv` dispatch (plus `process.exit`) in that file kills the host process (this broke `opencode run` for npm installs of 0.7.0–0.9.1 — see v0.9.2). `main` must be the plugin entry (`.opencode/plugins/index.js`); only `bin` may point at the CLI wrapper.
 12. **Don't export a bare function as `default` from `.opencode/plugins/*.js`.** OpenCode V2 requires the default export to be a `{ id, setup }` descriptor object and hard-fails the plugin otherwise (`PluginModule.LoadError`). Keep the dual shape `{ id, server, setup }`: `server` is the V1 plugin function, `setup` the V2 one. V1 hosts may invoke exported functions (including `setup`) with a V1-shaped ctx — guard V2 entry points by checking V2-only domains (e.g. `typeof ctx.session?.hook === "function"`) and return quietly.
 13. **Don't import `@opencode/plugin` (V2 SDK) or `@opencode-ai/plugin` (V1 SDK) in plugin code.** The dual entry point is a plain object; importing a host SDK package breaks the other runtime. superpowers does the same.
+14. **Don't run project pip with the base overlay enabled or auto-delete either venv.** Project dependencies must use `project-venv.js pip` (`OMAGENTS_PROJECT_ONLY=1`). Do not use `--system-site-packages` as a base-venv inheritance mechanism. Existing base/project environments are repaired only with explicit user confirmation.

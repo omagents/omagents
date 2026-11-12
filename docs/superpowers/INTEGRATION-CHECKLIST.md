@@ -69,6 +69,18 @@ After running a Codex session, verify the agent venv was provisioned and can imp
   ```bash
   ~/.venvs/omagents/bin/python -c "import jinja2; print(jinja2.__version__)"
   ```
+- [ ] In a disposable project, verify project overlay creation and idempotent reuse:
+  ```bash
+  node hooks/project-venv.js ensure --root <project-root>
+  node hooks/project-venv.js ensure --root <project-root>  # must report reused
+  ```
+- [ ] Install a project dependency through project-only pip and verify it resolves inside the project venv:
+  ```bash
+  node hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
+  node hooks/project-venv.js run --root <project-root> -- -c "import requests; print(requests.__file__)"
+  ```
+  The path must be under `<project-root>/.omagents/venv`, even if base already contains the same package. Normal `run` may import base-only tools, with project-local packages taking precedence. Do not run project pip directly with the overlay enabled.
+- [ ] Confirm `pyvenv.cfg` has `include-system-site-packages = false`, `.omagents-python.json` matches base `majorMinor`, and the project venv's own `.gitignore` contains `*`. Existing project `.venv` files must remain untouched.
 
 ## Local Automated Verification
 

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-11-12
+
+### Added
+
+- **Persistent Python base + project overlays**: OmAgents tools reuse `~/.venvs/omagents`, while project dependencies can use an on-demand `<project-root>/.omagents/venv`. The new `hooks/project-venv.js` CLI provides `ensure`, `python`, `pip`, and `run`; a switchable `.pth` overlay shares base imports without `--system-site-packages`, gives project packages precedence, and hides base during project pip operations so declared dependencies always install locally. Python minor-version mismatches and broken interpreters fail without automatic deletion.
+- **Python environment diagnostics and tests**: doctor now checks overlay targets, normal/project-only isolation, and version compatibility. Unit and real-Python integration tests cover reuse, idempotence, path safety, project-over-base precedence, and Codex hook packaging.
+
+### Changed
+
+- **Idempotent Python provisioning**: OpenCode and Codex now share `hooks/python-env.js`. Existing base environments are reused, only missing core packages are installed, pip uses `<python> -m pip`, and Codex logs distinguish creation from reuse instead of unconditionally installing `jinja2` on every session start. Internal interpreter commands use `-I` against cwd module shadowing, and project ensure sanitizes inherited project-only mode during normal-mode verification.
+- **Python dependency routing skills**: agent-only tools explicitly use the base interpreter; project-declared dependencies use `.omagents/venv` through the project CLI. Existing project `.venv` directories remain untouched, and non-core tools remain on-demand.
+
 ## [0.11.1] - 2026-10-28
 
 ### Fixed
