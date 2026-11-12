@@ -286,6 +286,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | 0.11.0 | v0.11.0 | Local-first MCP registration: context7 always local (`@upstash/context7-mcp`), websearch local (`exa-mcp-server`) when `EXA_API_KEY` is set |
 | 0.11.1 | v0.11.1 | Fix: V2 local MCP servers get `timeout: { startup: 180s }` (cold npx cache exceeded the host startup timeout, killing the download mid-way so every startup failed); doctor skill stdio probes no longer hang |
 | 0.12.0 | v0.12.0 | Persistent Python base + on-demand project overlays, shared OpenCode/Codex provisioning, project-only pip, overlay diagnostics and regression coverage |
+| 0.13.0 | v0.13.0 | Deep Research deliverable/state separation, run-scoped queues, legacy compatibility, path/input hardening |
 
 ## Design Principles
 
