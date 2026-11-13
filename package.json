@@ -21,17 +21,11 @@
     "type": "git",
     "url": "https://github.com/omagents/omagents"
   },
-  "dependencies": {
-    "superpowers": "git+https://github.com/obra/superpowers.git#8ca22dba9a94f28898bbce59f2537ff4d87c747d"
-  },
-  "bundledDependencies": [
-    "superpowers"
-  ],
   "scripts": {
     "build:pack": "npm pack --workspace @omagents/omagents",
     "test": "node --test tests/*.test.js",
-    "format": "prettier --write packages/opencode/src/*.js packages/opencode/bin/*.js tests/*.js index.js .codex/plugins/*.js hooks/*.js",
-    "format:check": "prettier --check packages/opencode/src/*.js packages/opencode/bin/*.js tests/*.js index.js .codex/plugins/*.js hooks/*.js"
+    "format": "prettier --write packages/core/src/*.js packages/core/src/*/*.js packages/core/hooks/*.js packages/opencode/src/*.js packages/opencode/bin/*.js tests/*.js index.js .codex/plugins/*.js",
+    "format:check": "prettier --check packages/core/src/*.js packages/core/src/*/*.js packages/core/hooks/*.js packages/opencode/src/*.js packages/opencode/bin/*.js tests/*.js index.js .codex/plugins/*.js"
   },
   "devDependencies": {
     "prettier": "^3.9.9"

@@ -8,21 +8,28 @@
 
 import path from "path"
 import fs from "fs"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { createParallelHooks, setupParallelV2 } from "./parallel.js"
-import { resolveMcpServers } from "../../core/src/index.js"
-import { AGENT_VENV_BIN, ensureBaseEnvironment } from "../../../hooks/python-env.js"
+import {
+  AGENT_VENV_BIN,
+  ensureBaseEnvironment,
+  getCorePaths,
+  listSkillDefinitions,
+  renderSkillForHost,
+  resolveMcpServers,
+} from "@omagents/core"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const OMAGENTS_DIR = path.resolve(__dirname, "../../..")
-const SKILLS_DIR = path.join(OMAGENTS_DIR, "skills")
+const CORE_PATHS = getCorePaths()
+const SKILLS_DIR = CORE_PATHS.skillsDir
 
 // Directories containing skill helper scripts to expose on PATH
 const SKILL_SCRIPT_DIRS = [
-  path.join(OMAGENTS_DIR, "skills", "deep-research", "scripts"),
-  path.join(OMAGENTS_DIR, "skills", "markitdown-converter", "scripts"),
-  path.join(OMAGENTS_DIR, "skills", "playwright-web-scraping", "scripts"),
-  path.join(OMAGENTS_DIR, "skills", "_shared", "scripts"),
+  path.join(SKILLS_DIR, "deep-research", "scripts"),
+  path.join(SKILLS_DIR, "markitdown-converter", "scripts"),
+  path.join(SKILLS_DIR, "playwright-web-scraping", "scripts"),
+  path.join(SKILLS_DIR, "_shared", "scripts"),
 ]
 
 // Built-in MCP servers bundled by this plugin. Core resolves the canonical
@@ -111,7 +118,11 @@ let _superpowers = null // null = not tried, false = unavailable, { server, setu
 async function loadSuperpowers() {
   if (_superpowers !== null) return _superpowers
   try {
-    const mod = await import("superpowers")
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(CORE_PATHS.superpowersDir, "package.json"), "utf8")
+    )
+    const pluginEntry = path.join(CORE_PATHS.superpowersDir, packageJson.main || "index.js")
+    const mod = await import(pathToFileURL(pluginEntry).href)
     const d = mod.default
     const server =
       typeof d === "function"
@@ -277,63 +288,23 @@ export const OmagentsPlugin = async (ctx) => {
 // ctx.session.hook("context"/"compaction"), and lifecycle via
 // ctx.event.subscribe().
 
-/**
- * Minimal YAML frontmatter parser for SKILL.md files. Handles plain
- * `key: value` lines, quoted values (including quotes closing on an indented
- * continuation line), block scalar markers (`>`, `|`), and CRLF endings.
- * Only the name/description fields consumed below need to survive parsing.
- */
-function parseFrontmatter(raw) {
-  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
-  if (!match) return { frontmatter: {}, content: raw }
-
-  const frontmatter = {}
-  let lastKey = null
-  for (const rawLine of match[1].split("\n")) {
-    const line = rawLine.replace(/\r$/, "")
-    const colonIdx = line.indexOf(":")
-    if (colonIdx > 0 && !/^\s/.test(line)) {
-      const key = line.slice(0, colonIdx).trim()
-      const value = line.slice(colonIdx + 1).trim()
-      frontmatter[key] = /^(>[+-]?|\|[+-]?)$/.test(value) ? "" : value
-      lastKey = key
-    } else if (lastKey !== null && line.trim() !== "") {
-      // Continuation of a multi-line value: append so long descriptions
-      // survive. Newlines collapse to spaces.
-      frontmatter[lastKey] = `${frontmatter[lastKey]} ${line.trim()}`.trim()
-    }
-  }
-
-  for (const key of Object.keys(frontmatter)) {
-    frontmatter[key] = frontmatter[key].replace(/^(["'])([\s\S]*)\1$/, "$2")
-  }
-
-  return { frontmatter, content: match[2] }
-}
-
 function collectSkillInfos() {
   const skills = []
-  let entries = []
-  try {
-    entries = fs.readdirSync(SKILLS_DIR, { withFileTypes: true })
-  } catch {
-    return skills
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name.startsWith("_")) continue
-    const skillPath = path.join(SKILLS_DIR, entry.name, "SKILL.md")
-    if (!fs.existsSync(skillPath)) continue
+  for (const definition of listSkillDefinitions({ host: "opencode-v2" })) {
+    // Superpowers registers its own plugin skills through the module resolved
+    // from Core; only OmAgents skills need this OpenCode adapter registration.
+    if (definition.source !== "omagents") continue
     try {
-      const { frontmatter, content } = parseFrontmatter(fs.readFileSync(skillPath, "utf8"))
+      const rendered = renderSkillForHost(definition, "opencode-v2")
       skills.push({
-        id: entry.name,
-        name: frontmatter.name || entry.name,
-        ...(frontmatter.description ? { description: frontmatter.description } : {}),
-        path: skillPath,
-        content,
+        id: rendered.id,
+        name: rendered.name,
+        ...(rendered.description ? { description: rendered.description } : {}),
+        path: rendered.path,
+        content: rendered.body,
       })
     } catch (err) {
-      warnIfDebug(`[omagents] failed to read skill "${entry.name}":`, err.message)
+      warnIfDebug(`[omagents] failed to read skill "${definition.id}":`, err.message)
     }
   }
   return skills

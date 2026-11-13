@@ -2,9 +2,14 @@ import { test } from "node:test"
 import assert from "node:assert"
 import fs from "fs"
 import path from "path"
+import { getCorePaths } from "../packages/core/src/paths.js"
+import { listSkillDefinitions } from "../packages/core/src/skills/catalog.js"
+import { renderSkillForHost } from "../packages/core/src/skills/render.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
-const SKILLS_DIR = path.join(ROOT, "skills")
+const CORE_PATHS = getCorePaths()
+const SKILLS_DIR = CORE_PATHS.skillsDir
+const HOSTS = ["opencode-v1", "opencode-v2", "codex", "dsh"]
 
 function getSkillDirs() {
   return fs
@@ -31,8 +36,59 @@ function parseFrontmatter(content) {
   return fm
 }
 
-test("skills directory exists", () => {
+test("Core resolves every packaged asset without repository-relative paths", () => {
+  assert.equal(CORE_PATHS.root, path.join(ROOT, "packages", "core"))
+  for (const value of Object.values(CORE_PATHS)) {
+    assert.ok(path.isAbsolute(value), `Core asset path should be absolute: ${value}`)
+  }
+  assert.ok(fs.existsSync(path.join(CORE_PATHS.skillsDir, "deep-research", "SKILL.md")))
+  assert.ok(
+    fs.existsSync(path.join(CORE_PATHS.superpowersDir, "skills", "brainstorming", "SKILL.md"))
+  )
+  assert.ok(fs.existsSync(path.join(CORE_PATHS.hooksDir, "python-env.js")))
+  assert.ok(fs.existsSync(path.join(CORE_PATHS.hooksDir, "project-venv.js")))
+  assert.ok(fs.existsSync(path.join(CORE_PATHS.hooksDir, "setup-venv.js")))
+  assert.ok(fs.existsSync(CORE_PATHS.mcpCatalogPath))
+})
+
+test("skills directory exists in Core", () => {
   assert.ok(fs.existsSync(SKILLS_DIR))
+})
+
+test("skill discovery and rendering support exactly the four explicit hosts", () => {
+  for (const host of HOSTS) {
+    const definitions = listSkillDefinitions({ host })
+    assert.ok(definitions.some((skill) => skill.name === "parallel-execution"))
+    assert.ok(definitions.some((skill) => skill.name === "brainstorming"))
+    assert.equal(renderSkillForHost(definitions[0], host).host, host)
+  }
+  assert.throws(() => listSkillDefinitions({ host: "unknown" }), /Unsupported skill host/)
+  const definition = listSkillDefinitions({ host: "dsh" })[0]
+  assert.throws(() => renderSkillForHost(definition, "unknown"), /Unsupported skill host/)
+})
+
+test("shared skills fall back to SKILL.md and host overrides replace the full content", () => {
+  const definition = listSkillDefinitions({ host: "dsh" }).find(
+    (skill) => skill.name === "parallel-execution"
+  )
+  const sharedPath = path.join(definition.directory, "SKILL.md")
+  const overridePath = path.join(definition.directory, "SKILL.dsh.md")
+  const shared = renderSkillForHost(definition, "opencode-v2")
+  const overridden = renderSkillForHost(definition, "dsh")
+
+  assert.equal(shared.path, sharedPath)
+  assert.equal(shared.content, fs.readFileSync(sharedPath, "utf8"))
+  assert.equal(overridden.path, overridePath)
+  assert.equal(overridden.content, fs.readFileSync(overridePath, "utf8"))
+  assert.notEqual(overridden.content, shared.content)
+  assert.ok(!overridden.body.startsWith("---"), "rendering also exposes a frontmatter-free body")
+})
+
+test("DSH parallel skill never contains the OpenCode background argument", () => {
+  const definition = listSkillDefinitions({ host: "dsh" }).find(
+    (skill) => skill.name === "parallel-execution"
+  )
+  assert.doesNotMatch(renderSkillForHost(definition, "dsh").content, /background:\s*true/)
 })
 
 test("all skill directories have SKILL.md", () => {

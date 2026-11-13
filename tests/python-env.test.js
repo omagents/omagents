@@ -13,8 +13,8 @@ import {
   inspectPython,
   runProjectPip,
   runProjectPython,
-} from "../hooks/python-env.js"
-import { main as projectVenvMain } from "../hooks/project-venv.js"
+} from "../packages/core/hooks/python-env.js"
+import { main as projectVenvMain } from "../packages/core/hooks/project-venv.js"
 
 const IS_WIN = process.platform === "win32"
 const VENV_BIN = IS_WIN ? "Scripts" : "bin"

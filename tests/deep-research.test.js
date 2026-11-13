@@ -11,10 +11,18 @@ const PYTHON =
   PYTHON_SETTING.includes("/") || PYTHON_SETTING.includes("\\")
     ? path.resolve(ROOT, PYTHON_SETTING)
     : PYTHON_SETTING
-const SCRIPTS = path.join(ROOT, "skills", "deep-research", "scripts")
+const SCRIPTS = path.join(ROOT, "packages", "core", "skills", "deep-research", "scripts")
 const PRE_RESEARCH = path.join(SCRIPTS, "pre_research.py")
 const DEEP_RESEARCH = path.join(SCRIPTS, "deep_research.py")
-const LOOP_ENGINE = path.join(ROOT, "skills", "_shared", "scripts", "loop_engine.py")
+const LOOP_ENGINE = path.join(
+  ROOT,
+  "packages",
+  "core",
+  "skills",
+  "_shared",
+  "scripts",
+  "loop_engine.py"
+)
 
 function makeProject(t) {
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "omagents-research-")))

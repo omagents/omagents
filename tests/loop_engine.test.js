@@ -5,7 +5,7 @@ import fs from "fs"
 import path from "path"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
-const ENGINE = `python3 ${path.join(ROOT, "skills", "_shared", "scripts", "loop_engine.py")}`
+const ENGINE = `python3 ${path.join(ROOT, "packages", "core", "skills", "_shared", "scripts", "loop_engine.py")}`
 const SKILL = "test-unit"
 const LOOP_PATH = path.join(ROOT, ".omagents", "loops", SKILL, "tasks.json")
 

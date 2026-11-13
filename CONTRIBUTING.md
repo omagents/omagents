@@ -23,16 +23,19 @@ Restart OpenCode to reload changes.
 
 ```
 omagents/
-├── .opencode/plugins/
-│   ├── index.js              # Plugin entry point (merges superpowers + omagents hooks)
-│   └── parallel.js           # Parallel execution engine
-├── skills/                   # Bundled OpenCode skills
-│   ├── deep-research/        # Research workflow with items × fields + gap detection
-│   ├── parallel-execution/   # Background task dispatch guide
-│   ├── agents-python-tools/  # Python venv management
-│   ├── markitdown-converter/ # Document to Markdown conversion
-│   └── playwright-web-scraping/
-├── package.json              # Includes superpowers as dependency
+├── .opencode/plugins/index.js # Development-only OpenCode re-export
+├── packages/
+│   ├── core/
+│   │   ├── src/              # Host-neutral state, assets, and rendering
+│   │   ├── hooks/            # Shared Python environment management
+│   │   └── skills/           # Bundled skills and helper scripts
+│   │       ├── deep-research/
+│   │       ├── parallel-execution/
+│   │       ├── agents-python-tools/
+│   │       ├── markitdown-converter/
+│   │       └── playwright-web-scraping/
+│   └── opencode/src/         # OpenCode V1/V2 adapter and parallel hooks
+├── package.json              # Private npm-workspaces root
 └── README.md
 ```
 
@@ -45,17 +48,16 @@ omagents/
 - Both files are plain JavaScript (ESM). No build step required.
 - Test syntax with: `node --check .opencode/plugins/index.js`
 
-### Skills (`skills/`)
+### Skills (`packages/core/skills/`)
 
-Each skill is a directory with a `SKILL.md` file (YAML frontmatter + Markdown body).
-Some skills include helper scripts (Python) and templates.
+Each skill is a directory with a shared `SKILL.md` fallback (YAML frontmatter + Markdown body). An optional `SKILL.<host>.md` is a full-content override for `opencode-v1`, `opencode-v2`, `codex`, or `dsh`. Some skills include helper scripts (Python) and templates.
 
-### Deep-Research Scripts (`skills/deep-research/scripts/`)
+### Deep-Research Scripts (`packages/core/skills/deep-research/scripts/`)
 
 Python scripts that support the deep-research workflow. Test with:
 
 ```bash
-~/.venvs/omagents/bin/python skills/deep-research/scripts/deep_research.py plan --query "test"
+~/.venvs/omagents/bin/python packages/core/skills/deep-research/scripts/deep_research.py plan --query "test"
 ```
 
 ## Submitting Changes

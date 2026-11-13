@@ -13,7 +13,7 @@
 ## Checklist
 
 - [ ] `node --check .opencode/plugins/index.js` passes
-- [ ] `python3 -m py_compile skills/deep-research/scripts/*.py` passes
+- [ ] `python3 -m py_compile packages/core/skills/deep-research/scripts/*.py` passes
 - [ ] `node --test tests/` passes (if tests exist for changed area)
 - [ ] `npx prettier --check ".opencode/plugins/*.js" "tests/*.js"` passes
 - [ ] CHANGELOG.md updated (if user-facing change)

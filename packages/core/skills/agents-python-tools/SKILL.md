@@ -35,18 +35,18 @@ Use the absolute base interpreter or base console script so an active project ve
 
 Create the project environment only when a project dependency is needed. An existing project `.venv` is left untouched.
 
-The CLI is at `<omagents-root>/hooks/project-venv.js` (`${PLUGIN_ROOT}` is the root for Codex):
+The CLI is at `<omagents-core>/hooks/project-venv.js`. In a source checkout, `<omagents-core>` is `packages/core`; for an installed Codex plugin, use `${PLUGIN_ROOT}`:
 
 ```bash
 # Create or reuse the project environment and base overlay
-node <omagents-root>/hooks/project-venv.js ensure --root <project-root>
+node <omagents-core>/hooks/project-venv.js ensure --root <project-root>
 
 # Install project-declared dependencies locally
-node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
-node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -e .
+node <omagents-core>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
+node <omagents-core>/hooks/project-venv.js pip --root <project-root> -- install -e .
 
 # Run with project packages first, then base tool packages
-node <omagents-root>/hooks/project-venv.js run --root <project-root> -- script.py
+node <omagents-core>/hooks/project-venv.js run --root <project-root> -- script.py
 ```
 
 Project dependencies declared in `pyproject.toml`, `requirements.txt`, or equivalent files must be installed locally **even when base already contains the same package**. Base is only a tool overlay, not a source of undeclared project dependencies.

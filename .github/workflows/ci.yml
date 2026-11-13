@@ -23,22 +23,26 @@ jobs:
       - name: Check JS syntax
         run: |
           node --check .opencode/plugins/index.js
-          node --check .opencode/plugins/parallel.js
-          node --check setup/opencode.js
+          node --check packages/opencode/src/index.js
+          node --check packages/opencode/src/parallel.js
+          node --check packages/opencode/bin/install.js
           node --check index.js
           node --check .codex/plugins/setup.js
-          node --check hooks/python-env.js
-          node --check hooks/project-venv.js
-          node --check hooks/setup-venv.js
+          node --check packages/core/hooks/python-env.js
+          node --check packages/core/hooks/project-venv.js
+          node --check packages/core/hooks/setup-venv.js
+          node --check packages/core/src/paths.js
+          node --check packages/core/src/skills/catalog.js
+          node --check packages/core/src/skills/render.js
 
       - name: Validate Codex plugin templates
         run: |
-            node -e "JSON.parse(require('fs').readFileSync('mcp-servers/base.json','utf8'))"
+            node -e "JSON.parse(require('fs').readFileSync('packages/core/mcp-servers/base.json','utf8'))"
 
       - name: Check Python scripts
         run: |
-          python3 -m py_compile skills/deep-research/scripts/*.py
-          python3 -m py_compile skills/_shared/scripts/loop_engine.py
+          python3 -m py_compile packages/core/skills/deep-research/scripts/*.py
+          python3 -m py_compile packages/core/skills/_shared/scripts/loop_engine.py
 
       - name: Prepare isolated Python test environment
         run: |
@@ -46,9 +50,9 @@ jobs:
           .omagents/ci-venv/bin/python -m pip install jinja2
 
       - name: Check formatting
-        run: npx prettier --check ".opencode/plugins/*.js" "tests/*.js" "index.js" ".codex/plugins/*.js" "hooks/*.js"
+        run: npx prettier --check ".opencode/plugins/*.js" "packages/core/src/*.js" "packages/core/src/*/*.js" "packages/core/hooks/*.js" "packages/opencode/src/*.js" "packages/opencode/bin/*.js" "tests/*.js" "index.js" ".codex/plugins/*.js"
 
       - name: Run tests
         env:
           OMAGENTS_TEST_PYTHON: .omagents/ci-venv/bin/python
-        run: node --test tests/*.test.js
+        run: node --test tests/*.test.js packages/core/test/*.test.js

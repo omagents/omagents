@@ -34,9 +34,9 @@ Instead, please:
 
 **In scope:**
 - Plugin code (`.opencode/plugins/`)
-- Python scripts (`skills/`)
+- Python scripts (`packages/core/skills/`)
 - MCP server configurations
-- Loop engine (`skills/_shared/scripts/`)
+- Loop engine (`packages/core/skills/_shared/scripts/`)
 
 **Not in scope:**
 - OpenCode runtime itself (report to [OpenCode](https://github.com/sst/opencode))

@@ -47,7 +47,7 @@ loop_engine.py next pre-publish-review
 | `changelog` | Read CHANGELOG.md, verify there's an entry for the current version |
 | `tests` | `node --test tests/*.test.js` -- all must pass |
 | `lint` | `npx prettier --check ".opencode/plugins/*.js" "tests/*.js"` |
-| `python` | `python3 -m py_compile skills/deep-research/scripts/*.py skills/_shared/scripts/loop_engine.py` |
+| `python` | `python3 -m py_compile packages/core/skills/deep-research/scripts/*.py packages/core/skills/_shared/scripts/loop_engine.py` |
 | `git-status` | `git status --porcelain` must be empty |
 | `docs` | Verify README.md and AGENTS.md reference correct version, skill count, etc. |
 

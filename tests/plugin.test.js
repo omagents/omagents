@@ -5,7 +5,7 @@ import path from "path"
 import { spawnSync } from "node:child_process"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
-const SKILLS_DIR = path.join(ROOT, "skills")
+const SKILLS_DIR = path.join(ROOT, "packages", "core", "skills")
 const PLUGINS_DIR = path.join(ROOT, "packages", "opencode", "src")
 
 test("plugin entry point exists", () => {
@@ -71,11 +71,21 @@ test("OpenCode delegates Python provisioning to the shared environment module", 
   )
 })
 
-test("superpowers dependency is pinned to a commit", () => {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf-8"))
-  const dep = pkg.dependencies.superpowers
-  assert.ok(dep.includes("#"), "superpowers should be pinned with #<commit-sha>")
-  assert.ok(!dep.endsWith(".git"), "superpowers should not be unpinned (missing #commit)")
+test("Core owns the Superpowers dependency pinned to a commit", () => {
+  const corePkg = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "packages", "core", "package.json"), "utf-8")
+  )
+  const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf-8"))
+  const opencodePkg = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "packages", "opencode", "package.json"), "utf-8")
+  )
+  const dep = corePkg.dependencies.superpowers
+  assert.ok(dep.includes("#8ca22dba9a94f28898bbce59f2537ff4d87c747d"))
+  assert.ok(corePkg.bundledDependencies.includes("superpowers"))
+  assert.equal(rootPkg.dependencies?.superpowers, undefined)
+  assert.equal(rootPkg.bundledDependencies, undefined)
+  assert.equal(opencodePkg.dependencies?.superpowers, undefined)
+  assert.equal(opencodePkg.bundledDependencies, undefined)
 })
 
 test("Core mcp-servers/base.json contains only unconditional servers", () => {

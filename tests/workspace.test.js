@@ -21,14 +21,17 @@ test("root is private and exposes the OpenCode workspace package", () => {
   assert.equal(opencode.version, root.version)
 })
 
-test("OpenCode package exposes its module and no-argument installer surfaces", () => {
+test("OpenCode depends on Core and Core bundles pinned Superpowers assets", () => {
   const pkg = readJson("packages/opencode/package.json")
+  const core = readJson("packages/core/package.json")
 
   assert.equal(pkg.type, "module")
   assert.equal(pkg.main, "src/index.js")
   assert.deepEqual(pkg.bin, { omagents: "bin/install.js" })
-  assert.ok(pkg.dependencies.superpowers.includes("#8ca22dba"))
-  assert.ok(pkg.bundledDependencies.includes("superpowers"))
+  assert.equal(pkg.dependencies["@omagents/core"], "0.13.1")
+  assert.equal(pkg.dependencies.superpowers, undefined)
+  assert.ok(core.dependencies.superpowers.includes("#8ca22dba9a94f28898bbce59f2537ff4d87c747d"))
+  assert.ok(core.bundledDependencies.includes("superpowers"))
 })
 
 test("development entry only re-exports the packaged OpenCode implementation", () => {

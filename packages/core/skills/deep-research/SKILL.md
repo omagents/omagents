@@ -9,7 +9,7 @@ Conduct iterative, multi-source research and produce a high-quality Markdown rep
 
 This skill combines the **structured items × fields approach** (inspired by RhinoInsight and Weizhena's Deep Research skills) with the **dynamic gap-detection loop** from LangChain's Open Deep Research, while staying native to OpenCode's subagent and MCP infrastructure.
 
-**Loop Engine:** Research task state is managed by the shared `loop_engine.py` (see `skills/_shared/scripts/loop_engine.py`). This provides durable state that survives context clearing, retry logic, and a unified summary across all loop-based skills.
+**Loop Engine:** Research task state is managed by the shared `loop_engine.py` (see `packages/core/skills/_shared/scripts/loop_engine.py`). This provides durable state that survives context clearing, retry logic, and a unified summary across all loop-based skills.
 
 ## When to Use
 

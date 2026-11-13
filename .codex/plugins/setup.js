@@ -11,10 +11,12 @@ import fs from "fs"
 import path from "path"
 import os from "os"
 import { fileURLToPath } from "url"
+import { getCorePaths } from "../../packages/core/src/index.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const PKG_ROOT = path.resolve(__dirname, "..", "..")
+const CORE_PATHS = getCorePaths()
 
 // ─── Inlined data (no external template files) ──────────────────────────────
 
@@ -241,7 +243,7 @@ export async function installCodex() {
   }
 
   const pkg = readJson(path.join(PKG_ROOT, "package.json"))
-  const baseJson = readJson(path.join(PKG_ROOT, "packages", "core", "mcp-servers", "base.json"))
+  const baseJson = readJson(CORE_PATHS.mcpCatalogPath)
   const hasGithubToken = !!process.env.GITHUB_TOKEN
 
   // Use "local" as version dir - Codex always prefers it over semver versions
@@ -280,14 +282,14 @@ export async function installCodex() {
   mkdirp(hooksDir)
   fs.writeFileSync(path.join(hooksDir, "hooks.json"), JSON.stringify(HOOKS_CONFIG, null, 2) + "\n")
   for (const hookName of ["python-env.js", "setup-venv.js", "project-venv.js"]) {
-    const hookSrc = path.join(PKG_ROOT, "hooks", hookName)
+    const hookSrc = path.join(CORE_PATHS.hooksDir, hookName)
     if (fs.existsSync(hookSrc)) {
       fs.copyFileSync(hookSrc, path.join(hooksDir, hookName))
     }
   }
 
   // 4. skills (with tool mapping)
-  const skillsSrc = path.join(PKG_ROOT, "skills")
+  const skillsSrc = CORE_PATHS.skillsDir
   const skillsDest = path.join(cacheDir, "skills")
   mkdirp(skillsDest)
 
@@ -327,7 +329,7 @@ export async function installCodex() {
   }
 
   // 6. Bundle superpowers skills
-  const superpowersSrc = path.join(PKG_ROOT, "node_modules", "superpowers", "skills")
+  const superpowersSrc = path.join(CORE_PATHS.superpowersDir, "skills")
   if (fs.existsSync(superpowersSrc)) {
     const superpowersDest = path.join(skillsDest, "superpowers")
     mkdirp(superpowersDest)

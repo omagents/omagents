@@ -36,40 +36,35 @@ OmAgents (`@omagents/omagents`) is an OpenCode plugin that bundles agent skills,
 omagents/
 ├── .opencode/
 │   ├── .gitignore              # Ignores host-generated artifacts (see note below)
-│   └── plugins/
-│       ├── index.js            # Plugin entry point (dual V1/V2; merges superpowers + omagents)
-│       └── parallel.js         # Parallel execution engine (V1 + V2 wiring, shared job board)
+│   └── plugins/index.js        # Development-only OpenCode package re-export
 ├── .github/
 │   ├── ISSUE_TEMPLATE/         # bug_report.md, feature_request.md
 │   └── workflows/
 │       ├── ci.yml              # Syntax checks + isolated Python/Node tests on push/PR
 │       └── publish.yml         # OIDC trusted publishing on tag push
-├── hooks/
-│   ├── python-env.js           # Shared persistent base + project overlay management
-│   ├── project-venv.js         # Project CLI: ensure/python/pip/run
-│   └── setup-venv.js           # Codex SessionStart base provisioning hook
-├── skills/                     # Bundled OpenCode skills
-│   ├── _shared/scripts/        # Shared scripts (loop_engine.py)
-│   ├── deep-research/          # Multi-source research workflow
-│   │   ├── SKILL.md
-│   │   ├── agents/
-│   │   ├── scripts/            # Pipeline scripts + layout.py canonical run paths
-│   │   └── templates/          # Jinja2 report templates (comparison, survey, technical)
-│   ├── parallel-execution/     # Background task dispatch guide
-│   │   └── SKILL.md
-│   ├── agents-python-tools/    # Python venv management
-│   │   └── SKILL.md
-│   ├── markitdown-converter/   # Document to Markdown conversion
-│   │   ├── SKILL.md
-│   │   └── scripts/
-│   ├── officecli/              # Create and edit Office documents (.docx, .xlsx, .pptx)
-│   │   └── SKILL.md
-│   └── playwright-web-scraping/# Web scraping with Playwright
-│       ├── SKILL.md
-│       └── scripts/
-├── setup/
-│   └── opencode.js             # OpenCode setup command (npx @omagents/omagents opencode)
-├── package.json                # superpowers as git dependency (pinned to commit)
+├── packages/
+│   ├── core/                   # @omagents/core: host-neutral assets and behavior
+│   │   ├── src/
+│   │   │   ├── paths.js        # import.meta.url-based packaged asset resolution
+│   │   │   ├── skills/         # Four-host discovery and full-content rendering
+│   │   │   ├── job-board/      # Shared execution state and presenters
+│   │   │   ├── storage/        # Durable JSON persistence
+│   │   │   └── mcp/            # Canonical MCP resolution
+│   │   ├── hooks/
+│   │   │   ├── python-env.js   # Persistent base + project overlay management
+│   │   │   ├── project-venv.js # Project CLI: ensure/python/pip/run
+│   │   │   └── setup-venv.js   # Codex SessionStart base provisioning hook
+│   │   ├── skills/             # OmAgents skills and shared scripts
+│   │   │   ├── _shared/scripts/
+│   │   │   └── deep-research/
+│   │   │       ├── scripts/    # Pipeline + layout.py canonical run paths
+│   │   │       └── templates/  # Jinja2 report templates
+│   │   └── mcp-servers/base.json
+│   └── opencode/               # @omagents/omagents OpenCode adapter
+│       ├── src/index.js        # Dual V1/V2 entry; merges superpowers + OmAgents
+│       ├── src/parallel.js     # OpenCode lifecycle adapter
+│       └── bin/install.js      # No-argument installer
+├── package.json                # Private npm-workspaces root
 ├── package-lock.json
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
@@ -77,9 +72,11 @@ omagents/
 └── LICENSE
 ```
 
-**IMPORTANT:** There is NO root-level `templates/` directory. Jinja2 templates live in `skills/deep-research/templates/`.
+**IMPORTANT:** There is NO root-level `templates/` directory. Jinja2 templates live in `packages/core/skills/deep-research/templates/`.
 
-## Plugin Entry Point (`.opencode/plugins/index.js`)
+## Plugin Entry Point (`packages/opencode/src/index.js`)
+
+The repository's `.opencode/plugins/index.js` is only a development re-export of this packaged implementation.
 
 The default export is a **dual V1/V2 descriptor** (same pattern as superpowers >= 6.4):
 
@@ -96,21 +93,21 @@ No `@opencode/plugin` import — the descriptor is a plain object, keeping the p
 
 On load the plugin:
 
-1. **Load superpowers** via `import("superpowers")` with graceful degradation; `loadSuperpowers()` resolves both halves (`server` for V1, `setup` for V2)
-2. **Register skills** from `skills/` (V1: `config.skills.paths`; V2: per-skill `ctx.skill.transform` with frontmatter parsing)
+1. **Load superpowers** through `getCorePaths().superpowersDir` with graceful degradation; `loadSuperpowers()` resolves both halves (`server` for V1, `setup` for V2) without relying on npm hoisting
+2. **Register skills** from `packages/core/skills/` (V1: `config.skills.paths`; V2: Core discovery/rendering plus per-skill `ctx.skill.transform`). Core supports exactly `opencode-v1`, `opencode-v2`, `codex`, and `dsh`; `SKILL.md` is the fallback and `SKILL.<host>.md` is a full-content override
 3. **Register MCP servers** (V1: `config.mcp` with `enabled`; V2: `ctx.mcp.transform` with the `enabled` key stripped). User config takes precedence (won't override existing)
 4. **Merge hooks** from superpowers + parallel execution engine (V1)
-5. **Provision the persistent Python base** at `~/.venvs/omagents` through `hooks/python-env.js`, auto-installing only missing core packages (`jinja2`). V1 runs on `session.created`; V2 runs at plugin setup, non-blocking. Uses `node:child_process`, runs once per process, and never auto-deletes the base. Project overlays are created separately on demand, never at plugin startup.
+5. **Provision the persistent Python base** at `~/.venvs/omagents` through `packages/core/hooks/python-env.js`, auto-installing only missing core packages (`jinja2`). V1 runs on `session.created`; V2 runs at plugin setup, non-blocking. Uses `node:child_process`, runs once per process, and never auto-deletes the base. Project overlays are created separately on demand, never at plugin startup.
 6. **Inject PATH** via shell hook: venv bin + skill script dirs + existing PATH (deduped)
 
 Key variables:
-- `OMAGENTS_DIR` = project root (parent of `.opencode/`)
-- `SKILLS_DIR` = `OMAGENTS_DIR/skills`
-- `AGENT_VENV` / `AGENT_VENV_BIN` = persistent base path and its platform-specific executable directory, defined in `hooks/python-env.js`
+- `getCorePaths()` = Core `root`, `skillsDir`, `superpowersDir`, `hooksDir`, and `mcpCatalogPath`, resolved from `import.meta.url` and Core's own dependency resolver
+- `SKILLS_DIR` = `getCorePaths().skillsDir` in the OpenCode adapter
+- `AGENT_VENV` / `AGENT_VENV_BIN` = persistent base path and its platform-specific executable directory, defined in `packages/core/hooks/python-env.js`
 - `getProjectVenvPath(projectRoot)` = `<project-root>/.omagents/venv`, the on-demand project overlay
-- `SKILL_SCRIPT_DIRS` = script directories from deep-research, markitdown-converter, playwright-web-scraping, _shared
+- `SKILL_SCRIPT_DIRS` = script directories from deep-research, markitdown-converter, playwright-web-scraping, _shared beneath Core's skill root
 
-## Parallel Execution Engine (`.opencode/plugins/parallel.js`)
+## Parallel Execution Engine (`packages/opencode/src/parallel.js`)
 
 The parallel execution engine:
 
@@ -137,7 +134,7 @@ Registered automatically (V1: `config` hook; V2: `ctx.mcp.transform`). User conf
 | `github` | remote | `https://api.githubcopilot.com/mcp/` (requires `GITHUB_TOKEN`) |
 | `grep_app` | remote | `https://mcp.grep.app` (fallback when no `GITHUB_TOKEN`) |
 
-On the V2 path, local servers are registered with `timeout: { startup: 180s }` (`toV2McpConfig` in `.opencode/plugins/index.js`) because `npx -y <pkg>` must download the package before the server can answer the MCP initialize handshake on a cold npx cache. Core's `packages/core/mcp-servers/base.json` and `resolveMcpServers()` stay host-neutral; the OpenCode V1 adapter adds `enabled`.
+On the V2 path, local servers are registered with `timeout: { startup: 180s }` (`toV2McpConfig` in `packages/opencode/src/index.js`) because `npx -y <pkg>` must download the package before the server can answer the MCP initialize handshake on a cold npx cache. Core's `packages/core/mcp-servers/base.json` and `resolveMcpServers()` stay host-neutral; the OpenCode V1 adapter adds `enabled`.
 
 ## Skills
 
@@ -174,7 +171,7 @@ brainstorming, test-driven-development, systematic-debugging, writing-plans, exe
 
 - Agent tools base: `~/.venvs/omagents` (persistent; managed by plugin + agents-python-tools skill)
 - Project deps overlay: `<project-root>/.omagents/venv` (created on demand; existing `.venv` directories are untouched)
-- Project overlay CLI: `hooks/project-venv.js` with `ensure`, `python`, `pip`, and `run` commands
+- Project overlay CLI: `packages/core/hooks/project-venv.js` with `ensure`, `python`, `pip`, and `run` commands
 
 The project overlay uses `omagents-base.pth`, not `--system-site-packages`. Internal inspection/venv/pip commands use Python `-I` to prevent cwd module shadowing. Project ensure removes inherited `OMAGENTS_PROJECT_ONLY` for its internal normal-mode verification; only `project-venv.js pip` sets it again so project dependencies always install locally even when base contains them. Normal `run` does not use `-I` and enables base imports with project packages taking precedence. Project/base Python `majorMinor` must match. Neither environment is automatically deleted.
 
@@ -182,7 +179,7 @@ The `agents-python-tools` skill has full documentation on venv paths, cross-plat
 
 ## How to Add a New Skill
 
-1. Create `skills/<skill-name>/SKILL.md` with YAML frontmatter:
+1. Create `packages/core/skills/<skill-name>/SKILL.md` with YAML frontmatter:
    ```yaml
    ---
    name: <skill-name>
@@ -192,12 +189,13 @@ The `agents-python-tools` skill has full documentation on venv paths, cross-plat
 2. Optionally add:
    - `scripts/` directory for helper scripts (Python, shell)
    - `agents/openai.yaml` for agent display name
-3. If the skill has scripts, add the script directory to `SKILL_SCRIPT_DIRS` in `.opencode/plugins/index.js`
-4. The skill is auto-discovered via `config.skills.paths` - no other registration needed
+   - `SKILL.<host>.md` as a complete override for one of `opencode-v1`, `opencode-v2`, `codex`, or `dsh`; never add runtime host detection
+3. If the skill has scripts, add the script directory to `SKILL_SCRIPT_DIRS` in `packages/opencode/src/index.js`
+4. Core discovers OmAgents and Superpowers file-based skills; OpenCode V1 uses Core's skill path and V2 uses Core discovery/rendering
 
 ## Loop Engine
 
-Skills that process items iteratively (deep-research, remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit) use a shared loop engine at `skills/_shared/scripts/loop_engine.py`.
+Skills that process items iteratively (deep-research, remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit) use a shared loop engine at `packages/core/skills/_shared/scripts/loop_engine.py`.
 
 The loop engine provides a durable task queue stored in `.omagents/loops/<skill>/tasks.json` within the project directory. State survives context clearing and can be resumed.
 
@@ -218,16 +216,16 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 
 ### Deep Research Storage
 
-`skills/deep-research/scripts/layout.py` is the single path resolver for all deep-research commands. For new runs, `--workspace` contains only public deliverables; internal plans, raw evidence, derived artifacts, checkpoints, and provenance live under `.omagents/deep-research/<run-id>/`. Main and pre-research loop keys are suffixed with the same run ID (`deep-research-<run-id>` and `deep-research-pre-<run-id>`), while the shared loop engine itself is unchanged.
+`packages/core/skills/deep-research/scripts/layout.py` is the single path resolver for all deep-research commands. For new runs, `--workspace` contains only public deliverables; internal plans, raw evidence, derived artifacts, checkpoints, and provenance live under `.omagents/deep-research/<run-id>/`. Main and pre-research loop keys are suffixed with the same run ID (`deep-research-<run-id>` and `deep-research-pre-<run-id>`), while the shared loop engine itself is unchanged.
 
 Raw evidence and state are durable. Derived `artifacts/` are rebuildable but retained by default. New provenance always goes to `<run-dir>/logs/provenance.jsonl`; legacy root/`artifacts/` logs are combined on read. Reject new runs whose public workspace would contain the internal run or loop store (including the default project root) before any writes; require a separate child workspace. Existing legacy workspaces retain their original paths and unnamespaced loop keys—never migrate or delete them automatically.
 
 ## Development
 
 - **No build step.** Plugin code is plain JavaScript (ESM). Skills are plain Markdown + optional Python.
-- **Syntax check:** `node --check .opencode/plugins/index.js`
-- **Python check:** `python3 -m py_compile skills/deep-research/scripts/*.py`
-- **Unit tests:** `node --test tests/*.test.js` (plugin structure, skills frontmatter, loop engine, deep-research storage/legacy/pipeline integration). Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
+- **Syntax check:** `node --check packages/opencode/src/index.js`
+- **Python check:** `python3 -m py_compile packages/core/skills/deep-research/scripts/*.py`
+- **Unit tests:** `node --test tests/*.test.js packages/core/test/*.test.js` (plugin structure, Core state/assets, skills frontmatter and host rendering, loop engine, deep-research storage/legacy/pipeline integration). Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
 - **Local testing:** Point OpenCode config to local clone:
   ```json
   { "plugin": ["omagents@git+file:///path/to/omagents"] }
@@ -266,7 +264,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | `superpowers` | git (pinned to commit) | 6.4.2 (`8ca22dba`) |
 | `prettier` | dev | ^3.9.9 |
 
-**superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. To update, change the commit SHA in `package.json`, run `npm install`, and verify. Note: superpowers >= 6.4 exports a V2 descriptor object as `default`; the V1 plugin function is `default.server` (also the named export `SuperpowersPlugin`). `loadSuperpowers()` in `.opencode/plugins/index.js` handles both shapes.
+**superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. Core owns both the dependency and `bundledDependencies` entry in `packages/core/package.json`; host packages resolve its plugin and skills through `getCorePaths()`. To update, change the commit SHA there, run `npm install`, and verify. Note: superpowers >= 6.4 exports a V2 descriptor object as `default`; the V1 plugin function is `default.server` (also the named export `SuperpowersPlugin`). `loadSuperpowers()` in `packages/opencode/src/index.js` handles both shapes.
 
 ## Version History
 
@@ -307,7 +305,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 
 ## Common Mistakes to Avoid
 
-1. **Don't reference `templates/` as a root-level directory.** Templates are in `skills/deep-research/templates/`.
+1. **Don't reference `templates/` as a root-level directory.** Templates are in `packages/core/skills/deep-research/templates/`.
 2. **Don't claim tools are "pre-installed".** Only `jinja2` is auto-installed. Others are on-demand.
 3. **Don't duplicate venv path info.** The `agents-python-tools` skill covers this. Reference it.
 4. **Don't unpin superpowers.** It's pinned to a commit for stability.
@@ -317,7 +315,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 8. **Don't change README.md without updating all language versions.** README exists in 4 languages (EN, ZH-CN, JA, KO). All must be updated in the same commit.
 9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.
 10. **Don't put non-plugin scripts in `.opencode/plugins/`.** OpenCode auto-discovers and loads EVERY `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions. A CLI script there (this broke startup when developing in this repo — see v0.9.1) crashes plugin init. CLI entry scripts live in `setup/` instead; only true plugin files belong in `.opencode/plugins/`.
-11. **Don't point package `main` at the CLI wrapper.** OpenCode imports the plugin via `main`; module-level `process.argv` dispatch (plus `process.exit`) in that file kills the host process (this broke `opencode run` for npm installs of 0.7.0–0.9.1 — see v0.9.2). `main` must be the plugin entry (`.opencode/plugins/index.js`); only `bin` may point at the CLI wrapper.
+11. **Don't point package `main` at the CLI wrapper.** OpenCode imports the plugin via `main`; module-level `process.argv` dispatch (plus `process.exit`) in that file kills the host process (this broke `opencode run` for npm installs of 0.7.0–0.9.1 — see v0.9.2). `main` must be the plugin entry (`packages/opencode/src/index.js`); only `bin` may point at the CLI wrapper.
 12. **Don't export a bare function as `default` from `.opencode/plugins/*.js`.** OpenCode V2 requires the default export to be a `{ id, setup }` descriptor object and hard-fails the plugin otherwise (`PluginModule.LoadError`). Keep the dual shape `{ id, server, setup }`: `server` is the V1 plugin function, `setup` the V2 one. V1 hosts may invoke exported functions (including `setup`) with a V1-shaped ctx — guard V2 entry points by checking V2-only domains (e.g. `typeof ctx.session?.hook === "function"`) and return quietly.
 13. **Don't import `@opencode/plugin` (V2 SDK) or `@opencode-ai/plugin` (V1 SDK) in plugin code.** The dual entry point is a plain object; importing a host SDK package breaks the other runtime. superpowers does the same.
 14. **Don't run project pip with the base overlay enabled or auto-delete either venv.** Project dependencies must use `project-venv.js pip` (`OMAGENTS_PROJECT_ONLY=1`). Do not use `--system-site-packages` as a base-venv inheritance mechanism. Existing base/project environments are repaired only with explicit user confirmation.
