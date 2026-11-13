@@ -14,5 +14,9 @@
   },
   "bundledDependencies": [
     "superpowers"
-  ]
+  ],
+  "scripts": {
+    "prepack": "node scripts/pack-superpowers.js",
+    "postpack": "node scripts/pack-superpowers.js --cleanup"
+  }
 }

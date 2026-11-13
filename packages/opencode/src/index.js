@@ -117,6 +117,13 @@ let _superpowers = null // null = not tried, false = unavailable, { server, setu
 
 async function loadSuperpowers() {
   if (_superpowers !== null) return _superpowers
+  if (!CORE_PATHS.superpowersDir) {
+    _superpowers = false
+    warnIfDebug(
+      "[omagents] superpowers not available, skipping (install with: bun add superpowers)"
+    )
+    return null
+  }
   try {
     const packageJson = JSON.parse(
       fs.readFileSync(path.join(CORE_PATHS.superpowersDir, "package.json"), "utf8")

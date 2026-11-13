@@ -329,8 +329,10 @@ export async function installCodex() {
   }
 
   // 6. Bundle superpowers skills
-  const superpowersSrc = path.join(CORE_PATHS.superpowersDir, "skills")
-  if (fs.existsSync(superpowersSrc)) {
+  const superpowersSrc = CORE_PATHS.superpowersDir
+    ? path.join(CORE_PATHS.superpowersDir, "skills")
+    : null
+  if (superpowersSrc && fs.existsSync(superpowersSrc)) {
     const superpowersDest = path.join(skillsDest, "superpowers")
     mkdirp(superpowersDest)
     for (const entry of fs.readdirSync(superpowersSrc, { withFileTypes: true })) {

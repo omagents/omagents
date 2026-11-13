@@ -4,12 +4,7 @@ import { getCorePaths } from "../paths.js"
 import { parseSkillFrontmatter, selectSkillPath, SKILL_HOSTS } from "./render.js"
 
 function discoverSkills(skillsRoot, source, host) {
-  let entries
-  try {
-    entries = fs.readdirSync(skillsRoot, { withFileTypes: true })
-  } catch {
-    return []
-  }
+  const entries = fs.readdirSync(skillsRoot, { withFileTypes: true })
 
   return entries
     .filter(
@@ -47,6 +42,8 @@ export function listSkillDefinitions({ host } = {}) {
   const paths = getCorePaths()
   return [
     ...discoverSkills(paths.skillsDir, "omagents", host),
-    ...discoverSkills(path.join(paths.superpowersDir, "skills"), "superpowers", host),
+    ...(paths.superpowersDir
+      ? discoverSkills(path.join(paths.superpowersDir, "skills"), "superpowers", host)
+      : []),
   ]
 }

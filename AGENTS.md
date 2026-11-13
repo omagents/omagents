@@ -54,6 +54,7 @@ omagents/
 │   │   │   ├── python-env.js   # Persistent base + project overlay management
 │   │   │   ├── project-venv.js # Project CLI: ensure/python/pip/run
 │   │   │   └── setup-venv.js   # Codex SessionStart base provisioning hook
+│   │   ├── scripts/pack-superpowers.js # Deterministic ignored pre/postpack materialization
 │   │   ├── skills/             # OmAgents skills and shared scripts
 │   │   │   ├── _shared/scripts/
 │   │   │   └── deep-research/
@@ -101,7 +102,7 @@ On load the plugin:
 6. **Inject PATH** via shell hook: venv bin + skill script dirs + existing PATH (deduped)
 
 Key variables:
-- `getCorePaths()` = Core `root`, `skillsDir`, `superpowersDir`, `hooksDir`, and `mcpCatalogPath`, resolved from `import.meta.url` and Core's own dependency resolver
+- `getCorePaths()` = Core `root`, `skillsDir`, `superpowersDir`, `hooksDir`, and `mcpCatalogPath`, resolved from `import.meta.url` and Core's own dependency resolver. Only `superpowersDir` is optional and becomes `null` when that dependency is absent; other asset failures remain visible
 - `SKILLS_DIR` = `getCorePaths().skillsDir` in the OpenCode adapter
 - `AGENT_VENV` / `AGENT_VENV_BIN` = persistent base path and its platform-specific executable directory, defined in `packages/core/hooks/python-env.js`
 - `getProjectVenvPath(projectRoot)` = `<project-root>/.omagents/venv`, the on-demand project overlay
@@ -264,7 +265,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | `superpowers` | git (pinned to commit) | 6.4.2 (`8ca22dba`) |
 | `prettier` | dev | ^3.9.9 |
 
-**superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. Core owns both the dependency and `bundledDependencies` entry in `packages/core/package.json`; host packages resolve its plugin and skills through `getCorePaths()`. To update, change the commit SHA there, run `npm install`, and verify. Note: superpowers >= 6.4 exports a V2 descriptor object as `default`; the V1 plugin function is `default.server` (also the named export `SuperpowersPlugin`). `loadSuperpowers()` in `packages/opencode/src/index.js` handles both shapes.
+**superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. Core owns both the dependency and `bundledDependencies` entry in `packages/core/package.json`; host packages resolve its plugin and skills through `getCorePaths()`. Core's `prepack` script materializes that pinned installed dependency into ignored `packages/core/node_modules/` so workspace `npm pack` includes it, and `postpack` removes only the marked materialized copy; never commit a duplicate Superpowers source tree. To update, change the commit SHA there, run `npm install`, and verify. Note: superpowers >= 6.4 exports a V2 descriptor object as `default`; the V1 plugin function is `default.server` (also the named export `SuperpowersPlugin`). `loadSuperpowers()` in `packages/opencode/src/index.js` handles both shapes.
 
 ## Version History
 

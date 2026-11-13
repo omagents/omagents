@@ -367,7 +367,7 @@ test("V2 compaction hook appends the state preservation note", async (t) => {
 // checkout activates.
 
 /** Copy OpenCode and Core into separate fake installed workspace packages. */
-function makeInstalledCopy(t) {
+function makeInstalledCopy(t, { includeSuperpowers = true } = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-installed-"))
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
   const nodeModules = path.join(tmp, "node_modules")
@@ -382,16 +382,24 @@ function makeInstalledCopy(t) {
 
   // A minimal installed dependency is sufficient for these adapter tests; the
   // real pinned Superpowers implementation is exercised by the local suite.
-  const superpowersDir = path.join(nodeModules, "superpowers")
-  fs.mkdirSync(superpowersDir, { recursive: true })
-  fs.writeFileSync(
-    path.join(superpowersDir, "package.json"),
-    JSON.stringify({ name: "superpowers", type: "module", main: "index.js" })
-  )
-  fs.writeFileSync(
-    path.join(superpowersDir, "index.js"),
-    "export default { server: async () => ({}), setup: async () => {} }\n"
-  )
+  if (includeSuperpowers) {
+    const superpowersDir = path.join(nodeModules, "superpowers")
+    fs.mkdirSync(superpowersDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(superpowersDir, "package.json"),
+      JSON.stringify({ name: "superpowers", type: "module", main: "index.js" })
+    )
+    fs.writeFileSync(
+      path.join(superpowersDir, "index.js"),
+      "export default { server: async () => ({}), setup: async () => {} }\n"
+    )
+    const brainstormingDir = path.join(superpowersDir, "skills", "brainstorming")
+    fs.mkdirSync(brainstormingDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(brainstormingDir, "SKILL.md"),
+      "---\nname: brainstorming\ndescription: Test skill\n---\n"
+    )
+  }
   return path.join(moduleDir, "index.js")
 }
 
@@ -443,6 +451,38 @@ test("installed package runs normally in any other project (V2)", async (t) => {
   const cleanup = await mod.default.setup(ctx)
   try {
     assert.ok(Object.keys(captured.mcps).length > 0, "MCPs registered in a normal project")
+  } finally {
+    if (typeof cleanup === "function") await cleanup()
+  }
+})
+
+test("installed OpenCode loads its own skills and warns cleanly without Superpowers", async (t) => {
+  const entry = makeInstalledCopy(t, { includeSuperpowers: false })
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-no-superpowers-"))
+  t.after(() => fs.rmSync(other, { recursive: true, force: true }))
+  const previousDebug = process.env.OMAGENTS_DEBUG
+  const previousWarn = console.warn
+  const warnings = []
+  process.env.OMAGENTS_DEBUG = "1"
+  console.warn = (...args) => warnings.push(args.join(" "))
+  t.after(() => {
+    if (previousDebug === undefined) delete process.env.OMAGENTS_DEBUG
+    else process.env.OMAGENTS_DEBUG = previousDebug
+    console.warn = previousWarn
+  })
+
+  const mod = await import(entry)
+  const { ctx, captured } = makeFakeV2Context(t)
+  ctx.location = { directory: other, project: { directory: other } }
+  const cleanup = await mod.default.setup(ctx)
+  try {
+    assert.ok(captured.skills.some((skill) => skill.id === "deep-research"))
+    assert.ok(!captured.skills.some((skill) => skill.id === "brainstorming"))
+    assert.ok(Object.keys(captured.mcps).length > 0, "OmAgents MCP registration still runs")
+    assert.ok(
+      warnings.some((warning) => warning.includes("superpowers not available, skipping")),
+      `missing dependency warning should be observable: ${warnings.join("\n")}`
+    )
   } finally {
     if (typeof cleanup === "function") await cleanup()
   }
