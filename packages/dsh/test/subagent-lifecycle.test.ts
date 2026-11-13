@@ -162,6 +162,36 @@ test("an end with a missed start reconciles its durable job and backfills withou
   assert.equal(board.revision, revision)
 })
 
+test("a missed start followed by end-before-result creates exactly one terminal job", async (t) => {
+  const { root, board } = await setup(t)
+  const owner = parent()
+  const end = {
+    runId: SubagentRunId("orphan-end-run"),
+    provider: "external",
+    id: SessionId("orphan-end-child"),
+    local: false,
+  }
+
+  emitEnd(root, owner, end, "completed", [{ type: "text", text: "Orphan result" }])
+  assert.equal(board.list().length, 0)
+  emitResult(root, owner, "orphan-end-child", "Correlate an orphan end")
+
+  assert.equal(board.list().length, 1)
+  const [job] = board.list()
+  assert.equal(job.hostTaskId, "orphan-end-child")
+  assert.equal(job.description, "Correlate an orphan end")
+  assert.equal(job.executionState, "completed")
+  assert.equal(job.resultSummary, "Orphan result")
+  assert.equal(job.notificationState, "injected")
+
+  const revision = board.revision
+  emitResult(root, owner, "orphan-end-child", "Duplicate activation result")
+  emitEnd(root, owner, end, "completed", [{ type: "text", text: "Orphan result" }])
+  assert.equal(board.list().length, 1)
+  assert.equal(board.revision, revision)
+  assert.equal(job.notificationState, "injected")
+})
+
 test("result-first correlation is parent-scoped and error/aborted outcomes stay authoritative", async (t) => {
   const { root, board } = await setup(t)
   const firstParent = parent("parent-a")

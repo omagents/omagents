@@ -205,6 +205,78 @@ test("a native end racing a slow recovery read wins without a missing-state regr
   assert.equal(job.notificationState, "injected")
 })
 
+test("startup recovery waits for delayed sessionQuery before classifying a restored job", async (t) => {
+  const root = new Context()
+  t.after(() => root.fiber.dispose())
+  root.provide("tools", {})
+  root.provide("subagents", { interrupt() {} })
+  root.provide("agents", { get() {} })
+  const board = createBoard()
+  const restored = launch(board, "delayed-query-child")
+  const tracker = createSubagentTracker(root, board)
+  t.after(() => tracker.dispose())
+  await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(restored.executionState, "running", "missing query services must not be sticky missing evidence")
+
+  const session = sessionWithTurn("delayed-query-child", { kind: "completed" })
+  root.provide("sessionQuery", {
+    async readSession() {
+      return { session: session.header, events: session.snapshotEvents() }
+    },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(restored.executionState, "completed")
+  assert.equal(restored.notificationState, "pending")
+})
+
+test("an observed active external run stays active when its cold Session read is missing", async (t) => {
+  const { root, board, tracker } = await setup(t, {
+    async readSession(id) {
+      const error = new Error(`session "${id}" not found`)
+      error.code = "SESSION_QUERY_SESSION_NOT_FOUND"
+      throw error
+    },
+  })
+  const owner = { id: SessionId("parent-1"), session: { id: SessionId("parent-1") } }
+  const start = {
+    runId: SubagentRunId("active-external-run"),
+    provider: "external",
+    id: SessionId("active-external-child"),
+    local: false,
+  }
+  root.emit(scopeTarget(root.subagents, owner), "subagent/start", start)
+  const exec = {
+    callId: "active-external-call",
+    rootCallId: "active-external-call",
+    name: "subagent",
+    arguments: { description: "Active external work", prompt: "Keep running" },
+    agent: owner,
+    signal: new AbortController().signal,
+    token: Symbol("active-external"),
+  }
+  root.emit(scopeTarget(root.tools, owner), "tools/result", exec, {
+    isError: false,
+    value: { kind: "activation", subagentId: "active-external-child" },
+    content: [{ type: "text", text: "started subagent active-external-child" }],
+  })
+  const [job] = board.list()
+  assert.equal(job.executionState, "running")
+
+  await board.reconcile({ query: (candidate) => tracker.query(candidate) })
+  assert.equal(job.executionState, "running", "an observed active external run is not missing")
+
+  root.emit(scopeTarget(root.subagents, owner), "subagent/end", {
+    ...start,
+    stopReason: "completed",
+    lastAssistantMessage: [{ type: "text", text: "External completion" }],
+  })
+  assert.equal(job.executionState, "completed")
+  assert.equal(job.resultSummary, "External completion")
+  assert.equal(job.notificationState, "injected")
+})
+
 test("startup recovery runs after delayed subagent/tools activation and preserves duplicate terminal notices", async (t) => {
   const root = new Context()
   t.after(() => root.fiber.dispose())
@@ -214,6 +286,11 @@ test("startup recovery runs after delayed subagent/tools activation and preserve
       return id === "restart-complete"
         ? { id: session.id, session, status: "idle" }
         : undefined
+    },
+  })
+  root.provide("sessionQuery", {
+    async readSession() {
+      throw new Error("the live Agent should supply this outcome")
     },
   })
   const board = createBoard()

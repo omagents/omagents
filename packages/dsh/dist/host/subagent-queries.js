@@ -159,6 +159,8 @@ export async function queryDshSubagent(ctx, job, observation = {}) {
         }
         catch (error) {
             if (isMissingSessionError(error)) {
+                if (observation.run)
+                    return { kind: "active" };
                 return { kind: "missing", reason: errorMessage(error) };
             }
             return { kind: "unreadable", reason: errorMessage(error) };

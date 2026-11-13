@@ -68,6 +68,7 @@ function errorMessage(error: unknown): string {
 export function createSubagentTracker(ctx: Context, board: DshJobBoard): DshSubagentTracker {
   const pendingResults = new Map<string, PendingResult[]>()
   const pendingStarts = new Map<string, PendingStart[]>()
+  const orphanEnds = new Map<string, SubagentRunEndInfo[]>()
   const runs = new Map<SubagentRunId, DshObservedRun>()
   const runByJob = new Map<string, DshObservedRun>()
   const jobByRun = new Map<SubagentRunId, string>()
@@ -77,6 +78,7 @@ export function createSubagentTracker(ctx: Context, board: DshJobBoard): DshSuba
   const pendingCancels = new Map<string, Promise<void>>()
   const disposers: Array<() => void> = []
   let capabilityFiber: ReturnType<Context["inject"]> | undefined
+  let recoveryFiber: ReturnType<Context["inject"]> | undefined
   let activeCleanup: (() => void) | undefined
   let disposed = false
 
@@ -158,6 +160,13 @@ export function createSubagentTracker(ctx: Context, board: DshJobBoard): DshSuba
     const pending = pendingResults.get(key) ?? []
     pending.push({ exec, parentSessionId })
     pendingResults.set(key, pending)
+    const orphans = orphanEnds.get(key)
+    const orphan = orphans?.shift()
+    if (orphan) {
+      observeStart(orphan, parentSessionId)
+      activeRuns.delete(orphan.runId)
+      if (orphans?.length === 0) orphanEnds.delete(key)
+    }
     correlate(key)
   }
 
@@ -234,6 +243,12 @@ export function createSubagentTracker(ctx: Context, board: DshJobBoard): DshSuba
       } else if (parentSessionId && pendingResults.has(correlationKey(parentSessionId, info.id))) {
         // The activation result can be observed even if this adapter attached after start.
         observeStart(info, parentSessionId)
+      } else if (parentSessionId) {
+        // Retain end-before-result metadata by the same identity used for activation results.
+        const key = correlationKey(parentSessionId, info.id)
+        const pending = orphanEnds.get(key) ?? []
+        pending.push(info)
+        orphanEnds.set(key, pending)
       }
     }
     recordEnd(info)
@@ -266,7 +281,6 @@ export function createSubagentTracker(ctx: Context, board: DshJobBoard): DshSuba
         inner.on("subagent/start", onStart),
         inner.on("subagent/end", onEnd)
       )
-      recover()
     } catch (error) {
       report("Unable to observe DSH subagent lifecycles", error)
       cleanup()
@@ -286,6 +300,25 @@ export function createSubagentTracker(ctx: Context, board: DshJobBoard): DshSuba
     }
   } catch (error) {
     report("Unable to subscribe to DSH subagent availability", error)
+  }
+
+  const activateRecovery = (_inner: Context): (() => void) => {
+    if (!disposed) recover()
+    return () => {}
+  }
+
+  try {
+    if (
+      typeof ctx.inject === "function" &&
+      typeof ctx.get === "function" &&
+      (!ctx.get("tools") || !ctx.get("subagents") || !ctx.get("agents") || !ctx.get("sessionQuery"))
+    ) {
+      recoveryFiber = ctx.inject(["tools", "subagents", "agents", "sessionQuery"], activateRecovery)
+    } else {
+      activateRecovery(ctx)
+    }
+  } catch (error) {
+    report("Unable to subscribe to DSH recovery availability", error)
   }
 
   return {
@@ -332,8 +365,19 @@ export function createSubagentTracker(ctx: Context, board: DshJobBoard): DshSuba
       } catch (error) {
         report("Unable to dispose DSH subagent availability", error)
       }
+      try {
+        const recoveryDisposal = recoveryFiber?.dispose()
+        if (recoveryDisposal) {
+          void recoveryDisposal.catch((error) => {
+            report("Unable to dispose DSH recovery availability", error)
+          })
+        }
+      } catch (error) {
+        report("Unable to dispose DSH recovery availability", error)
+      }
       pendingResults.clear()
       pendingStarts.clear()
+      orphanEnds.clear()
       runs.clear()
       runByJob.clear()
       jobByRun.clear()

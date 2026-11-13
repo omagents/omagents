@@ -32,6 +32,7 @@ function errorMessage(error) {
 export function createSubagentTracker(ctx, board) {
     const pendingResults = new Map();
     const pendingStarts = new Map();
+    const orphanEnds = new Map();
     const runs = new Map();
     const runByJob = new Map();
     const jobByRun = new Map();
@@ -41,6 +42,7 @@ export function createSubagentTracker(ctx, board) {
     const pendingCancels = new Map();
     const disposers = [];
     let capabilityFiber;
+    let recoveryFiber;
     let activeCleanup;
     let disposed = false;
     const report = (message, error) => {
@@ -123,6 +125,14 @@ export function createSubagentTracker(ctx, board) {
         const pending = pendingResults.get(key) ?? [];
         pending.push({ exec, parentSessionId });
         pendingResults.set(key, pending);
+        const orphans = orphanEnds.get(key);
+        const orphan = orphans?.shift();
+        if (orphan) {
+            observeStart(orphan, parentSessionId);
+            activeRuns.delete(orphan.runId);
+            if (orphans?.length === 0)
+                orphanEnds.delete(key);
+        }
         correlate(key);
     };
     const recordEnd = (info) => {
@@ -197,6 +207,13 @@ export function createSubagentTracker(ctx, board) {
                 // The activation result can be observed even if this adapter attached after start.
                 observeStart(info, parentSessionId);
             }
+            else if (parentSessionId) {
+                // Retain end-before-result metadata by the same identity used for activation results.
+                const key = correlationKey(parentSessionId, info.id);
+                const pending = orphanEnds.get(key) ?? [];
+                pending.push(info);
+                orphanEnds.set(key, pending);
+            }
         }
         recordEnd(info);
     };
@@ -226,7 +243,6 @@ export function createSubagentTracker(ctx, board) {
         activeCleanup = cleanup;
         try {
             disposers.push(inner.on("tools/result", onToolResult), inner.on("subagent/start", onStart), inner.on("subagent/end", onEnd));
-            recover();
         }
         catch (error) {
             report("Unable to observe DSH subagent lifecycles", error);
@@ -246,6 +262,24 @@ export function createSubagentTracker(ctx, board) {
     }
     catch (error) {
         report("Unable to subscribe to DSH subagent availability", error);
+    }
+    const activateRecovery = (_inner) => {
+        if (!disposed)
+            recover();
+        return () => { };
+    };
+    try {
+        if (typeof ctx.inject === "function" &&
+            typeof ctx.get === "function" &&
+            (!ctx.get("tools") || !ctx.get("subagents") || !ctx.get("agents") || !ctx.get("sessionQuery"))) {
+            recoveryFiber = ctx.inject(["tools", "subagents", "agents", "sessionQuery"], activateRecovery);
+        }
+        else {
+            activateRecovery(ctx);
+        }
+    }
+    catch (error) {
+        report("Unable to subscribe to DSH recovery availability", error);
     }
     return {
         query,
@@ -296,8 +330,20 @@ export function createSubagentTracker(ctx, board) {
             catch (error) {
                 report("Unable to dispose DSH subagent availability", error);
             }
+            try {
+                const recoveryDisposal = recoveryFiber?.dispose();
+                if (recoveryDisposal) {
+                    void recoveryDisposal.catch((error) => {
+                        report("Unable to dispose DSH recovery availability", error);
+                    });
+                }
+            }
+            catch (error) {
+                report("Unable to dispose DSH recovery availability", error);
+            }
             pendingResults.clear();
             pendingStarts.clear();
+            orphanEnds.clear();
             runs.clear();
             runByJob.clear();
             jobByRun.clear();
