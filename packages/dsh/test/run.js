@@ -1,7 +1,14 @@
 import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 
-const files = ["loader.test.ts", "package-surface.test.js", "npm-launcher.test.js"]
+const files = [
+  "loader.test.ts",
+  "skills.test.ts",
+  "mcp.test.ts",
+  "python.test.ts",
+  "package-surface.test.js",
+  "npm-launcher.test.js",
+]
 const filters = process.argv.slice(2)
 const selected = filters.length
   ? files.filter((file) => filters.some((filter) => file.includes(filter)))

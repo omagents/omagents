@@ -21,8 +21,10 @@ const launch = {
 
 async function createIsolatedProfile(t: TestContext) {
   const home = await fs.mkdtemp(join(tmpdir(), "omagents-dsh-home-"))
+  const userHome = join(home, "user-home")
   const profileDir = join(home, "profiles", "web")
   await fs.mkdir(profileDir, { recursive: true })
+  await fs.mkdir(userHome, { recursive: true })
   const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..")
   const installedPackageDir = join(profileDir, "node_modules", "@omagents", "omagents-dsh")
   await fs.mkdir(dirname(installedPackageDir), { recursive: true })
@@ -32,13 +34,21 @@ async function createIsolatedProfile(t: TestContext) {
     process.platform === "win32" ? "junction" : "dir"
   )
   const previousHome = process.env.DSH_HOME
+  const previousUserHome = process.env.HOME
+  const previousUserProfile = process.env.USERPROFILE
   const previousModelKey = process.env.DEEPSEEK_API_KEY
   process.env.DSH_HOME = home
+  process.env.HOME = userHome
+  process.env.USERPROFILE = userHome
   delete process.env.DEEPSEEK_API_KEY
 
   t.after(async () => {
     if (previousHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previousHome
+    if (previousUserHome === undefined) delete process.env.HOME
+    else process.env.HOME = previousUserHome
+    if (previousUserProfile === undefined) delete process.env.USERPROFILE
+    else process.env.USERPROFILE = previousUserProfile
     if (previousModelKey === undefined) delete process.env.DEEPSEEK_API_KEY
     else process.env.DEEPSEEK_API_KEY = previousModelKey
     await fs.rm(home, { recursive: true, force: true })
@@ -54,6 +64,11 @@ async function createIsolatedProfile(t: TestContext) {
 async function createTestLoaderWithRequiredServices(t: TestContext) {
   const profile = await createIsolatedProfile(t)
   const root = new Context()
+  root.provide("omagentsPython", {
+    async ensureBaseEnvironment() {
+      return { status: "test-isolated" }
+    },
+  })
   await root.plugin(Loader, { baseUrl: profile.baseUrl })
   t.after(() => root.fiber.dispose())
 
@@ -90,6 +105,66 @@ test("real Loader starts and disposes the package-root Host entry", async (t) =>
   assert.equal(persisted.revision, 1)
   assert.equal(persisted.jobs[0].id, job.id)
   assert.equal(persisted.jobs[0].hostTaskId, launch.hostTaskId)
+})
+
+test("Loader teardown composes capability disposers and blocks late Python health", async (t) => {
+  const isolated = await createIsolatedProfile(t)
+  const root = new Context()
+  const skills = []
+  const mcps = []
+  let rejectPython
+  const pendingPython = new Promise((_, reject) => {
+    rejectPython = reject
+  })
+  root.provide("skills", {
+    register(skill) {
+      const registration = { name: skill.name, disposed: false }
+      skills.push(registration)
+      return () => {
+        registration.disposed = true
+      }
+    },
+  })
+  root.provide("mcpManager", {
+    has() {
+      return false
+    },
+    register(name) {
+      const registration = { name, disposed: false }
+      mcps.push(registration)
+      return {
+        ready: Promise.resolve(),
+        async dispose() {
+          registration.disposed = true
+        },
+      }
+    },
+  })
+  root.provide("omagentsPython", {
+    ensureBaseEnvironment() {
+      return pendingPython
+    },
+  })
+  await root.plugin(Loader, { baseUrl: isolated.baseUrl })
+  t.after(() => root.fiber.dispose())
+
+  const id = await root.loader.create({ name: "@omagents/omagents-dsh" })
+  await root.loader.await()
+  const entry = root.loader.resolve(id)
+  assert.ok(entry.fiber)
+  await entry.fiber.await()
+  const runtime = (entry.fiber.ctx as Context & { omagents?: DshRuntime }).omagents
+  assert.ok(runtime)
+  assert.equal(skills.length, 33)
+  assert.ok(mcps.length > 0)
+
+  await entry.fiber.dispose()
+  assert.ok(skills.every((skill) => skill.disposed))
+  assert.ok(mcps.every((mcp) => mcp.disposed))
+  rejectPython(new Error("late Loader failure"))
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+  assert.equal(runtime.health.python.status, "ready")
+  assert.deepEqual(runtime.health.python.diagnostics, [])
 })
 
 test("runtime isolates active profiles and reports persistence health independently", async (t) => {

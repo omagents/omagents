@@ -1,13 +1,46 @@
+const capabilityUpdaters = new WeakMap();
+function healthRecord(diagnostics) {
+    return {
+        status: diagnostics.length === 0 ? "ready" : "degraded",
+        diagnostics,
+    };
+}
+export function setDshCapabilityDiagnostics(health, capability, diagnostics) {
+    const update = capabilityUpdaters.get(health);
+    if (!update)
+        throw new TypeError("OmAgents health records must come from createHealthRecords()");
+    update(capability, diagnostics);
+}
+export function appendDshCapabilityDiagnostic(health, capability, diagnostic) {
+    setDshCapabilityDiagnostics(health, capability, [
+        ...health[capability].diagnostics,
+        diagnostic,
+    ]);
+}
 export function createHealthRecords(readPersistenceDiagnostics) {
     const host = { status: "ready", diagnostics: [] };
-    return {
+    const diagnostics = {
+        skills: [],
+        mcp: [],
+        python: [],
+    };
+    const health = {
         host,
         get persistence() {
-            const diagnostics = readPersistenceDiagnostics();
-            return {
-                status: diagnostics.length === 0 ? "ready" : "degraded",
-                diagnostics,
-            };
+            return healthRecord(readPersistenceDiagnostics());
+        },
+        get skills() {
+            return healthRecord(diagnostics.skills);
+        },
+        get mcp() {
+            return healthRecord(diagnostics.mcp);
+        },
+        get python() {
+            return healthRecord(diagnostics.python);
         },
     };
+    capabilityUpdaters.set(health, (capability, nextDiagnostics) => {
+        diagnostics[capability] = Object.freeze([...nextDiagnostics]);
+    });
+    return health;
 }

@@ -10,24 +10,78 @@ export interface HealthRecord {
   diagnostics: readonly HealthDiagnostic[]
 }
 
+export type DshCapability = "skills" | "mcp" | "python"
+
 export interface DshHealth {
   readonly host: HealthRecord
   readonly persistence: HealthRecord
+  readonly skills: HealthRecord
+  readonly mcp: HealthRecord
+  readonly python: HealthRecord
+}
+
+type CapabilityDiagnostics = Record<DshCapability, readonly HealthDiagnostic[]>
+
+const capabilityUpdaters = new WeakMap<
+  DshHealth,
+  (capability: DshCapability, diagnostics: readonly HealthDiagnostic[]) => void
+>()
+
+function healthRecord(diagnostics: readonly HealthDiagnostic[]): HealthRecord {
+  return {
+    status: diagnostics.length === 0 ? "ready" : "degraded",
+    diagnostics,
+  }
+}
+
+export function setDshCapabilityDiagnostics(
+  health: DshHealth,
+  capability: DshCapability,
+  diagnostics: readonly HealthDiagnostic[]
+): void {
+  const update = capabilityUpdaters.get(health)
+  if (!update) throw new TypeError("OmAgents health records must come from createHealthRecords()")
+  update(capability, diagnostics)
+}
+
+export function appendDshCapabilityDiagnostic(
+  health: DshHealth,
+  capability: DshCapability,
+  diagnostic: HealthDiagnostic
+): void {
+  setDshCapabilityDiagnostics(health, capability, [
+    ...health[capability].diagnostics,
+    diagnostic,
+  ])
 }
 
 export function createHealthRecords(
   readPersistenceDiagnostics: () => readonly HealthDiagnostic[]
 ): DshHealth {
   const host: HealthRecord = { status: "ready", diagnostics: [] }
-
-  return {
+  const diagnostics: CapabilityDiagnostics = {
+    skills: [],
+    mcp: [],
+    python: [],
+  }
+  const health: DshHealth = {
     host,
     get persistence(): HealthRecord {
-      const diagnostics = readPersistenceDiagnostics()
-      return {
-        status: diagnostics.length === 0 ? "ready" : "degraded",
-        diagnostics,
-      }
+      return healthRecord(readPersistenceDiagnostics())
+    },
+    get skills(): HealthRecord {
+      return healthRecord(diagnostics.skills)
+    },
+    get mcp(): HealthRecord {
+      return healthRecord(diagnostics.mcp)
+    },
+    get python(): HealthRecord {
+      return healthRecord(diagnostics.python)
     },
   }
+
+  capabilityUpdaters.set(health, (capability, nextDiagnostics) => {
+    diagnostics[capability] = Object.freeze([...nextDiagnostics])
+  })
+  return health
 }
