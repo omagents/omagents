@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import { validateJobSnapshot } from "../storage/schema.js"
 import { assertTerminalState, createJobRecord, isTerminalState } from "./records.js"
 
 function normalizeClock(clock) {
@@ -13,9 +14,17 @@ function hostTaskKey(host, hostTaskId) {
   return JSON.stringify([host, hostTaskId])
 }
 
+function recoveryError(kind, reason) {
+  return {
+    code: kind === "missing" ? "HOST_MISSING" : "HOST_UNREADABLE",
+    message: typeof reason === "string" ? reason : JSON.stringify(reason),
+  }
+}
+
 export class JobBoard {
   #clock
   #idGenerator
+  #store
   #jobs = new Map()
   #hostTaskIndex = new Map()
   #aliases = new Map()
@@ -23,9 +32,20 @@ export class JobBoard {
   #revision = 0
   #aliasCounter = 0
 
-  constructor({ clock, idGenerator } = {}) {
+  constructor({ clock, idGenerator, store } = {}) {
     this.#clock = normalizeClock(clock)
     this.#idGenerator = idGenerator || randomUUID
+    this.#store = store
+  }
+
+  static async open({ store, clock, idGenerator } = {}) {
+    if (typeof store?.load !== "function") {
+      throw new TypeError("store must provide load()")
+    }
+    const snapshot = validateJobSnapshot(await store.load())
+    const board = new JobBoard({ clock, idGenerator, store })
+    board.#restore(snapshot)
+    return board
   }
 
   get revision() {
@@ -101,6 +121,65 @@ export class JobBoard {
     }
   }
 
+  async reconcile({ query } = {}) {
+    if (typeof query !== "function") throw new TypeError("query must be a function")
+    const activeJobs = this.list().filter(
+      (job) => job.executionState === "running" || job.executionState === "cancelling"
+    )
+
+    for (const job of activeJobs) {
+      const outcome = await query(job)
+      if (outcome?.kind === "active") continue
+
+      if (outcome?.kind === "terminal") {
+        this.markTerminal(job.id, outcome)
+        continue
+      }
+
+      if (outcome?.kind === "missing" || outcome?.kind === "unreadable") {
+        this.markTerminal(job.id, {
+          state: "interrupted",
+          error: recoveryError(outcome.kind, outcome.reason),
+        })
+        continue
+      }
+
+      throw new TypeError(`Invalid reconciliation outcome for job ${job.id}`)
+    }
+
+    await this.flush()
+  }
+
+  prune({ maxAcknowledged = 100 } = {}) {
+    if (!Number.isInteger(maxAcknowledged) || maxAcknowledged < 0) {
+      throw new RangeError("maxAcknowledged must be a non-negative integer")
+    }
+
+    const eligible = this.list()
+      .filter(
+        (job) => isTerminalState(job.executionState) && job.notificationState === "acknowledged"
+      )
+      .sort(
+        (left, right) =>
+          right.updatedAt - left.updatedAt ||
+          right.revision - left.revision ||
+          left.id.localeCompare(right.id)
+      )
+    const removed = eligible.slice(maxAcknowledged).reverse()
+    if (removed.length === 0) return removed
+
+    for (const job of removed) {
+      this.#jobs.delete(job.id)
+      this.#aliases.delete(job.alias)
+      this.#hostTaskIndex.delete(hostTaskKey(job.host, job.hostTaskId))
+    }
+
+    this.#revision += 1
+    this.#persist()
+    for (const listener of [...this.#listeners]) listener({ revision: this.#revision })
+    return removed
+  }
+
   get(idOrAlias) {
     return this.#find(idOrAlias)
   }
@@ -127,6 +206,24 @@ export class JobBoard {
     }
   }
 
+  async flush() {
+    await this.#store?.flush()
+  }
+
+  async close() {
+    await this.#store?.close()
+  }
+
+  #restore(snapshot) {
+    this.#revision = snapshot.revision
+    for (const restored of snapshot.jobs) {
+      const job = structuredClone(restored)
+      this.#jobs.set(job.id, job)
+      this.#hostTaskIndex.set(hostTaskKey(job.host, job.hostTaskId), job.id)
+      this.#aliases.set(job.alias, job.id)
+    }
+  }
+
   #find(idOrAlias) {
     const id = this.#aliases.get(idOrAlias) ?? idOrAlias
     return this.#jobs.get(id)
@@ -147,8 +244,19 @@ export class JobBoard {
     job.revision = this.#revision
     job.updatedAt = timestamp
 
+    this.#persist()
     for (const listener of [...this.#listeners]) {
       listener({ revision: this.#revision, jobId: job.id })
     }
+  }
+
+  #persist() {
+    if (!this.#store) return
+    const snapshot = {
+      version: 1,
+      revision: this.#revision,
+      jobs: structuredClone(this.list()),
+    }
+    Promise.resolve(this.#store.save(snapshot)).catch(() => {})
   }
 }
