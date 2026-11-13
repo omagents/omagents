@@ -10,6 +10,8 @@ const files = [
   "subagent-lifecycle.test.ts",
   "subagent-recovery.test.ts",
   "context.test.ts",
+  "remote-service.test.ts",
+  "watch-stream.test.ts",
   "package-surface.test.js",
   "npm-launcher.test.js",
 ]

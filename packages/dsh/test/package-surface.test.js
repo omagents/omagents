@@ -46,6 +46,8 @@ test("Host module has only named plugin exports and no default or Client export"
   assert.equal(typeof host.createSubagentTracker, "function")
   assert.equal(typeof host.registerDshCommands, "function")
   assert.equal(typeof host.registerDshContext, "function")
+  assert.equal(typeof host.OmAgentsRemote, "function")
+  assert.equal(typeof host.authorizeRemoteScope, "function")
   assert.equal(host.client, undefined)
 })
 
@@ -98,6 +100,12 @@ test("publish dry-run contains built runtime artifacts but no source or test too
     "dist/host/register-commands.d.ts",
     "dist/host/register-context.js",
     "dist/host/register-context.d.ts",
+    "dist/host/remote-service.js",
+    "dist/host/remote-service.d.ts",
+    "dist/host/remote-access.js",
+    "dist/host/remote-access.d.ts",
+    "dist/host/remote-types.js",
+    "dist/host/remote-types.d.ts",
     "dist/host/prompt.js",
     "dist/host/prompt.d.ts",
     "package.json",

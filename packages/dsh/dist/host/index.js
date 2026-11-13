@@ -5,6 +5,8 @@ import { registerDshMcp } from "./register-mcp.js";
 import { provisionDshPython } from "./register-python.js";
 import { registerDshSkills } from "./register-skills.js";
 import { registerDshTools } from "./register-tools.js";
+import { authorizeRemoteScope } from "./remote-access.js";
+import { OmAgentsRemote } from "./remote-service.js";
 import { createSubagentTracker } from "./subagent-tracker.js";
 export { createDshRuntime } from "./runtime.js";
 export { registerDshCommands } from "./register-commands.js";
@@ -13,6 +15,8 @@ export { registerDshMcp } from "./register-mcp.js";
 export { provisionDshPython } from "./register-python.js";
 export { registerDshSkills } from "./register-skills.js";
 export { registerDshTools } from "./register-tools.js";
+export { authorizeRemoteScope } from "./remote-access.js";
+export { OmAgentsRemote } from "./remote-service.js";
 export { createSubagentTracker } from "./subagent-tracker.js";
 export const name = "omagents";
 export const inject = ["loader"];
@@ -21,6 +25,12 @@ export async function apply(ctx) {
     const disposeSkills = registerDshSkills(ctx, runtime.health);
     const disposeMcp = registerDshMcp(ctx, process.env, runtime.health);
     const tracker = createSubagentTracker(ctx, runtime.board);
+    new OmAgentsRemote(ctx, {
+        board: runtime.board,
+        tracker,
+        health: runtime.health,
+        authorizeScope: authorizeRemoteScope,
+    });
     const disposeTools = registerDshTools(ctx, runtime.board, tracker, runtime.health);
     const disposeCommands = registerDshCommands(ctx, runtime.board, runtime.health);
     const disposeContext = registerDshContext(ctx, runtime.board, runtime.health);

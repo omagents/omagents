@@ -55,6 +55,7 @@ export interface DshJobBoard {
   get(idOrAlias: string): DshJobRecord | undefined
   list(options?: { parentSessionId?: string }): DshJobRecord[]
   listPendingOutcomes(parentSessionId?: string): DshJobRecord[]
+  subscribe(listener: (event: { revision: number; jobId?: string }) => void): () => void
   registerLaunch(launch: DshJobLaunch): DshJobRecord
   requestCancellation(idOrAlias: string): DshJobRecord | undefined
   markTerminal(idOrAlias: string, update: DshTerminalUpdate): DshJobRecord | undefined
