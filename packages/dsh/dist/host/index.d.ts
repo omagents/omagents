@@ -8,6 +8,8 @@ export { registerDshMcp } from "./register-mcp.js";
 export { provisionDshPython } from "./register-python.js";
 export { registerDshSkills } from "./register-skills.js";
 export { registerDshTools } from "./register-tools.js";
+export { createSubagentTracker } from "./subagent-tracker.js";
+export type { DshSubagentTracker } from "./subagent-tracker.js";
 export type { DshCapability, DshHealth, HealthDiagnostic, HealthRecord, HealthStatus, } from "./health.js";
 declare module "@deepseek-ai/cordis" {
     interface Context {

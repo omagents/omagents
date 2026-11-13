@@ -43,6 +43,7 @@ test("Host module has only named plugin exports and no default or Client export"
   assert.equal(typeof host.registerDshMcp, "function")
   assert.equal(typeof host.provisionDshPython, "function")
   assert.equal(typeof host.registerDshTools, "function")
+  assert.equal(typeof host.createSubagentTracker, "function")
   assert.equal(typeof host.registerDshCommands, "function")
   assert.equal(typeof host.registerDshContext, "function")
   assert.equal(host.client, undefined)
@@ -89,6 +90,10 @@ test("publish dry-run contains built runtime artifacts but no source or test too
     "dist/host/register-python.d.ts",
     "dist/host/register-tools.js",
     "dist/host/register-tools.d.ts",
+    "dist/host/subagent-tracker.js",
+    "dist/host/subagent-tracker.d.ts",
+    "dist/host/subagent-queries.js",
+    "dist/host/subagent-queries.d.ts",
     "dist/host/register-commands.js",
     "dist/host/register-commands.d.ts",
     "dist/host/register-context.js",

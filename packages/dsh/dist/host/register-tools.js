@@ -4,8 +4,16 @@ import { appendDshCapabilityDiagnostic, setDshCapabilityDiagnostics, } from "./h
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
 }
-/** Register only the read-only status tool; cancellation is added by the lifecycle adapter. */
-export function registerDshTools(ctx, board, health) {
+function cancellationResult(board, job, message) {
+    return {
+        revision: board.revision,
+        found: job !== undefined,
+        ...(job ? { job: job } : {}),
+        message,
+    };
+}
+/** Register canonical status and idempotent native-subagent cancellation tools. */
+export function registerDshTools(ctx, board, tracker, health) {
     if (health)
         setDshCapabilityDiagnostics(health, "tools", []);
     const disposers = [];
@@ -116,9 +124,56 @@ export function registerDshTools(ctx, board, health) {
                 },
             });
             disposers.push(inner.tools.register(definition));
+            const cancellation = defineTool({
+                name: "cancel_task",
+                description: "Request cancellation of a running native DSH subagent by Job Board ID or alias. Acceptance changes the job to cancelling; only the native subagent settlement marks it cancelled. Local interruption stops the current turn while descendants continue; external one-shot runs terminate without resume. Repeated, unknown, and terminal requests are idempotent.",
+                parameters: {
+                    task_id: {
+                        type: "string",
+                        required: true,
+                        description: "The Job Board task ID or alias to cancel.",
+                    },
+                },
+                output: {
+                    schema: {
+                        type: "object",
+                        additionalProperties: false,
+                        properties: {
+                            revision: { type: "integer", required: true },
+                            found: { type: "boolean", required: true },
+                            job: { type: "json" },
+                            message: { type: "string", required: true },
+                        },
+                    },
+                    render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 2) }],
+                },
+                async execute(args) {
+                    const job = board.get(args.task_id);
+                    if (!job) {
+                        return cancellationResult(board, undefined, `No background task found with ID or alias '${args.task_id}'.`);
+                    }
+                    if (job.executionState !== "running") {
+                        return cancellationResult(board, job, `Task '${job.alias}' is already in state: ${job.executionState}.`);
+                    }
+                    if (!tracker) {
+                        return cancellationResult(board, job, `Error cancelling task '${job.alias}': DSH subagent tracking is unavailable.`);
+                    }
+                    try {
+                        await tracker.cancel(job);
+                        const current = board.get(job.id) ?? job;
+                        return cancellationResult(board, current, current.executionState === "cancelling"
+                            ? `Cancellation requested for task '${current.alias}' (${current.hostTaskId}).`
+                            : `Task '${current.alias}' is now in state: ${current.executionState}.`);
+                    }
+                    catch (error) {
+                        return cancellationResult(board, board.get(job.id) ?? job, `Error cancelling task '${job.alias}': ${errorMessage(error)}`);
+                    }
+                },
+            });
+            disposers.push(inner.tools.register(cancellation));
         }
         catch (error) {
-            report("ERR_DSH_TOOL_REGISTRATION", `Unable to register DSH parallel_status: ${errorMessage(error)}`);
+            report("ERR_DSH_TOOL_REGISTRATION", `Unable to register DSH status/cancellation tools: ${errorMessage(error)}`);
         }
         return cleanup;
     };

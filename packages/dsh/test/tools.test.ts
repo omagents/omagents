@@ -92,7 +92,7 @@ async function within(promise, label) {
   }
 }
 
-test("parallel_status is the only model tool and returns canonical read-only Core JSON", async () => {
+test("parallel_status returns canonical read-only Core JSON alongside cancellation", async () => {
   const { board, setNow } = createBoard()
   const running = board.registerLaunch(launch())
   const finished = board.registerLaunch(
@@ -104,10 +104,10 @@ test("parallel_status is the only model tool and returns canonical read-only Cor
   setNow(6_000)
   const registry = createToolRegistry()
   const health = healthyRecords()
-  const dispose = registerDshTools({ tools: registry }, board, health)
+  const dispose = registerDshTools({ tools: registry }, board, undefined, health)
 
-  assert.deepEqual([...registry.definitions.keys()], ["parallel_status"])
-  assert.equal(registry.definitions.has("cancel_task"), false)
+  assert.deepEqual([...registry.definitions.keys()], ["parallel_status", "cancel_task"])
+  assert.equal(registry.definitions.has("cancel_task"), true)
   const definition = registry.definitions.get("parallel_status")
   assert.equal(definition.isConcurrencySafe({}), true)
   assert.doesNotMatch(definition.description, /\btask\s*\(|background\s*:/)
@@ -140,7 +140,7 @@ test("parallel_status is the only model tool and returns canonical read-only Cor
 test("DSH validates parallel_status arguments before reading the Board", async () => {
   const { board } = createBoard()
   const registry = createToolRegistry()
-  registerDshTools({ tools: registry }, board, healthyRecords())
+  registerDshTools({ tools: registry }, board, undefined, healthyRecords())
   const definition = registry.definitions.get("parallel_status")
 
   for (const args of [null, [], { session_id: 42 }, { session_id: null }]) {
@@ -190,7 +190,7 @@ test("tool and command registrars activate late services and compose repeat-safe
   const health = healthyRecords()
   const root = new Context()
   t.after(() => root.fiber.dispose())
-  const disposeTools = registerDshTools(root, board, health)
+  const disposeTools = registerDshTools(root, board, undefined, health)
   const disposeCommands = registerDshCommands(root, board, health)
 
   const firstToolActivation = deferred()
@@ -203,7 +203,7 @@ test("tool and command registrars activate late services and compose repeat-safe
     Promise.all([firstToolActivation.promise, firstCommandActivation.promise]),
     "initial tool and command activation"
   )
-  assert.equal(firstTools.definitions.size, 1)
+  assert.equal(firstTools.definitions.size, 2)
   assert.equal(firstCommands.definitions.size, 1)
 
   await removeTools()

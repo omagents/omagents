@@ -1,5 +1,6 @@
 import type { Context } from "@deepseek-ai/cordis"
 import { defineTool } from "@deepseek-ai/dsh-tools"
+import type { JsonValue } from "@deepseek-ai/dsh-util-values"
 import { buildParallelStatus } from "@omagents/core"
 
 import {
@@ -7,16 +8,31 @@ import {
   setDshCapabilityDiagnostics,
   type DshHealth,
 } from "./health.js"
-import type { DshJobBoard } from "./runtime.js"
+import type { DshJobBoard, DshJobRecord } from "./runtime.js"
+import type { DshSubagentTracker } from "./subagent-tracker.js"
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** Register only the read-only status tool; cancellation is added by the lifecycle adapter. */
+function cancellationResult(
+  board: DshJobBoard,
+  job: DshJobRecord | undefined,
+  message: string
+) {
+  return {
+    revision: board.revision,
+    found: job !== undefined,
+    ...(job ? { job: job as unknown as JsonValue } : {}),
+    message,
+  }
+}
+
+/** Register canonical status and idempotent native-subagent cancellation tools. */
 export function registerDshTools(
   ctx: Context,
   board: DshJobBoard,
+  tracker?: DshSubagentTracker,
   health?: DshHealth
 ): () => void {
   if (health) setDshCapabilityDiagnostics(health, "tools", [])
@@ -127,10 +143,77 @@ export function registerDshTools(
         },
       })
       disposers.push(inner.tools.register(definition))
+      const cancellation = defineTool({
+        name: "cancel_task",
+        description:
+          "Request cancellation of a running native DSH subagent by Job Board ID or alias. Acceptance changes the job to cancelling; only the native subagent settlement marks it cancelled. Local interruption stops the current turn while descendants continue; external one-shot runs terminate without resume. Repeated, unknown, and terminal requests are idempotent.",
+        parameters: {
+          task_id: {
+            type: "string",
+            required: true,
+            description: "The Job Board task ID or alias to cancel.",
+          },
+        },
+        output: {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              revision: { type: "integer", required: true },
+              found: { type: "boolean", required: true },
+              job: { type: "json" },
+              message: { type: "string", required: true },
+            },
+          },
+          render: (_args, value) => [{ type: "text", text: JSON.stringify(value, null, 2) }],
+        },
+        async execute(args) {
+          const job = board.get(args.task_id)
+          if (!job) {
+            return cancellationResult(
+              board,
+              undefined,
+              `No background task found with ID or alias '${args.task_id}'.`
+            )
+          }
+          if (job.executionState !== "running") {
+            return cancellationResult(
+              board,
+              job,
+              `Task '${job.alias}' is already in state: ${job.executionState}.`
+            )
+          }
+          if (!tracker) {
+            return cancellationResult(
+              board,
+              job,
+              `Error cancelling task '${job.alias}': DSH subagent tracking is unavailable.`
+            )
+          }
+          try {
+            await tracker.cancel(job)
+            const current = board.get(job.id) ?? job
+            return cancellationResult(
+              board,
+              current,
+              current.executionState === "cancelling"
+                ? `Cancellation requested for task '${current.alias}' (${current.hostTaskId}).`
+                : `Task '${current.alias}' is now in state: ${current.executionState}.`
+            )
+          } catch (error) {
+            return cancellationResult(
+              board,
+              board.get(job.id) ?? job,
+              `Error cancelling task '${job.alias}': ${errorMessage(error)}`
+            )
+          }
+        },
+      })
+      disposers.push(inner.tools.register(cancellation))
     } catch (error) {
       report(
         "ERR_DSH_TOOL_REGISTRATION",
-        `Unable to register DSH parallel_status: ${errorMessage(error)}`
+        `Unable to register DSH status/cancellation tools: ${errorMessage(error)}`
       )
     }
     return cleanup

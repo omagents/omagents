@@ -7,6 +7,7 @@ import { registerDshMcp } from "./register-mcp.js"
 import { provisionDshPython } from "./register-python.js"
 import { registerDshSkills } from "./register-skills.js"
 import { registerDshTools } from "./register-tools.js"
+import { createSubagentTracker } from "./subagent-tracker.js"
 
 export { createDshRuntime } from "./runtime.js"
 export type { DshRuntime } from "./runtime.js"
@@ -16,6 +17,8 @@ export { registerDshMcp } from "./register-mcp.js"
 export { provisionDshPython } from "./register-python.js"
 export { registerDshSkills } from "./register-skills.js"
 export { registerDshTools } from "./register-tools.js"
+export { createSubagentTracker } from "./subagent-tracker.js"
+export type { DshSubagentTracker } from "./subagent-tracker.js"
 export type {
   DshCapability,
   DshHealth,
@@ -37,13 +40,15 @@ export async function apply(ctx: Context): Promise<void> {
   const runtime = await createDshRuntime(ctx)
   const disposeSkills = registerDshSkills(ctx, runtime.health)
   const disposeMcp = registerDshMcp(ctx, process.env, runtime.health)
-  const disposeTools = registerDshTools(ctx, runtime.board, runtime.health)
+  const tracker = createSubagentTracker(ctx, runtime.board)
+  const disposeTools = registerDshTools(ctx, runtime.board, tracker, runtime.health)
   const disposeCommands = registerDshCommands(ctx, runtime.board, runtime.health)
   const disposeContext = registerDshContext(ctx, runtime.board, runtime.health)
   ctx.effect(() => async () => {
     disposeContext()
     disposeCommands()
     disposeTools()
+    tracker.dispose()
     disposeSkills()
     // Start closing the Board synchronously; Loader removal may call the
     // effect disposer twice without awaiting its first in-flight settlement.

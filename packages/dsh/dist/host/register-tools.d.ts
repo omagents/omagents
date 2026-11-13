@@ -1,5 +1,6 @@
 import type { Context } from "@deepseek-ai/cordis";
 import { type DshHealth } from "./health.js";
 import type { DshJobBoard } from "./runtime.js";
-/** Register only the read-only status tool; cancellation is added by the lifecycle adapter. */
-export declare function registerDshTools(ctx: Context, board: DshJobBoard, health?: DshHealth): () => void;
+import type { DshSubagentTracker } from "./subagent-tracker.js";
+/** Register canonical status and idempotent native-subagent cancellation tools. */
+export declare function registerDshTools(ctx: Context, board: DshJobBoard, tracker?: DshSubagentTracker, health?: DshHealth): () => void;

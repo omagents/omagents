@@ -7,6 +7,8 @@ const files = [
   "mcp.test.ts",
   "python.test.ts",
   "tools.test.ts",
+  "subagent-lifecycle.test.ts",
+  "subagent-recovery.test.ts",
   "context.test.ts",
   "package-surface.test.js",
   "npm-launcher.test.js",
