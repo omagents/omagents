@@ -16,6 +16,14 @@ test("parallel engine exists", () => {
   assert.ok(fs.existsSync(path.join(PLUGINS_DIR, "parallel.js")))
 })
 
+test("OpenCode parallel execution delegates state and persistence to Core", () => {
+  const source = fs.readFileSync(path.join(PLUGINS_DIR, "parallel.js"), "utf8")
+  assert.ok(!source.includes("jobBoard = new Map()"), "legacy global board must be removed")
+  assert.ok(!source.includes("function persistJobBoard"), "legacy persistence must be removed")
+  assert.ok(source.includes("JobBoard"), "adapter should use the Core JobBoard")
+  assert.ok(source.includes("JsonJobStore"), "adapter should use the Core JSON store")
+})
+
 test("index.js exports dual V1/V2 entry point", async () => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
   // V1: named export scanned by older V1 hosts
@@ -99,15 +107,23 @@ test("index.js contains conditional github/grep_app fallback logic", () => {
 
 function getRegisteredMcps(env) {
   const script = `
+    import fs from "node:fs";
+    import os from "node:os";
+    import path from "node:path";
     import mod from "./packages/opencode/src/index.js";
-    const p = await mod.server({});
+    const storage = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-v1-test-"));
+    const p = await mod.server({ omagents: {
+      jobStorePath: path.join(storage, "job-board.json"),
+      tuiStatePath: path.join(storage, "tui-state.json")
+    } });
     const config = { skills: { paths: [] }, mcp: {} };
     await p.config(config);
     console.log(JSON.stringify(config.mcp));
+    fs.rmSync(storage, { recursive: true, force: true });
   `
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
     cwd: ROOT,
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...env, SHELL: "omagents-test-shell" },
   })
   if (result.status !== 0) {
     throw new Error(result.stderr.toString() || "Child process failed")

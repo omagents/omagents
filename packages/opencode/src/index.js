@@ -563,9 +563,9 @@ async function setupV2(ctx) {
   // Provision the Python venv in the background (never blocks plugin load)
   void ensurePythonDependencies(ctx.omagents?.ensureBaseEnvironment)
 
-  return () => {
+  return async () => {
     try {
-      cleanupParallel?.()
+      await cleanupParallel?.()
     } catch {
       // best-effort
     }

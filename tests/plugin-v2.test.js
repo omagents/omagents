@@ -14,7 +14,9 @@ const PLUGINS_DIR = path.join(ROOT, "packages", "opencode", "src")
  * superpowers (a real dependency) also runs its V2 setup against this ctx,
  * so assertions are tolerant of its registrations too.
  */
-function makeFakeV2Context() {
+function makeFakeV2Context(t) {
+  const storageDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-v2-test-"))
+  t.after(() => fs.rmSync(storageDirectory, { recursive: true, force: true }))
   const captured = {
     skills: [],
     mcps: {},
@@ -28,6 +30,8 @@ function makeFakeV2Context() {
 
   const ctx = {
     omagents: {
+      jobStorePath: path.join(storageDirectory, "job-board.json"),
+      tuiStatePath: path.join(storageDirectory, "tui-state.json"),
       ensureBaseEnvironment: async () => {
         captured.pythonProvisions += 1
         return { status: "reused" }
@@ -90,16 +94,16 @@ function makeFakeV2Context() {
   return { ctx, captured }
 }
 
-test("V2 setup returns quietly for a V1-shaped context", async () => {
+test("V2 setup returns quietly for a V1-shaped context", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
   await assert.doesNotReject(() => mod.default.setup(null))
   await assert.doesNotReject(() => mod.default.setup({}))
   await assert.doesNotReject(() => mod.default.setup({ session: {} }))
 })
 
-test("V2 setup uses the injected Python provisioner", async () => {
+test("V2 setup uses the injected Python provisioner", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
     assert.equal(captured.pythonProvisions, 1)
@@ -108,9 +112,9 @@ test("V2 setup uses the injected Python provisioner", async () => {
   }
 })
 
-test("V2 setup registers bundled skills via ctx.skill.transform", async () => {
+test("V2 setup registers bundled skills via ctx.skill.transform", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
     // Every skills/<name>/SKILL.md must be registered (superpowers skills may
@@ -137,9 +141,9 @@ test("V2 setup registers bundled skills via ctx.skill.transform", async () => {
   }
 })
 
-test("V2 setup registers built-in MCP servers in V2 shape", async () => {
+test("V2 setup registers built-in MCP servers in V2 shape", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
     for (const name of ["agentmemory", "codegraph", "context7", "websearch"]) {
@@ -181,17 +185,17 @@ test("V2 setup registers built-in MCP servers in V2 shape", async () => {
   }
 })
 
-test("V2 setup does not override user-configured MCP servers", async () => {
+test("V2 setup does not override user-configured MCP servers", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   captured.mcps.context7 = { type: "remote", url: "https://example.com/custom" }
   await mod.default.setup(ctx)
   assert.strictEqual(captured.mcps.context7.url, "https://example.com/custom")
 })
 
-test("V2 setup registers parallel_status/cancel_task tools and /ps command", async () => {
+test("V2 setup registers parallel_status/cancel_task tools and /ps command", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
     assert.ok(captured.tools.has("parallel_status"), "parallel_status registered")
@@ -209,9 +213,9 @@ test("V2 setup registers parallel_status/cancel_task tools and /ps command", asy
   }
 })
 
-test("V2 parallel engine tracks a background subagent end to end", async () => {
+test("V2 parallel engine tracks a background subagent end to end", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
     const before = captured.toolHooks["execute.before"]?.[0]
@@ -300,9 +304,9 @@ test("V2 parallel engine tracks a background subagent end to end", async () => {
   }
 })
 
-test("V2 shell hook prepends venv and skill script dirs to PATH", async () => {
+test("V2 shell hook prepends venv and skill script dirs to PATH", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
     const hook = captured.shellHooks["create.before"]?.[0]
@@ -331,9 +335,9 @@ test("V2 shell hook prepends venv and skill script dirs to PATH", async () => {
   }
 })
 
-test("V2 compaction hook appends the state preservation note", async () => {
+test("V2 compaction hook appends the state preservation note", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
     const hook = captured.sessionHooks["compaction"]?.[0]
@@ -371,9 +375,16 @@ function makeInstalledCopy(t) {
   fs.mkdirSync(moduleDir, { recursive: true })
   fs.mkdirSync(path.join(pkgDir, "mcp-servers"), { recursive: true })
   fs.mkdirSync(path.join(pkgDir, "hooks"), { recursive: true })
-  for (const f of ["index.js", "parallel.js"]) {
+  for (const f of fs.readdirSync(PLUGINS_DIR).filter((file) => file.endsWith(".js"))) {
     fs.copyFileSync(path.join(PLUGINS_DIR, f), path.join(moduleDir, f))
   }
+  fs.cpSync(
+    path.join(ROOT, "packages", "core", "src"),
+    path.join(pkgDir, "packages", "core", "src"),
+    {
+      recursive: true,
+    }
+  )
   fs.copyFileSync(
     path.join(ROOT, "hooks", "python-env.js"),
     path.join(pkgDir, "hooks", "python-env.js")
@@ -399,7 +410,7 @@ test("installed package yields to the local checkout inside the source repo (V2)
   const entry = makeInstalledCopy(t)
   const srcRepo = makeSourceRepo(t)
   const mod = await import(entry)
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   ctx.location = { directory: srcRepo, project: { directory: srcRepo } }
   await mod.default.setup(ctx)
   assert.strictEqual(captured.skills.length, 0, "no skills registered when yielding")
@@ -417,7 +428,7 @@ test("installed package also yields from a subdirectory of the source repo (V2)"
   const subdir = path.join(srcRepo, "skills", "deep-research")
   fs.mkdirSync(subdir, { recursive: true })
   const mod = await import(entry)
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   ctx.location = { directory: subdir }
   await mod.default.setup(ctx)
   assert.strictEqual(Object.keys(captured.mcps).length, 0, "no MCPs registered when yielding")
@@ -428,7 +439,7 @@ test("installed package runs normally in any other project (V2)", async (t) => {
   const other = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-other-"))
   t.after(() => fs.rmSync(other, { recursive: true, force: true }))
   const mod = await import(entry)
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   ctx.location = { directory: other, project: { directory: other } }
   const cleanup = await mod.default.setup(ctx)
   try {
@@ -446,9 +457,9 @@ test("installed package yields to the local checkout inside the source repo (V1)
   assert.deepStrictEqual(hooks, {}, "V1 returns empty hooks when yielding")
 })
 
-test("local checkout never yields inside the source repo (V2)", async () => {
+test("local checkout never yields inside the source repo (V2)", async (t) => {
   const mod = await import(path.join(PLUGINS_DIR, "index.js"))
-  const { ctx, captured } = makeFakeV2Context()
+  const { ctx, captured } = makeFakeV2Context(t)
   ctx.location = { directory: ROOT, project: { directory: ROOT } }
   const cleanup = await mod.default.setup(ctx)
   try {

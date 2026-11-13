@@ -1,50 +1,24 @@
 /**
- * OmAgents Parallel Execution Plugin
+ * OpenCode lifecycle adapter for the shared Core Job Board.
  *
- * Intercepts OpenCode's native `task` tool with `background: true` to track
- * background jobs, inject job status into the orchestrator's context, and
- * provide a `/ps` command for checking running tasks.
- *
- * Inspired by oh-my-opencode-slim's task-session-manager.
+ * Tool-call correlation, host parsing, interruption, event subscription, and
+ * TUI projection stay here. Job state, notifications, recovery transitions,
+ * and durable JSON persistence are owned by Core.
  */
 
-import path from "path"
-import fs from "fs"
-import os from "os"
-import { fileURLToPath } from "url"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+import { JobBoard, JsonJobStore } from "../../core/src/index.js"
+import {
+  buildLegacyParallelStatus,
+  buildOpenCodeJobBoardContext,
+  buildTuiState,
+} from "./job-presenters.js"
+import { getJobStorePath, getTuiStatePath } from "./job-store-paths.js"
 
-// ─── Job Board ──────────────────────────────────────────────────────────────
-
-/**
- * @typedef {Object} JobRecord
- * @property {string} taskID
- * @property {string} parentSessionID
- * @property {string} agent
- * @property {string} description
- * @property {string} state - "running" | "completed" | "error" | "cancelled" | "reconciled"
- * @property {string} [terminalState]
- * @property {boolean} terminalUnreconciled
- * @property {string} [resultSummary]
- * @property {number} launchedAt
- * @property {number} [completedAt]
- * @property {string} [alias]
- */
-
-/** @type {Map<string, JobRecord>} taskID -> JobRecord */
-const jobBoard = new Map()
-
-/** @type {Map<string, {callId: string, parentSessionId: string, agentType: string, label: string}>} */
-const pendingCalls = new Map()
-
-/** @type {Set<string>} */
-const processedCompletions = new Set()
-const MAX_PROCESSED = 500
-
-// ─── Parallel Execution System Prompt ───────────────────────────────────────
-// Injected into ALL agents (build, plan, custom) via system.transform.
-
+const HOST = "opencode"
 const PARALLEL_SYSTEM_PROMPT = `<Parallel_Execution>
 You have parallel execution capabilities via background tasks.
 
@@ -74,9 +48,6 @@ If task B needs results from task A: launch A with \`background: true\`, continu
 - For trivial tasks or tiny mechanical edits, direct execution is fine.
 </Parallel_Execution>`
 
-// V2 variant: OpenCode 2.x exposes background execution through the native
-// `subagent` tool ({ agent, description, prompt, background }) instead of the
-// V1 experimental `task(background: true)`.
 const PARALLEL_SYSTEM_PROMPT_V2 = `<Parallel_Execution>
 You have parallel execution capabilities via background tasks.
 
@@ -106,24 +77,15 @@ If task B needs results from task A: launch A with \`background: true\`, continu
 - For trivial tasks or tiny mechanical edits, direct execution is fine.
 </Parallel_Execution>`
 
-// Alias counter
-let aliasCounter = 0
-function nextAlias(agent) {
-  const prefix = (agent || "task").slice(0, 3)
-  aliasCounter++
-  return `${prefix}-${aliasCounter}`
-}
-
-// ─── TUI State File ─────────────────────────────────────────────────────────
+const PS_COMMAND_TEMPLATE =
+  "List all background tasks for the current session. Use the parallel_status tool to get the current status, then display as a concise table with columns: Alias | Agent | Status | Elapsed | Description. If no tasks are running, say 'No background tasks.'"
 
 const ENV_NAME = "OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS"
 const START_MARKER = "# >>> omagents background subagents >>>"
 const END_MARKER = "# <<< omagents background subagents <<<"
 
 function warnIfDebug(...args) {
-  if (process.env.OMAGENTS_DEBUG === "1") {
-    console.warn(...args)
-  }
+  if (process.env.OMAGENTS_DEBUG === "1") console.warn(...args)
 }
 
 function isBackgroundSubagentsEnabled() {
@@ -146,125 +108,41 @@ function detectShellConfigPath() {
 }
 
 function ensureBackgroundSubagentsEnv() {
-  // Ensure the current process is enabled immediately, regardless of whether
-  // we can persist the setting to a shell config file.
   process.env[ENV_NAME] = "true"
-
-  // Best-effort persistence to shell config. Don't warn if it fails (e.g.
-  // read-only or permission-denied home directory) because the env var above
-  // is sufficient for the current session.
-  if (isBackgroundSubagentsEnabled()) {
-    // already enabled in this process; no need to persist repeatedly
-    if (process.env[ENV_NAME] !== "true") {
-      process.env[ENV_NAME] = "true"
-    }
+  if (isBackgroundSubagentsEnabled() && process.env[ENV_NAME] !== "true") {
+    process.env[ENV_NAME] = "true"
   }
 
   const targetPath = detectShellConfigPath()
-  if (!targetPath) {
-    return
-  }
+  if (!targetPath) return
 
   try {
     const isFish = targetPath.endsWith(".fish")
     const command = isFish ? `set -gx ${ENV_NAME} true` : `export ${ENV_NAME}=true`
     const block = `${START_MARKER}\n${command}\n${END_MARKER}`
-
     let content = ""
     try {
       content = fs.readFileSync(targetPath, "utf8")
     } catch {
-      // file doesn't exist yet
+      // The file does not exist yet.
     }
-
-    // Check if block already exists
     if (content.includes(START_MARKER)) return
-
-    // Append block
     const prefix = content.length > 0 && !content.endsWith("\n") ? "\n\n" : ""
-    const newContent = `${content}${prefix}${block}\n`
     fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-    fs.writeFileSync(targetPath, newContent)
-  } catch (err) {
-    // Silent best-effort: the current session is already enabled above.
-  }
-}
-
-function getTuiStatePath() {
-  const dataDir = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share")
-  return path.join(dataDir, "opencode", "storage", "omagents", "tui-state.json")
-}
-
-function getJobBoardPath() {
-  const dataDir = process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share")
-  return path.join(dataDir, "opencode", "storage", "omagents", "job-board.json")
-}
-
-let persistTimer = null
-
-function persistJobBoard() {
-  if (persistTimer) clearTimeout(persistTimer)
-  persistTimer = setTimeout(() => {
-    try {
-      const boardPath = getJobBoardPath()
-      fs.mkdirSync(path.dirname(boardPath), { recursive: true })
-      const data = [...jobBoard.values()]
-      fs.writeFileSync(boardPath, JSON.stringify(data, null, 2) + "\n")
-    } catch {
-      // best-effort
-    }
-  }, 500)
-}
-
-function loadJobBoard() {
-  try {
-    const boardPath = getJobBoardPath()
-    if (!fs.existsSync(boardPath)) return
-    const data = JSON.parse(fs.readFileSync(boardPath, "utf-8"))
-    for (const job of data) {
-      if (job.state === "running") {
-        job.state = "completed"
-        job.terminalState = "completed"
-        job.terminalUnreconciled = false
-      }
-      jobBoard.set(job.taskID, job)
-    }
+    fs.writeFileSync(targetPath, `${content}${prefix}${block}\n`)
   } catch {
-    // best-effort
+    // The current process is enabled even when persistence is unavailable.
   }
 }
 
-function writeTuiState() {
+function writeTuiState(board, statePath) {
   try {
-    const statePath = getTuiStatePath()
     fs.mkdirSync(path.dirname(statePath), { recursive: true })
-
-    const jobs = [...jobBoard.values()]
-    const snapshot = {
-      version: 1,
-      updatedAt: Date.now(),
-      running: jobs.filter((j) => j.state === "running").length,
-      completed: jobs.filter((j) => j.state === "completed" || j.state === "reconciled").length,
-      error: jobs.filter((j) => j.state === "error").length,
-      jobs: jobs.map((j) => ({
-        alias: j.alias,
-        agent: j.agent,
-        description: j.description,
-        state: j.state,
-        elapsed:
-          j.state === "running"
-            ? Date.now() - j.launchedAt
-            : (j.completedAt || Date.now()) - j.launchedAt,
-      })),
-    }
-    fs.writeFileSync(statePath, JSON.stringify(snapshot, null, 2) + "\n")
-    persistJobBoard()
+    fs.writeFileSync(statePath, `${JSON.stringify(buildTuiState(board), null, 2)}\n`)
   } catch {
-    // best-effort
+    // TUI projection is best-effort; Core persistence is independent.
   }
 }
-
-// ─── Task Output Parsing ────────────────────────────────────────────────────
 
 function parseTaskIdFromOutput(output) {
   if (typeof output !== "string") return undefined
@@ -279,12 +157,15 @@ function parseTaskIdFromOutput(output) {
 
 function parseTaskStateFromOutput(output) {
   if (typeof output !== "string") return undefined
-  const xmlMatch = /<task\s+[^>]*\bstate=["'](running|completed|error|cancelled)["'][^>]*>/i.exec(
-    output
-  )
+  const xmlMatch =
+    /<task\s+[^>]*\bstate=["'](running|completed|error|failed|cancelled|interrupted)["'][^>]*>/i.exec(
+      output
+    )
   if (xmlMatch) return xmlMatch[1].toLowerCase()
   for (const line of output.split(/\r?\n/)) {
-    const match = /^state:\s*(running|completed|error|cancelled)/i.exec(line.trim())
+    const match = /^state:\s*(running|completed|error|failed|cancelled|interrupted)/i.exec(
+      line.trim()
+    )
     if (match) return match[1].toLowerCase()
   }
   return undefined
@@ -296,198 +177,202 @@ function parseTaskResultFromOutput(output) {
   return match?.[2]?.trim() || undefined
 }
 
-// ─── Job Board Operations ───────────────────────────────────────────────────
+// A Host context represents one plugin process. Repeated V1 entry-point
+// discovery reuses this Board rather than opening independent stores.
+const boardEntries = new WeakMap()
 
-function registerLaunch(taskID, parentSessionID, agent, description) {
-  const alias = nextAlias(agent)
-  /** @type {JobRecord} */
-  const record = {
-    taskID,
-    parentSessionID,
-    agent: agent || "unknown",
-    description: description || "(no description)",
-    state: "running",
-    terminalUnreconciled: false,
-    launchedAt: Date.now(),
-    alias,
+function getBoardEntry(ctx) {
+  if (ctx && typeof ctx === "object" && boardEntries.has(ctx)) return boardEntries.get(ctx)
+
+  const injected = ctx?.omagents?.jobBoard
+  const filePath = ctx?.omagents?.jobStorePath || getJobStorePath()
+  const entry = {
+    filePath,
+    owned: !injected,
+    promise: injected
+      ? Promise.resolve(injected)
+      : JobBoard.open({ store: new JsonJobStore({ filePath }) }),
   }
-  jobBoard.set(taskID, record)
-  writeTuiState()
-  return record
+  if (ctx && typeof ctx === "object") boardEntries.set(ctx, entry)
+  return entry
 }
 
-function updateJobStatus(taskID, state, result) {
-  const job = jobBoard.get(taskID)
-  if (!job) return
-  if (job.state === "reconciled" || job.state === "cancelled") return
-
-  // Terminal states are sticky: a job already marked completed/error (e.g. by
-  // a lifecycle event) must not regress when the completion text is scanned
-  // again on a later turn. Only backfill a missing result summary.
-  if (job.state === "completed" || job.state === "error") {
-    if (result && !job.resultSummary) {
-      job.resultSummary = result
-      writeTuiState()
+function createBoardRuntime(ctx, query) {
+  const entry = getBoardEntry(ctx)
+  const tuiStatePath = ctx?.omagents?.tuiStatePath || getTuiStatePath()
+  const ready = entry.promise.then(async (board) => {
+    const unsubscribe = board.subscribe(() => writeTuiState(board, tuiStatePath))
+    try {
+      await board.reconcile({ query })
+    } catch (error) {
+      // Keep the in-memory adapter available, but never hide degraded health.
+      warnIfDebug("[omagents] job recovery failed:", error.message)
     }
-    return
-  }
-
-  job.state = state
-  job.terminalState = state
-  job.terminalUnreconciled = state === "completed" || state === "error"
-  job.resultSummary = result
-  job.completedAt = Date.now()
-  writeTuiState()
+    return { board, unsubscribe }
+  })
+  ready.catch((error) => warnIfDebug("[omagents] job store initialization failed:", error.message))
+  return { ctx, entry, ready, tuiStatePath }
 }
 
-function reconcileJobs(parentSessionID) {
-  for (const job of jobBoard.values()) {
-    if (job.parentSessionID === parentSessionID && job.terminalUnreconciled) {
-      job.state = "reconciled"
-      job.terminalUnreconciled = false
+function findJob(board, idOrAlias) {
+  return board.get(idOrAlias) || board.list().find((job) => job.hostTaskId === idOrAlias)
+}
+
+function findHostJob(board, hostTaskId) {
+  return board.list().find((job) => job.host === HOST && job.hostTaskId === hostTaskId)
+}
+
+function registerLaunch(board, hostTaskId, parentSessionId, agent, description) {
+  return board.registerLaunch({
+    host: HOST,
+    hostTaskId,
+    parentSessionId,
+    agent,
+    description,
+  })
+}
+
+function normalizeTerminalState(state) {
+  if (state === "error") return "failed"
+  if (state === "interrupted") return "cancelled"
+  return state
+}
+
+function markHostTerminal(board, hostTaskId, state, { resultSummary, error } = {}) {
+  const job = findHostJob(board, hostTaskId)
+  if (!job) return undefined
+  const terminalState = normalizeTerminalState(state)
+  return board.markTerminal(job.id, {
+    state: terminalState,
+    ...(resultSummary !== undefined ? { resultSummary } : {}),
+    ...(error !== undefined
+      ? { error }
+      : terminalState === "failed" && resultSummary
+        ? { error: { message: resultSummary } }
+        : {}),
+  })
+}
+
+function recoveryError(error) {
+  const status = error?.status ?? error?.statusCode ?? error?.response?.status
+  const missing =
+    status === 404 ||
+    error?.code === "ENOENT" ||
+    error?.code === "NOT_FOUND" ||
+    error?.name === "NotFoundError"
+  return {
+    kind: missing ? "missing" : "unreadable",
+    reason: typeof error?.message === "string" ? error.message : String(error),
+  }
+}
+
+function sessionOutcome(response) {
+  if (response?.error) return recoveryError(response.error)
+  const session =
+    response && typeof response === "object" && "data" in response ? response.data : response
+  if (!session) return { kind: "missing", reason: "host session not found" }
+
+  const statusValue =
+    session.executionState ??
+    session.state ??
+    (typeof session.status === "string" ? session.status : session.status?.type) ??
+    session.execution?.state
+  const status = typeof statusValue === "string" ? statusValue.toLowerCase() : "running"
+  const resultSummary = [session.resultSummary, session.result, session.output].find(
+    (value) => typeof value === "string"
+  )
+  const errorMessage =
+    typeof session.error === "string"
+      ? session.error
+      : typeof session.error?.message === "string"
+        ? session.error.message
+        : undefined
+
+  if (["completed", "succeeded", "success", "idle"].includes(status)) {
+    return { kind: "terminal", state: "completed", resultSummary }
+  }
+  if (["error", "failed"].includes(status)) {
+    return {
+      kind: "terminal",
+      state: "failed",
+      resultSummary,
+      error: errorMessage ? { message: errorMessage } : { message: "host session failed" },
     }
   }
-  writeTuiState()
+  if (["cancelled", "canceled", "interrupted", "aborted"].includes(status)) {
+    return { kind: "terminal", state: "cancelled", resultSummary }
+  }
+  return { kind: "active" }
 }
 
-function getJobsForSession(parentSessionID) {
-  return [...jobBoard.values()].filter((j) => j.parentSessionID === parentSessionID)
+async function queryV1Session(client, job) {
+  if (typeof client?.session?.get !== "function") {
+    return { kind: "unreadable", reason: "OpenCode session query is unavailable" }
+  }
+  try {
+    return sessionOutcome(await client.session.get({ path: { id: job.hostTaskId } }))
+  } catch (error) {
+    return recoveryError(error)
+  }
 }
 
-function getUnreconciledJobs(parentSessionID) {
-  return getJobsForSession(parentSessionID).filter((j) => j.terminalUnreconciled)
+async function queryV2Session(ctx, job) {
+  if (typeof ctx.session?.get !== "function") {
+    return { kind: "unreadable", reason: "OpenCode session query is unavailable" }
+  }
+  try {
+    return sessionOutcome(await ctx.session.get({ sessionID: job.hostTaskId }))
+  } catch (error) {
+    return recoveryError(error)
+  }
 }
 
-function getRunningJobs(parentSessionID) {
-  return getJobsForSession(parentSessionID).filter((j) => j.state === "running")
-}
+function injectBoardIntoParts(board, sessionID, parts) {
+  const boardText = buildOpenCodeJobBoardContext(board, sessionID)
+  if (!boardText) return
 
-function findJobByIdOrAlias(id) {
-  return jobBoard.get(id) || [...jobBoard.values()].find((j) => j.alias === id)
-}
-
-// Shared by the V1 `parallel_status` tool and its V2 counterpart.
-function buildParallelStatusJson(sessionId) {
-  const jobs = sessionId ? getJobsForSession(sessionId) : [...jobBoard.values()]
-
-  if (jobs.length === 0) {
-    return JSON.stringify({ total: 0, message: "No background tasks found." })
+  const alreadyInjected = parts.some(
+    (part) =>
+      part?.type === "text" &&
+      typeof part.text === "string" &&
+      part.text.includes("SENTINEL: omagents-job-board-v1")
+  )
+  if (!alreadyInjected) {
+    const firstPart = parts.find((part) => part?.type === "text")
+    if (firstPart) firstPart.text = `${boardText}\n\n${firstPart.text || ""}`
+    else parts.unshift({ type: "text", text: boardText })
   }
 
-  const summary = {
-    total: jobs.length,
-    running: jobs.filter((j) => j.state === "running").length,
-    completed: jobs.filter((j) => j.state === "completed" || j.state === "reconciled").length,
-    error: jobs.filter((j) => j.state === "error").length,
-    tasks: jobs.map((j) => ({
-      alias: j.alias,
-      task_id: j.taskID,
-      agent: j.agent,
-      description: j.description,
-      state: j.state,
-      elapsed_s: Math.round(
-        (j.state === "running"
-          ? Date.now() - j.launchedAt
-          : (j.completedAt || Date.now()) - j.launchedAt) / 1000
-      ),
-      result: j.resultSummary?.slice(0, 200),
-    })),
-  }
-
-  return JSON.stringify(summary, null, 2)
+  board.markInjected(board.listPendingOutcomes(sessionID).map((job) => job.id))
 }
-
-// Prompt body of the /ps command (shared by the V1 config hook and the V2
-// command transform).
-const PS_COMMAND_TEMPLATE =
-  "List all background tasks for the current session. Use the parallel_status tool to get the current status, then display as a concise table with columns: Alias | Agent | Status | Elapsed | Description. If no tasks are running, say 'No background tasks.'"
-
-// ─── Job Board Context for LLM ──────────────────────────────────────────────
-
-function buildJobBoardText(sessionID) {
-  const running = getRunningJobs(sessionID)
-  const unreconciled = getUnreconciledJobs(sessionID)
-
-  if (running.length === 0 && unreconciled.length === 0) return ""
-
-  const lines = [
-    "### Background Job Board",
-    "SENTINEL: omagents-job-board-v1",
-    "Do not poll running jobs. Wait for hook-driven completion notifications.",
-    "",
-  ]
-
-  if (running.length > 0) {
-    lines.push("#### Running")
-    for (const job of running) {
-      lines.push(`- ${job.alias} / ${job.taskID} / ${job.agent} / running`)
-      lines.push(`  Objective: ${job.description}`)
-    }
-    lines.push("")
-  }
-
-  if (unreconciled.length > 0) {
-    lines.push("#### Completed (unreconciled)")
-    for (const job of unreconciled) {
-      lines.push(`- ${job.alias} / ${job.taskID} / ${job.agent} / ${job.terminalState}`)
-      lines.push(`  Objective: ${job.description}`)
-      if (job.resultSummary) {
-        const summary = job.resultSummary.slice(0, 500)
-        lines.push(`  Result: ${summary}`)
-      }
-    }
-    lines.push("")
-    lines.push("Acknowledge completed jobs before your final response.")
-  }
-
-  return lines.join("\n")
-}
-
-// ─── Plugin ─────────────────────────────────────────────────────────────────
 
 /**
- * @param {{ client: any, serverUrl: URL, $: any }} ctx
+ * Create the OpenCode 1.x hooks. The returned hook shape remains synchronous;
+ * each Board-dependent hook awaits the same opened Core Board.
  */
 export function createParallelHooks(ctx) {
-  const { client } = ctx
+  const { client } = ctx || {}
+  const pendingCalls = new Map()
+  const runtime = createBoardRuntime(ctx, (job) => queryV1Session(client, job))
 
-  // Restore persisted Job Board from disk
-  try {
-    loadJobBoard()
-  } catch {
-    // best-effort
-  }
-
-  // Auto-enable background subagents on first load
   try {
     ensureBackgroundSubagentsEnv()
   } catch {
-    // best-effort
+    // Best-effort host capability setup.
   }
 
   return {
-    // ── Inject parallel instructions into ALL agents' system prompts ────────
-
     "experimental.chat.system.transform": async (_input, output) => {
       output.system = output.system || []
-      // Guard against double registration (V1 hosts may invoke both the named
-      // export and default.server of the dual V1/V2 entry point).
       if (output.system.includes(PARALLEL_SYSTEM_PROMPT)) return
       output.system.push(PARALLEL_SYSTEM_PROMPT)
     },
 
-    // ── Intercept task tool ─────────────────────────────────────────────────
-
     "tool.execute.before": async (input, output) => {
       if (input.tool !== "task") return
-
       const args = output.args
       if (!args) return
-
-      // Track pending call
-      const callId = input.callID
-      pendingCalls.set(callId, {
-        callId,
+      pendingCalls.set(input.callID, {
         parentSessionId: input.sessionID,
         agentType: args.subagent_type || "general",
         label: args.description || "",
@@ -496,7 +381,6 @@ export function createParallelHooks(ctx) {
 
     "tool.execute.after": async (input, output) => {
       if (input.tool !== "task") return
-
       const pending = pendingCalls.get(input.callID)
       if (!pending) return
       pendingCalls.delete(input.callID)
@@ -504,148 +388,114 @@ export function createParallelHooks(ctx) {
       const outputText = typeof output.output === "string" ? output.output : ""
       const taskID = parseTaskIdFromOutput(outputText)
       const state = parseTaskStateFromOutput(outputText)
+      if (!taskID || !state) return
 
-      if (!taskID) return
-
-      // Register or update job
-      if (state === "running") {
-        registerLaunch(taskID, pending.parentSessionId, pending.agentType, pending.label)
-      } else if (state === "completed" || state === "error" || state === "cancelled") {
-        const result = parseTaskResultFromOutput(outputText)
-        registerLaunch(taskID, pending.parentSessionId, pending.agentType, pending.label)
-        updateJobStatus(taskID, state, result)
+      const { board } = await runtime.ready
+      registerLaunch(board, taskID, pending.parentSessionId, pending.agentType, pending.label)
+      if (state !== "running") {
+        markHostTerminal(board, taskID, state, {
+          resultSummary: parseTaskResultFromOutput(outputText),
+        })
       }
     },
 
-    // ── Inject job board into LLM context ───────────────────────────────────
-
     "experimental.chat.messages.transform": async (_input, output) => {
       if (!output.messages || output.messages.length === 0) return
+      const { board } = await runtime.ready
 
-      // 1. Process synthetic completion messages
       for (const msg of output.messages) {
         if (msg.info?.role !== "user") continue
-        for (const part of msg.parts) {
-          if (!part.synthetic) continue
-          if (typeof part.text !== "string") continue
-
+        for (const part of msg.parts || []) {
+          if (!part.synthetic || typeof part.text !== "string") continue
           const taskID = parseTaskIdFromOutput(part.text)
           const state = parseTaskStateFromOutput(part.text)
-          if (!taskID || !state) continue
-
-          const occId = `${msg.info.id}:${part.id || ""}:${taskID}:${state}`
-          if (processedCompletions.has(occId)) continue
-          processedCompletions.add(occId)
-          if (processedCompletions.size > MAX_PROCESSED) {
-            const first = processedCompletions.values().next().value
-            if (first) processedCompletions.delete(first)
-          }
-
-          const result = parseTaskResultFromOutput(part.text)
-          updateJobStatus(taskID, state, result)
+          if (!taskID || !state || state === "running") continue
+          markHostTerminal(board, taskID, state, {
+            resultSummary: parseTaskResultFromOutput(part.text),
+          })
         }
       }
 
-      // 2. Inject job board into the last user message
-      // Find the last user message
       let lastUser = null
-      for (let i = output.messages.length - 1; i >= 0; i--) {
-        if (output.messages[i].info?.role === "user") {
-          lastUser = output.messages[i]
+      for (let index = output.messages.length - 1; index >= 0; index -= 1) {
+        if (output.messages[index].info?.role === "user") {
+          lastUser = output.messages[index]
           break
         }
       }
       if (!lastUser) return
+      lastUser.parts = lastUser.parts || []
 
-      // Extract session ID from the message context
       const sessionID =
-        output.messages?.[0]?.info?.sessionID ||
-        output.messages?.[0]?.sessionID ||
+        output.messages[0]?.info?.sessionID ||
+        output.messages[0]?.sessionID ||
         _input?.sessionID ||
-        null
+        undefined
+      injectBoardIntoParts(board, sessionID, lastUser.parts)
+    },
 
-      if (!sessionID) {
-        // Fallback: if we can't determine session, use all jobs (legacy behavior)
-        const boardText = buildJobBoardTextForAll()
-        if (!boardText) return
-        const firstPart = lastUser.parts.find((p) => p.type === "text")
-        if (firstPart) {
-          firstPart.text = `${boardText}\n\n${firstPart.text || ""}`
-        } else {
-          lastUser.parts.unshift({ type: "text", text: boardText })
+    event: async ({ event }) => {
+      const { board } = await runtime.ready
+      const type = event?.type
+      const properties = event?.properties || {}
+      const sessionID = properties.sessionID || properties.id
+
+      if (
+        (type === "session.idle" || (type === "session.status" && properties.type === "idle")) &&
+        sessionID
+      ) {
+        board.acknowledgeInjected(sessionID)
+        const job = findHostJob(board, sessionID)
+        if (job?.executionState === "running") {
+          markHostTerminal(board, sessionID, "completed")
         }
         return
       }
 
-      // Session-scoped: only show jobs for this session
-      const boardText = buildJobBoardText(sessionID)
-      if (!boardText) return
-
-      // Guard: don't double-inject (check every text part, not just parts[0])
-      const alreadyInjected = lastUser.parts.some(
-        (p) =>
-          p.type === "text" &&
-          typeof p.text === "string" &&
-          p.text.includes("SENTINEL: omagents-job-board-v1")
-      )
-      if (alreadyInjected) return
-
-      // Prepend job board to the first text part
-      const firstPart = lastUser.parts.find((p) => p.type === "text")
-      if (firstPart) {
-        firstPart.text = `${boardText}\n\n${firstPart.text || ""}`
-      } else {
-        lastUser.parts.unshift({ type: "text", text: boardText })
+      if (type === "session.status" && properties.type === "busy") {
+        if (sessionID && findHostJob(board, sessionID)) writeTuiState(board, runtime.tuiStatePath)
+        return
       }
-    },
 
-    // ── Event listener for session lifecycle ────────────────────────────────
-
-    event: async ({ event }) => {
+      if (type === "session.execution.succeeded" && sessionID) {
+        markHostTerminal(board, sessionID, "completed")
+        return
+      }
       if (
-        event.type === "session.idle" ||
-        (event.type === "session.status" && event.properties?.type === "idle")
+        (type === "session.execution.failed" ||
+          (type === "session.status" && ["error", "failed"].includes(properties.type))) &&
+        sessionID
       ) {
-        const sessionID = event.properties?.sessionID || event.properties?.id
-        if (!sessionID) return
-
-        // Check if this is a parent session going idle -> reconcile
-        reconcileJobs(sessionID)
-
-        // Check if this is a child session that went idle while still marked running
-        const job = jobBoard.get(sessionID)
-        if (job && job.state === "running") {
-          updateJobStatus(sessionID, "completed", undefined)
-        }
+        const message = properties.error?.message
+        markHostTerminal(board, sessionID, "failed", {
+          ...(message ? { error: { message } } : {}),
+        })
+        return
+      }
+      if (
+        (type === "session.execution.interrupted" ||
+          (type === "session.status" && ["cancelled", "interrupted"].includes(properties.type))) &&
+        sessionID
+      ) {
+        markHostTerminal(board, sessionID, "cancelled")
+        return
       }
 
-      if (event.type === "session.status" && event.properties?.type === "busy") {
-        const sessionID = event.properties?.sessionID || event.properties?.id
-        if (sessionID && jobBoard.has(sessionID)) {
-          // Confirm still running
-          writeTuiState()
+      if (type === "session.deleted" && sessionID) {
+        const job = findHostJob(board, sessionID)
+        if (job && ["running", "cancelling"].includes(job.executionState)) {
+          board.markTerminal(job.id, {
+            state: "interrupted",
+            error: { code: "HOST_MISSING", message: "host session was deleted" },
+          })
         }
-      }
-
-      if (event.type === "session.deleted") {
-        const sessionID = event.properties?.sessionID || event.properties?.id
-        if (sessionID) {
-          jobBoard.delete(sessionID)
-          // Clean pending calls
-          for (const [key, pending] of pendingCalls) {
-            if (pending.parentSessionId === sessionID) {
-              pendingCalls.delete(key)
-            }
-          }
-          writeTuiState()
+        for (const [key, pending] of pendingCalls) {
+          if (pending.parentSessionId === sessionID) pendingCalls.delete(key)
         }
       }
     },
-
-    // ── Register /ps command ────────────────────────────────────────────────
 
     config: async (config) => {
-      // Register /ps command
       config.command = config.command || {}
       if (!config.command.ps) {
         config.command.ps = {
@@ -654,8 +504,6 @@ export function createParallelHooks(ctx) {
         }
       }
     },
-
-    // ── Custom tools ────────────────────────────────────────────────────────
 
     tool: {
       parallel_status: {
@@ -667,9 +515,9 @@ export function createParallelHooks(ctx) {
             description: "Optional session ID. If not provided, returns all jobs.",
           },
         },
-        async execute(args, context) {
-          // No session filter -> return all jobs; the LLM can filter
-          return buildParallelStatusJson(args.session_id)
+        async execute(args) {
+          const { board } = await runtime.ready
+          return JSON.stringify(buildLegacyParallelStatus(board, args.session_id), null, 2)
         },
       },
 
@@ -682,28 +530,25 @@ export function createParallelHooks(ctx) {
             description: "The task ID or alias of the background task to cancel.",
           },
         },
-        async execute(args, context) {
+        async execute(args) {
           const id = args.task_id
           if (!id) return "Error: task_id is required."
-
-          // Find job by taskID or alias
-          const job = findJobByIdOrAlias(id)
-          if (!job) {
-            return `Error: No background task found with ID or alias '${id}'.`
+          const { board } = await runtime.ready
+          const job = findJob(board, id)
+          if (!job) return `Error: No background task found with ID or alias '${id}'.`
+          if (job.executionState !== "running") {
+            return `Task '${job.alias}' is already in state: ${job.executionState}.`
           }
-          if (job.state !== "running") {
-            return `Task '${job.alias}' is already in state: ${job.state}.`
+          if (typeof client?.session?.abort !== "function") {
+            return `Error cancelling task '${job.alias}': OpenCode session abort is unavailable.`
           }
 
           try {
-            // Abort the session
-            if (client) {
-              await client.session.abort({ path: { id: job.taskID } })
-            }
-            updateJobStatus(job.taskID, "cancelled", undefined)
-            return `Cancelled task '${job.alias}' (${job.taskID}).`
-          } catch (err) {
-            return `Error cancelling task '${job.alias}': ${err.message}`
+            await client.session.abort({ path: { id: job.hostTaskId } })
+            board.requestCancellation(job.id)
+            return `Cancellation requested for task '${job.alias}' (${job.hostTaskId}).`
+          } catch (error) {
+            return `Error cancelling task '${job.alias}': ${error.message}`
           }
         },
       },
@@ -711,94 +556,39 @@ export function createParallelHooks(ctx) {
   }
 }
 
-// ── Helper: build job board for all sessions ────────────────────────────────
-
-function buildJobBoardTextForAll() {
-  const running = [...jobBoard.values()].filter((j) => j.state === "running")
-  const unreconciled = [...jobBoard.values()].filter((j) => j.terminalUnreconciled)
-
-  if (running.length === 0 && unreconciled.length === 0) return ""
-
-  const lines = [
-    "### Background Job Board",
-    "SENTINEL: omagents-job-board-v1",
-    "Do not poll running jobs. Wait for hook-driven completion notifications.",
-    "",
-  ]
-
-  if (running.length > 0) {
-    lines.push("#### Running")
-    for (const job of running) {
-      lines.push(`- ${job.alias} / ${job.taskID} / ${job.agent} / running`)
-      lines.push(`  Objective: ${job.description}`)
-    }
-    lines.push("")
-  }
-
-  if (unreconciled.length > 0) {
-    lines.push("#### Completed (unreconciled)")
-    for (const job of unreconciled) {
-      lines.push(`- ${job.alias} / ${job.taskID} / ${job.agent} / ${job.terminalState}`)
-      lines.push(`  Objective: ${job.description}`)
-      if (job.resultSummary) {
-        const summary = job.resultSummary.slice(0, 500)
-        lines.push(`  Result: ${summary}`)
-      }
-    }
-    lines.push("")
-    lines.push("Acknowledge completed jobs before your final response.")
-  }
-
-  return lines.join("\n")
-}
-
-// ─── OpenCode V2 wiring ─────────────────────────────────────────────────────
-//
-// OpenCode 2.x runs background work through the native `subagent` tool
-// ({ agent, description, prompt, background }) instead of the V1 experimental
-// `task(background: true)`. The tool result carries structured metadata
-// ({ sessionID, status }), and completion notices arrive in the parent
-// session as synthetic user messages:
-//   <subagent sessionID="..." state="completed|error|cancelled" ...>text</subagent>
+// ─── OpenCode V2 host parsing ────────────────────────────────────────────────
 
 const V2_SUBAGENT_COMPLETION_RE =
-  /<subagent\s+sessionID="([^"]+)"\s+state="(completed|error|cancelled)"[^>]*>([\s\S]*?)<\/subagent>/
+  /<subagent\s+sessionID="([^"]+)"\s+state="(completed|error|failed|cancelled|interrupted)"[^>]*>([\s\S]*?)<\/subagent>/
 
 function extractV2ChildSessionID(result) {
   if (!result || typeof result !== "object") return undefined
-  const meta = result.metadata
-  if (meta && typeof meta.sessionID === "string" && meta.sessionID) return meta.sessionID
-  const out = result.output
-  if (out && typeof out === "object" && typeof out.sessionID === "string" && out.sessionID) {
-    return out.sessionID
+  if (typeof result.metadata?.sessionID === "string" && result.metadata.sessionID) {
+    return result.metadata.sessionID
   }
-  // Last resort: the text "The subagent is working in the background (sessionID: ...)."
+  if (typeof result.output?.sessionID === "string" && result.output.sessionID) {
+    return result.output.sessionID
+  }
   const text = typeof result.content === "string" ? result.content : ""
-  const m = /sessionID:\s*([^\s()]+)/.exec(text)
-  return m ? m[1] : undefined
+  return /sessionID:\s*([^\s()]+)/.exec(text)?.[1]
 }
 
 function extractV2ResultStatus(result) {
   if (!result || typeof result !== "object") return undefined
-  const metaStatus = result.metadata?.status
-  if (typeof metaStatus === "string" && metaStatus) return metaStatus
-  const out = result.output
-  if (out && typeof out === "object" && typeof out.status === "string" && out.status) {
-    return out.status
-  }
+  if (typeof result.metadata?.status === "string") return result.metadata.status
+  if (typeof result.output?.status === "string") return result.output.status
   return undefined
 }
 
-function scanV2CompletionText(text) {
+function scanV2CompletionText(board, text) {
   if (typeof text !== "string" || !text.includes("<subagent")) return
-  const m = V2_SUBAGENT_COMPLETION_RE.exec(text)
-  if (!m) return
-  const [, sessionID, state, body] = m
-  if (!jobBoard.has(sessionID)) return
-  updateJobStatus(sessionID, state, body?.trim() || undefined)
+  const match = V2_SUBAGENT_COMPLETION_RE.exec(text)
+  if (!match) return
+  const [, sessionID, state, body] = match
+  markHostTerminal(board, sessionID, state, { resultSummary: body?.trim() || undefined })
 }
 
-function handleV2Event(event) {
+function handleV2Event(board, pendingCalls, event, tuiStatePath) {
   const type = event?.type
   if (typeof type !== "string") return
   const data = event.data && typeof event.data === "object" ? event.data : {}
@@ -806,87 +596,68 @@ function handleV2Event(event) {
 
   if (type === "session.idle") {
     if (!sessionID) return
-    // Parent session went idle -> mark its finished jobs as reconciled
-    reconcileJobs(sessionID)
-    // Child session went idle while still marked running -> treat as completed
-    const job = jobBoard.get(sessionID)
-    if (job && job.state === "running") {
-      updateJobStatus(sessionID, "completed", undefined)
-    }
+    board.acknowledgeInjected(sessionID)
+    const job = findHostJob(board, sessionID)
+    if (job?.executionState === "running") markHostTerminal(board, sessionID, "completed")
     return
   }
-
+  if (type === "session.status" && data.type === "busy") {
+    if (sessionID && findHostJob(board, sessionID)) writeTuiState(board, tuiStatePath)
+    return
+  }
   if (type === "session.execution.succeeded") {
-    if (sessionID && jobBoard.has(sessionID)) {
-      updateJobStatus(sessionID, "completed", undefined)
-    }
+    if (sessionID) markHostTerminal(board, sessionID, "completed")
     return
   }
-
   if (type === "session.execution.failed") {
-    if (sessionID && jobBoard.has(sessionID)) {
-      const message = data.error && typeof data.error === "object" ? data.error.message : undefined
-      updateJobStatus(sessionID, "error", typeof message === "string" ? message : undefined)
+    const message = typeof data.error?.message === "string" ? data.error.message : undefined
+    if (sessionID) {
+      markHostTerminal(board, sessionID, "failed", {
+        ...(message ? { error: { message } } : {}),
+      })
     }
     return
   }
-
   if (type === "session.execution.interrupted") {
-    if (sessionID && jobBoard.has(sessionID)) {
-      updateJobStatus(sessionID, "cancelled", undefined)
-    }
+    if (sessionID) markHostTerminal(board, sessionID, "cancelled")
     return
   }
-
-  if (type === "session.deleted") {
-    if (!sessionID) return
-    jobBoard.delete(sessionID)
-    for (const [key, pending] of pendingCalls) {
-      if (pending.parentSessionId === sessionID) {
-        pendingCalls.delete(key)
-      }
+  if (type === "session.deleted" && sessionID) {
+    const job = findHostJob(board, sessionID)
+    if (job && ["running", "cancelling"].includes(job.executionState)) {
+      board.markTerminal(job.id, {
+        state: "interrupted",
+        error: { code: "HOST_MISSING", message: "host session was deleted" },
+      })
     }
-    writeTuiState()
+    for (const [key, pending] of pendingCalls) {
+      if (pending.parentSessionId === sessionID) pendingCalls.delete(key)
+    }
   }
 }
 
-/**
- * Register the parallel execution engine with an OpenCode 2.x plugin context.
- * Returns a cleanup function that detaches the event subscription.
- */
+/** Register the Core-backed parallel engine with an OpenCode 2.x context. */
 export async function setupParallelV2(ctx) {
-  // V1 hosts scan every exported function in .opencode/plugins/*.js and invoke
-  // them with a V1-shaped context. Return quietly there — the V1 wiring lives
-  // in createParallelHooks().
   if (!ctx || typeof ctx.tool?.hook !== "function" || typeof ctx.session?.hook !== "function") {
     return
   }
 
-  // Restore persisted Job Board from disk
-  try {
-    loadJobBoard()
-  } catch {
-    // best-effort
-  }
-
-  // ── Track launches of background subagents ──────────────────────────────
+  const pendingCalls = new Map()
+  const runtime = createBoardRuntime(ctx, (job) => queryV2Session(ctx, job))
+  const { board, unsubscribe } = await runtime.ready
 
   await ctx.tool.hook("execute.before", (event) => {
     try {
       if (event.tool !== "subagent") return
       const args = event.input
-      if (!args || typeof args !== "object") return
-      // Foreground subagents complete synchronously; only track background ones
-      if (args.background !== true) return
-
+      if (!args || typeof args !== "object" || args.background !== true) return
       pendingCalls.set(event.id, {
-        callId: event.id,
         parentSessionId: event.sessionID,
         agentType: typeof args.agent === "string" ? args.agent : "general",
         label: typeof args.description === "string" ? args.description : "",
       })
-    } catch (err) {
-      warnIfDebug("[omagents] v2 execute.before hook failed:", err.message)
+    } catch (error) {
+      warnIfDebug("[omagents] v2 execute.before hook failed:", error.message)
     }
   })
 
@@ -901,102 +672,68 @@ export async function setupParallelV2(ctx) {
       const result = event.result
       const childID = extractV2ChildSessionID(result)
       if (!childID) return
-
+      registerLaunch(board, childID, pending.parentSessionId, pending.agentType, pending.label)
       const status = extractV2ResultStatus(result)
-      registerLaunch(childID, pending.parentSessionId, pending.agentType, pending.label)
-      if (status === "completed" || status === "error" || status === "cancelled") {
-        const out = result?.output
-        const text = out && typeof out === "object" ? out.output : undefined
-        updateJobStatus(childID, status, typeof text === "string" ? text : undefined)
+      if (["completed", "error", "failed", "cancelled", "interrupted"].includes(status)) {
+        const text = typeof result?.output?.output === "string" ? result.output.output : undefined
+        markHostTerminal(board, childID, status, { resultSummary: text })
       }
-    } catch (err) {
-      warnIfDebug("[omagents] v2 execute.after hook failed:", err.message)
+    } catch (error) {
+      warnIfDebug("[omagents] v2 execute.after hook failed:", error.message)
     }
   })
 
-  // ── Inject parallel instructions + job board into every model call ──────
-
   await ctx.session.hook("context", (event) => {
     try {
-      // System prompt (idempotent within one request)
       event.system = event.system || []
       if (
-        !event.system.some((p) => p && p.type === "text" && p.text === PARALLEL_SYSTEM_PROMPT_V2)
+        !event.system.some(
+          (part) => part?.type === "text" && part.text === PARALLEL_SYSTEM_PROMPT_V2
+        )
       ) {
         event.system.push({ type: "text", text: PARALLEL_SYSTEM_PROMPT_V2 })
       }
 
       const messages = event.messages
       if (!Array.isArray(messages) || messages.length === 0) return
-
-      // Process subagent completion notices delivered as synthetic messages
-      for (const msg of messages) {
-        if (msg.role !== "user") continue
-        for (const part of msg.content || []) {
-          if (part && part.type === "text") scanV2CompletionText(part.text)
+      for (const message of messages) {
+        if (message.role !== "user") continue
+        for (const part of message.content || []) {
+          if (part?.type === "text") scanV2CompletionText(board, part.text)
         }
       }
 
-      // Inject the job board into the last user message
-      const sessionID = event.sessionID
-      if (!sessionID) return
-      const boardText = buildJobBoardText(sessionID)
-      if (!boardText) return
-
       let lastUser = null
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === "user") {
-          lastUser = messages[i]
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index].role === "user") {
+          lastUser = messages[index]
           break
         }
       }
-      if (!lastUser) return
+      if (!lastUser || !event.sessionID) return
       lastUser.content = lastUser.content || []
-
-      // Guard: don't double-inject
-      const alreadyInjected = lastUser.content.some(
-        (p) =>
-          p &&
-          p.type === "text" &&
-          typeof p.text === "string" &&
-          p.text.includes("SENTINEL: omagents-job-board-v1")
-      )
-      if (alreadyInjected) return
-
-      const firstText = lastUser.content.find(
-        (p) => p && p.type === "text" && typeof p.text === "string"
-      )
-      if (firstText) {
-        firstText.text = `${boardText}\n\n${firstText.text}`
-      } else {
-        lastUser.content.unshift({ type: "text", text: boardText })
-      }
-    } catch (err) {
-      // Never let hook errors break the request pipeline
-      warnIfDebug("[omagents] v2 context hook failed:", err.message)
+      injectBoardIntoParts(board, event.sessionID, lastUser.content)
+    } catch (error) {
+      warnIfDebug("[omagents] v2 context hook failed:", error.message)
     }
   })
-
-  // ── Track session lifecycle ─────────────────────────────────────────────
 
   const controller = new AbortController()
   void (async () => {
     try {
       for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
         try {
-          handleV2Event(event)
-        } catch (err) {
-          warnIfDebug("[omagents] v2 event handling failed:", err.message)
+          handleV2Event(board, pendingCalls, event, runtime.tuiStatePath)
+        } catch (error) {
+          warnIfDebug("[omagents] v2 event handling failed:", error.message)
         }
       }
-    } catch (err) {
+    } catch (error) {
       if (!controller.signal.aborted) {
-        warnIfDebug("[omagents] v2 event stream ended:", err?.message || err)
+        warnIfDebug("[omagents] v2 event stream ended:", error?.message || error)
       }
     }
   })()
-
-  // ── Custom tools ────────────────────────────────────────────────────────
 
   await ctx.tool.transform((editor) => {
     editor.add({
@@ -1014,7 +751,7 @@ export async function setupParallelV2(ctx) {
         additionalProperties: false,
       },
       execute: async (args) => ({
-        content: buildParallelStatusJson(args?.session_id),
+        content: JSON.stringify(buildLegacyParallelStatus(board, args?.session_id), null, 2),
       }),
     })
 
@@ -1036,33 +773,36 @@ export async function setupParallelV2(ctx) {
       execute: async (args) => {
         const id = args?.task_id
         if (!id) return { content: "Error: task_id is required." }
-
-        const job = findJobByIdOrAlias(id)
+        const job = findJob(board, id)
         if (!job) {
           return { content: `Error: No background task found with ID or alias '${id}'.` }
         }
-        if (job.state !== "running") {
-          return { content: `Task '${job.alias}' is already in state: ${job.state}.` }
+        if (job.executionState !== "running") {
+          return { content: `Task '${job.alias}' is already in state: ${job.executionState}.` }
+        }
+        if (typeof ctx.session?.interrupt !== "function") {
+          return {
+            content: `Error cancelling task '${job.alias}': OpenCode session interruption is unavailable.`,
+          }
         }
 
         try {
-          await ctx.session.interrupt({ sessionID: job.taskID, continue: false })
-          updateJobStatus(job.taskID, "cancelled", undefined)
-          return { content: `Cancelled task '${job.alias}' (${job.taskID}).` }
-        } catch (err) {
-          return { content: `Error cancelling task '${job.alias}': ${err.message}` }
+          await ctx.session.interrupt({ sessionID: job.hostTaskId, continue: false })
+          board.requestCancellation(job.id)
+          return {
+            content: `Cancellation requested for task '${job.alias}' (${job.hostTaskId}).`,
+          }
+        } catch (error) {
+          return { content: `Error cancelling task '${job.alias}': ${error.message}` }
         }
       },
     })
   })
 
-  // ── /ps command (skip when the user defined their own) ──────────────────
-
   try {
     const existing = await ctx.command.list()
     const items = Array.isArray(existing) ? existing : existing?.commands || existing?.items || []
-    const hasPs = items.some((c) => c && c.name === "ps")
-    if (!hasPs) {
+    if (!items.some((command) => command?.name === "ps")) {
       await ctx.command.transform((editor) => {
         editor.add({
           name: "ps",
@@ -1078,19 +818,27 @@ export async function setupParallelV2(ctx) {
         })
       })
     }
-  } catch (err) {
-    warnIfDebug("[omagents] v2 /ps command registration failed:", err.message)
+  } catch (error) {
+    warnIfDebug("[omagents] v2 /ps command registration failed:", error.message)
   }
 
-  return () => controller.abort()
+  let cleaned = false
+  return async () => {
+    if (cleaned) return
+    cleaned = true
+    controller.abort()
+    unsubscribe()
+    if (runtime.entry.owned) {
+      if (ctx && typeof ctx === "object") boardEntries.delete(ctx)
+      await board.close()
+    } else {
+      await board.flush()
+    }
+  }
 }
 
-// Default export: a valid V2 plugin descriptor so V2 auto-discovery (which
-// loads every .opencode/plugins/*.js) accepts this module. The real wiring is
-// done by index.js (which imports the named exports below); setup() is a
-// deliberate no-op to avoid double registration.
-// V1 hosts either scan the named export (createParallelHooks) or call
-// default.server — keep them pointing at the same V1 factory.
+// Auto-discovery accepts this descriptor, while index.js invokes the named
+// exports to avoid registering a second engine.
 export default {
   id: "omagents.parallel-engine",
   server: createParallelHooks,
