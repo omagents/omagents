@@ -1,0 +1,279 @@
+import { test } from "node:test"
+import assert from "node:assert/strict"
+
+import { JobBoard } from "../src/index.js"
+
+function createHarness() {
+  let now = 1_000
+  let nextId = 0
+  const board = new JobBoard({
+    clock: () => now,
+    idGenerator: () => `job-${++nextId}`,
+  })
+
+  return {
+    board,
+    setNow(value) {
+      now = value
+    },
+    idCalls() {
+      return nextId
+    },
+  }
+}
+
+function launch(overrides = {}) {
+  return {
+    host: "host-a",
+    hostTaskId: "host-task-1",
+    parentSessionId: "parent-1",
+    childName: "child-one",
+    agent: "explore",
+    description: "Research the state machine",
+    ...overrides,
+  }
+}
+
+test("registerLaunch creates a running record indexed by Core ID and alias", () => {
+  const { board } = createHarness()
+
+  const job = board.registerLaunch(launch())
+
+  assert.equal(job.id, "job-1")
+  assert.equal(job.host, "host-a")
+  assert.equal(job.hostTaskId, "host-task-1")
+  assert.equal(job.parentSessionId, "parent-1")
+  assert.equal(job.childName, "child-one")
+  assert.equal(job.alias, "exp-1")
+  assert.equal(job.agent, "explore")
+  assert.equal(job.description, "Research the state machine")
+  assert.equal(job.executionState, "running")
+  assert.equal(job.notificationState, undefined)
+  assert.equal(job.launchedAt, 1_000)
+  assert.equal(job.updatedAt, 1_000)
+  assert.equal(job.terminalAt, undefined)
+  assert.equal(job.revision, 1)
+  assert.equal(board.revision, 1)
+  assert.strictEqual(board.get(job.id), job)
+  assert.strictEqual(board.get(job.alias), job)
+  assert.deepEqual(board.list(), [job])
+  assert.deepEqual(board.list({ parentSessionId: "parent-1" }), [job])
+  assert.deepEqual(board.list({ parentSessionId: "another-parent" }), [])
+})
+
+test("duplicate launches are idempotent and the host task index is host-scoped", () => {
+  const { board, setNow, idCalls } = createHarness()
+  const original = board.registerLaunch(launch())
+
+  setNow(2_000)
+  const duplicate = board.registerLaunch(
+    launch({ childName: "changed", description: "A duplicate must not replace metadata" })
+  )
+
+  assert.strictEqual(duplicate, original)
+  assert.equal(duplicate.childName, "child-one")
+  assert.equal(duplicate.description, "Research the state machine")
+  assert.equal(duplicate.updatedAt, 1_000)
+  assert.equal(board.revision, 1)
+  assert.equal(idCalls(), 1)
+
+  const otherHost = board.registerLaunch(launch({ host: "host-b" }))
+  assert.notStrictEqual(otherHost, original)
+  assert.equal(otherHost.id, "job-2")
+  assert.equal(otherHost.alias, "exp-2")
+  assert.equal(board.list().length, 2)
+  assert.equal(board.revision, 2)
+})
+
+test("accepted cancellation is not confirmed cancellation", () => {
+  const { board, setNow } = createHarness()
+  const job = board.registerLaunch(launch())
+
+  setNow(1_500)
+  const accepted = board.requestCancellation(job.alias)
+
+  assert.strictEqual(accepted, job)
+  assert.equal(job.executionState, "cancelling")
+  assert.equal(job.notificationState, undefined)
+  assert.equal(job.cancelRequestedAt, 1_500)
+  assert.equal(job.updatedAt, 1_500)
+  assert.equal(job.terminalAt, undefined)
+  assert.equal(job.revision, 2)
+
+  setNow(2_000)
+  board.requestCancellation(job.id)
+  assert.equal(job.executionState, "cancelling")
+  assert.equal(job.cancelRequestedAt, 1_500)
+  assert.equal(job.updatedAt, 1_500)
+  assert.equal(board.revision, 2)
+})
+
+test("terminal outcomes are sticky and independently delivered", () => {
+  const { board, setNow } = createHarness()
+  const job = board.registerLaunch(launch())
+
+  setNow(2_000)
+  board.markTerminal(job.id, { state: "completed", resultSummary: "done" })
+  assert.equal(job.executionState, "completed")
+  assert.equal(job.notificationState, "pending")
+  assert.equal(job.resultSummary, "done")
+  assert.equal(job.terminalAt, 2_000)
+  assert.equal(job.updatedAt, 2_000)
+  assert.deepEqual(board.listPendingOutcomes(job.parentSessionId), [job])
+
+  setNow(3_000)
+  board.markTerminal(job.id, { state: "failed", error: "late failure" })
+  assert.equal(job.executionState, "completed")
+  assert.equal(job.resultSummary, "done")
+  assert.equal(job.error, undefined)
+  assert.equal(job.terminalAt, 2_000)
+  assert.equal(job.updatedAt, 2_000)
+  assert.equal(board.revision, 2)
+
+  board.markInjected([job.id])
+  assert.equal(job.executionState, "completed")
+  assert.equal(job.notificationState, "injected")
+  assert.deepEqual(board.listPendingOutcomes(job.parentSessionId), [])
+
+  board.acknowledgeInjected(job.parentSessionId)
+  assert.equal(job.executionState, "completed")
+  assert.equal(job.notificationState, "acknowledged")
+  assert.equal(job.resultSummary, "done")
+  assert.equal(board.revision, 4)
+})
+
+test("running and cancelling jobs accept every authoritative outcome state", () => {
+  const states = ["completed", "failed", "cancelled", "interrupted"]
+
+  for (const state of states) {
+    for (const initialState of ["running", "cancelling"]) {
+      const { board } = createHarness()
+      const job = board.registerLaunch(launch())
+      if (initialState === "cancelling") board.requestCancellation(job.id)
+
+      board.markTerminal(job.id, {
+        state,
+        resultSummary: state === "completed" ? "finished" : undefined,
+        error: state === "completed" ? undefined : { reason: state },
+      })
+
+      assert.equal(job.executionState, state)
+      assert.equal(job.notificationState, "pending")
+      assert.equal(job.terminalAt, 1_000)
+      assert.equal(job.resultSummary, state === "completed" ? "finished" : undefined)
+      assert.deepEqual(job.error, state === "completed" ? undefined : { reason: state })
+    }
+  }
+})
+
+test("unknown IDs and invalid transitions cannot corrupt the board", () => {
+  const { board } = createHarness()
+
+  assert.equal(board.get("missing"), undefined)
+  assert.equal(board.requestCancellation("missing"), undefined)
+  assert.equal(board.markTerminal("missing", { state: "completed" }), undefined)
+  board.markInjected(["missing"])
+  board.acknowledgeInjected("missing")
+  assert.equal(board.revision, 0)
+
+  const job = board.registerLaunch(launch())
+  assert.throws(() => board.markTerminal(job.id, { state: "running" }), /Invalid terminal state/)
+  assert.throws(() => board.markTerminal(job.id, { state: "error" }), /Invalid terminal state/)
+  assert.equal(job.executionState, "running")
+  assert.equal(job.notificationState, undefined)
+  assert.equal(board.revision, 1)
+
+  board.markInjected([job.id])
+  board.acknowledgeInjected(job.parentSessionId)
+  assert.equal(job.notificationState, undefined)
+  assert.equal(board.revision, 1)
+
+  board.markTerminal(job.id, { state: "cancelled" })
+  const terminalRevision = board.revision
+  board.requestCancellation(job.id)
+  board.markTerminal(job.id, { state: "interrupted", error: "late interruption" })
+  assert.equal(job.executionState, "cancelled")
+  assert.equal(job.notificationState, "pending")
+  assert.equal(job.cancelRequestedAt, undefined)
+  assert.equal(board.revision, terminalRevision)
+})
+
+test("notification delivery is ordered, scoped, and idempotent", () => {
+  const { board } = createHarness()
+  const first = board.registerLaunch(launch())
+  const second = board.registerLaunch(launch({ hostTaskId: "host-task-2", childName: "child-two" }))
+  const otherParent = board.registerLaunch(
+    launch({ hostTaskId: "host-task-3", parentSessionId: "parent-2" })
+  )
+
+  for (const job of [first, second, otherParent]) {
+    board.markTerminal(job.id, { state: "failed", error: "failed" })
+  }
+  const beforeInjection = board.revision
+
+  board.markInjected([first.id, "missing", first.id, second.id])
+  assert.equal(first.notificationState, "injected")
+  assert.equal(second.notificationState, "injected")
+  assert.equal(otherParent.notificationState, "pending")
+  assert.equal(board.revision, beforeInjection + 2)
+
+  board.acknowledgeInjected(first.parentSessionId)
+  assert.equal(first.notificationState, "acknowledged")
+  assert.equal(second.notificationState, "acknowledged")
+  assert.equal(otherParent.notificationState, "pending")
+  assert.equal(board.revision, beforeInjection + 4)
+
+  const acknowledgedRevision = board.revision
+  board.markInjected([first.id, second.id])
+  board.acknowledgeInjected(first.parentSessionId)
+  assert.equal(board.revision, acknowledgedRevision)
+  assert.deepEqual(board.listPendingOutcomes("parent-2"), [otherParent])
+})
+
+test("acknowledgement cannot skip the injected notification state", () => {
+  const { board } = createHarness()
+  const job = board.registerLaunch(launch())
+  board.markTerminal(job.id, { state: "interrupted", error: "host disappeared" })
+  const revision = board.revision
+
+  board.acknowledgeInjected(job.parentSessionId)
+
+  assert.equal(job.notificationState, "pending")
+  assert.equal(board.revision, revision)
+})
+
+test("subscriptions are synchronous, ordered, revisioned, and disposable", () => {
+  const { board } = createHarness()
+  const events = []
+  const disposeFirst = board.subscribe(({ revision, jobId }) => {
+    events.push(`first:${revision}:${jobId}`)
+  })
+  board.subscribe(({ revision, jobId }) => {
+    events.push(`second:${revision}:${jobId}`)
+  })
+
+  const job = board.registerLaunch(launch())
+  assert.deepEqual(events, ["first:1:job-1", "second:1:job-1"])
+
+  disposeFirst()
+  disposeFirst()
+  board.requestCancellation(job.id)
+  assert.deepEqual(events, ["first:1:job-1", "second:1:job-1", "second:2:job-1"])
+  assert.equal(job.revision, 2)
+  assert.equal(board.revision, 2)
+})
+
+test("Core package has the aligned version and no host runtime dependencies", async () => {
+  const { readFile } = await import("node:fs/promises")
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8")
+  )
+
+  assert.equal(packageJson.name, "@omagents/core")
+  assert.equal(packageJson.version, "0.13.1")
+  assert.equal(packageJson.type, "module")
+  assert.equal(packageJson.main, "src/index.js")
+  for (const dependency of Object.keys(packageJson.dependencies || {})) {
+    assert.doesNotMatch(dependency, /opencode|codex|dsh|cordis|react/i)
+  }
+})
