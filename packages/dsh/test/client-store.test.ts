@@ -154,6 +154,9 @@ function scheduler() {
       timeout = undefined
       callback?.()
     },
+    reconnectCallback() {
+      return timeout
+    },
     get pendingReconnect() {
       return timeout !== undefined
     },
@@ -360,6 +363,182 @@ test("cancellation failures are actionable and do not mark a job cancelled", asy
   assert.equal(store.getSnapshot().jobs[0].executionState, "running")
   assert.deepEqual(store.getSnapshot().cancellingIds, [])
   store.clearActionError()
+  assert.equal(store.getSnapshot().actionError, undefined)
+  store.dispose()
+})
+
+test("permission denial cancels and invalidates an already scheduled reconnect", async () => {
+  const remote = remoteFixture()
+  const { store, timer } = start(remote)
+  await eventually(() => assert.equal(remote.channels.length, 1))
+  remote.channels[0].push(frame(1, [job("one")]))
+  await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
+
+  remote.channels[0].fail(new Error("carrier lost"))
+  await eventually(() => assert.equal(store.getSnapshot().status, "stale"))
+  const staleReconnect = timer.reconnectCallback()
+  assert.ok(staleReconnect)
+  remote.listJobs.mock.mockImplementation(async () => ({
+    ok: false as const,
+    error: { code: "remote-access/denied", message: "Session access was revoked" },
+  }))
+
+  await store.refresh()
+  assert.equal(store.getSnapshot().status, "permission-denied")
+  assert.equal(store.getSnapshot().jobs.length, 0)
+  staleReconnect()
+  await flush()
+  assert.equal(remote.channels.length, 1, "a denied timer must not reopen the watch")
+  assert.equal(store.getSnapshot().status, "permission-denied")
+  assert.equal(timer.pendingReconnect, false)
+  store.dispose()
+})
+
+test("a stale cancellation response cannot resurrect a terminal job from a newer watch frame", async () => {
+  const remote = remoteFixture()
+  const cancellation = deferred<Awaited<ReturnType<OmAgentsJobRemote["cancelJob"]>>>()
+  remote.cancelJob.mock.mockImplementation(() => cancellation.promise)
+  const { store } = start(remote)
+  await eventually(() => assert.equal(remote.channels.length, 1))
+  remote.channels[0].push(frame(1, [job("one", { revision: 1 })]))
+  await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
+
+  const pending = store.cancelJob("one")
+  remote.channels[0].push(
+    frame(3, [
+      job("one", {
+        executionState: "completed",
+        notificationState: "injected",
+        terminalAt: 3_000,
+        updatedAt: 3_000,
+        revision: 3,
+      }),
+    ]),
+  )
+  await eventually(() =>
+    assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
+  )
+  const updatedAt = store.getSnapshot().lastUpdatedAt
+
+  cancellation.resolve({
+    ok: true,
+    value: job("one", {
+      executionState: "cancelling",
+      cancelRequestedAt: 2_000,
+      revision: 2,
+    }),
+  })
+  await pending
+  assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
+  assert.equal(store.getSnapshot().jobs[0].revision, 3)
+  assert.equal(store.getSnapshot().revision, 3)
+  assert.equal(store.getSnapshot().lastUpdatedAt, updatedAt)
+  assert.deepEqual(store.getSnapshot().cancellingIds, [])
+  store.dispose()
+})
+
+test("an older cancellation DTO is ignored even without a watch mutation", async () => {
+  const remote = remoteFixture()
+  const cancellation = deferred<Awaited<ReturnType<OmAgentsJobRemote["cancelJob"]>>>()
+  remote.cancelJob.mock.mockImplementation(() => cancellation.promise)
+  const { store } = start(remote)
+  await eventually(() => assert.equal(remote.channels.length, 1))
+  remote.channels[0].push(
+    frame(3, [
+      job("one", {
+        executionState: "completed",
+        terminalAt: 3_000,
+        revision: 3,
+      }),
+    ]),
+  )
+  await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
+
+  const pending = store.cancelJob("one")
+  cancellation.resolve({
+    ok: true,
+    value: job("one", { executionState: "cancelling", revision: 2 }),
+  })
+  await pending
+  assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
+  assert.equal(store.getSnapshot().jobs[0].revision, 3)
+  store.dispose()
+})
+
+test("a stale manual refresh cannot overwrite a newer whole-set watch frame", async () => {
+  const remote = remoteFixture()
+  const listed = deferred<Awaited<ReturnType<OmAgentsJobRemote["listJobs"]>>>()
+  const health = deferred<Awaited<ReturnType<OmAgentsJobRemote["getHealth"]>>>()
+  const { store } = start(remote)
+  await eventually(() => assert.equal(remote.channels.length, 1))
+  remote.channels[0].push(frame(1, [job("one", { revision: 1 })]))
+  await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
+  await flush()
+  remote.listJobs.mock.mockImplementationOnce(() => listed.promise)
+  remote.getHealth.mock.mockImplementationOnce(() => health.promise)
+
+  const refreshing = store.refresh()
+  remote.channels[0].push(
+    frame(3, [
+      job("one", {
+        executionState: "completed",
+        terminalAt: 3_000,
+        revision: 3,
+      }),
+    ]),
+  )
+  await eventually(() =>
+    assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
+  )
+  const updatedAt = store.getSnapshot().lastUpdatedAt
+  listed.resolve({ ok: true, value: [job("one", { revision: 1 })] })
+  health.resolve({ ok: true, value: readyHealth })
+  await refreshing
+
+  assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
+  assert.equal(store.getSnapshot().jobs[0].revision, 3)
+  assert.equal(store.getSnapshot().revision, 3)
+  assert.equal(store.getSnapshot().lastUpdatedAt, updatedAt)
+  store.dispose()
+})
+
+test("a stale refresh health denial cannot replace a newer valid watch frame", async () => {
+  const remote = remoteFixture()
+  const listed = deferred<Awaited<ReturnType<OmAgentsJobRemote["listJobs"]>>>()
+  const health = deferred<Awaited<ReturnType<OmAgentsJobRemote["getHealth"]>>>()
+  const { store } = start(remote)
+  await eventually(() => assert.equal(remote.channels.length, 1))
+  remote.channels[0].push(frame(1, [job("one", { revision: 1 })]))
+  await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
+  await flush()
+  remote.listJobs.mock.mockImplementationOnce(() => listed.promise)
+  remote.getHealth.mock.mockImplementationOnce(() => health.promise)
+
+  const refreshing = store.refresh()
+  remote.channels[0].push(
+    frame(3, [
+      job("one", {
+        executionState: "completed",
+        terminalAt: 3_000,
+        revision: 3,
+      }),
+    ]),
+  )
+  await eventually(() =>
+    assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
+  )
+  listed.resolve({ ok: true, value: [job("one", { revision: 1 })] })
+  health.resolve({
+    ok: false,
+    error: { code: "remote-access/denied", message: "Stale health denial" },
+  })
+  await refreshing
+
+  assert.equal(store.getSnapshot().status, "ready")
+  assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
+  assert.equal(store.getSnapshot().jobs[0].revision, 3)
+  assert.equal(store.getSnapshot().revision, 3)
+  assert.equal(store.getSnapshot().error, undefined)
   assert.equal(store.getSnapshot().actionError, undefined)
   store.dispose()
 })

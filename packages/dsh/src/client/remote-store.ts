@@ -95,6 +95,15 @@ function isPermissionDenied(error: unknown): boolean {
   )
 }
 
+function isTerminalExecutionState(state: JobDto["executionState"]): boolean {
+  return (
+    state === "completed" ||
+    state === "failed" ||
+    state === "cancelled" ||
+    state === "interrupted"
+  )
+}
+
 class RemoteJobBoardStore implements JobBoardStore {
   private readonly remote: OmAgentsJobRemote
   private readonly scope: JobScope
@@ -109,6 +118,7 @@ class RemoteJobBoardStore implements JobBoardStore {
   private disposed = false
   private watch: ActiveWatch | undefined
   private generation = 0
+  private watchMutation = 0
   private tickHandle: unknown
   private reconnectHandle: unknown
 
@@ -147,14 +157,19 @@ class RemoteJobBoardStore implements JobBoardStore {
 
   async refresh(): Promise<void> {
     if (this.disposed) return
+    const watchMutation = this.watchMutation
     try {
       const [listed, health] = await Promise.all([
         this.remote.listJobs(this.scope),
         this.remote.getHealth(),
       ])
-      if (this.disposed) return
+      if (this.disposed || watchMutation !== this.watchMutation) return
       if (!listed.ok) {
         this.applyReadFailure(listed.error)
+        return
+      }
+      if (!health.ok && isPermissionDenied(health.error)) {
+        this.applyReadFailure(health.error)
         return
       }
       this.publish({
@@ -165,11 +180,10 @@ class RemoteJobBoardStore implements JobBoardStore {
         error: undefined,
         lastUpdatedAt: this.readNow(),
       })
-      if (!health.ok && isPermissionDenied(health.error)) {
-        this.applyReadFailure(health.error)
-      }
     } catch (error) {
-      this.applyReadFailure(error)
+      if (!this.disposed && watchMutation === this.watchMutation) {
+        this.applyReadFailure(error)
+      }
     }
   }
 
@@ -204,6 +218,7 @@ class RemoteJobBoardStore implements JobBoardStore {
   }
 
   private async performCancellation(jobId: string): Promise<void> {
+    const watchMutation = this.watchMutation
     this.publish({
       ...this.snapshot,
       cancellingIds: [...this.snapshot.cancellingIds, jobId],
@@ -211,8 +226,19 @@ class RemoteJobBoardStore implements JobBoardStore {
     })
     try {
       const result = await this.remote.cancelJob(jobId)
+      if (this.disposed || watchMutation !== this.watchMutation) return
       if (!result.ok) {
-        this.publish({ ...this.snapshot, actionError: errorMessage(result.error) })
+        if (isPermissionDenied(result.error)) this.applyReadFailure(result.error)
+        else this.publish({ ...this.snapshot, actionError: errorMessage(result.error) })
+        return
+      }
+      const currentJob = this.snapshot.jobs.find((job) => job.id === jobId)
+      if (!currentJob || result.value.id !== jobId) return
+      if (result.value.revision < currentJob.revision) return
+      if (
+        isTerminalExecutionState(currentJob.executionState) &&
+        !isTerminalExecutionState(result.value.executionState)
+      ) {
         return
       }
       const jobs = this.snapshot.jobs.map((job) =>
@@ -220,8 +246,9 @@ class RemoteJobBoardStore implements JobBoardStore {
       )
       this.publish({ ...this.snapshot, jobs, lastUpdatedAt: this.readNow() })
     } catch (error) {
-      if (!this.disposed) {
-        this.publish({ ...this.snapshot, actionError: errorMessage(error) })
+      if (!this.disposed && watchMutation === this.watchMutation) {
+        if (isPermissionDenied(error)) this.applyReadFailure(error)
+        else this.publish({ ...this.snapshot, actionError: errorMessage(error) })
       }
     } finally {
       this.cancellations.delete(jobId)
@@ -296,7 +323,7 @@ class RemoteJobBoardStore implements JobBoardStore {
         baseline = false
         hasSnapshot = true
         if (isBaseline && this.watch === watch && this.generation === generation) {
-          void this.loadHealth(generation)
+          void this.loadHealth(generation, this.watchMutation)
         }
       }
     } catch (error) {
@@ -309,6 +336,7 @@ class RemoteJobBoardStore implements JobBoardStore {
   }
 
   private applyFrame(frame: JobWatchFrame): void {
+    this.watchMutation += 1
     this.publish({
       ...this.snapshot,
       jobs: frame.jobs,
@@ -320,10 +348,16 @@ class RemoteJobBoardStore implements JobBoardStore {
     })
   }
 
-  private async loadHealth(generation: number): Promise<void> {
+  private async loadHealth(generation: number, watchMutation: number): Promise<void> {
     try {
       const result = await this.remote.getHealth()
-      if (this.disposed || this.generation !== generation) return
+      if (
+        this.disposed ||
+        this.generation !== generation ||
+        this.watchMutation !== watchMutation
+      ) {
+        return
+      }
       if (result.ok) {
         this.publish({ ...this.snapshot, health: result.value })
       } else if (isPermissionDenied(result.error)) {
@@ -337,13 +371,7 @@ class RemoteJobBoardStore implements JobBoardStore {
   private handleWatchFailure(error: unknown, generation: number, hasSnapshot: boolean): void {
     if (this.disposed || this.generation !== generation) return
     if (isPermissionDenied(error)) {
-      this.closeWatch()
-      this.publish({
-        ...this.snapshot,
-        jobs: [],
-        status: "permission-denied",
-        error: errorMessage(error),
-      })
+      this.enterPermissionDenied(error)
       return
     }
     this.publish({
@@ -356,21 +384,39 @@ class RemoteJobBoardStore implements JobBoardStore {
 
   private scheduleReconnect(): void {
     if (!this.running || this.reconnectHandle !== undefined) return
-    this.reconnectHandle = this.scheduler.setTimeout(() => {
+    const generation = this.generation
+    const handle = this.scheduler.setTimeout(() => {
+      if (this.reconnectHandle !== handle) return
       this.reconnectHandle = undefined
+      if (
+        !this.running ||
+        this.disposed ||
+        this.generation !== generation ||
+        this.snapshot.status === "permission-denied"
+      ) {
+        return
+      }
       this.openWatch()
     }, this.reconnectDelayMs)
+    this.reconnectHandle = handle
+  }
+
+  private enterPermissionDenied(error: unknown): void {
+    this.clearReconnect()
+    this.generation += 1
+    this.watchMutation += 1
+    this.closeWatch()
+    this.publish({
+      ...this.snapshot,
+      jobs: [],
+      status: "permission-denied",
+      error: errorMessage(error),
+    })
   }
 
   private applyReadFailure(error: unknown): void {
     if (isPermissionDenied(error)) {
-      this.closeWatch()
-      this.publish({
-        ...this.snapshot,
-        jobs: [],
-        status: "permission-denied",
-        error: errorMessage(error),
-      })
+      this.enterPermissionDenied(error)
       return
     }
     this.publish({

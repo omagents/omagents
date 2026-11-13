@@ -26,6 +26,12 @@ function isPermissionDenied(error) {
         "code" in error &&
         Reflect.get(error, "code") === "remote-access/denied");
 }
+function isTerminalExecutionState(state) {
+    return (state === "completed" ||
+        state === "failed" ||
+        state === "cancelled" ||
+        state === "interrupted");
+}
 class RemoteJobBoardStore {
     remote;
     scope;
@@ -40,6 +46,7 @@ class RemoteJobBoardStore {
     disposed = false;
     watch;
     generation = 0;
+    watchMutation = 0;
     tickHandle;
     reconnectHandle;
     constructor(remote, options) {
@@ -79,15 +86,20 @@ class RemoteJobBoardStore {
     async refresh() {
         if (this.disposed)
             return;
+        const watchMutation = this.watchMutation;
         try {
             const [listed, health] = await Promise.all([
                 this.remote.listJobs(this.scope),
                 this.remote.getHealth(),
             ]);
-            if (this.disposed)
+            if (this.disposed || watchMutation !== this.watchMutation)
                 return;
             if (!listed.ok) {
                 this.applyReadFailure(listed.error);
+                return;
+            }
+            if (!health.ok && isPermissionDenied(health.error)) {
+                this.applyReadFailure(health.error);
                 return;
             }
             this.publish({
@@ -98,12 +110,11 @@ class RemoteJobBoardStore {
                 error: undefined,
                 lastUpdatedAt: this.readNow(),
             });
-            if (!health.ok && isPermissionDenied(health.error)) {
-                this.applyReadFailure(health.error);
-            }
         }
         catch (error) {
-            this.applyReadFailure(error);
+            if (!this.disposed && watchMutation === this.watchMutation) {
+                this.applyReadFailure(error);
+            }
         }
     }
     async reconnect() {
@@ -137,6 +148,7 @@ class RemoteJobBoardStore {
         this.listeners.clear();
     }
     async performCancellation(jobId) {
+        const watchMutation = this.watchMutation;
         this.publish({
             ...this.snapshot,
             cancellingIds: [...this.snapshot.cancellingIds, jobId],
@@ -144,16 +156,33 @@ class RemoteJobBoardStore {
         });
         try {
             const result = await this.remote.cancelJob(jobId);
+            if (this.disposed || watchMutation !== this.watchMutation)
+                return;
             if (!result.ok) {
-                this.publish({ ...this.snapshot, actionError: errorMessage(result.error) });
+                if (isPermissionDenied(result.error))
+                    this.applyReadFailure(result.error);
+                else
+                    this.publish({ ...this.snapshot, actionError: errorMessage(result.error) });
+                return;
+            }
+            const currentJob = this.snapshot.jobs.find((job) => job.id === jobId);
+            if (!currentJob || result.value.id !== jobId)
+                return;
+            if (result.value.revision < currentJob.revision)
+                return;
+            if (isTerminalExecutionState(currentJob.executionState) &&
+                !isTerminalExecutionState(result.value.executionState)) {
                 return;
             }
             const jobs = this.snapshot.jobs.map((job) => job.id === result.value.id ? result.value : job);
             this.publish({ ...this.snapshot, jobs, lastUpdatedAt: this.readNow() });
         }
         catch (error) {
-            if (!this.disposed) {
-                this.publish({ ...this.snapshot, actionError: errorMessage(error) });
+            if (!this.disposed && watchMutation === this.watchMutation) {
+                if (isPermissionDenied(error))
+                    this.applyReadFailure(error);
+                else
+                    this.publish({ ...this.snapshot, actionError: errorMessage(error) });
             }
         }
         finally {
@@ -230,7 +259,7 @@ class RemoteJobBoardStore {
                 baseline = false;
                 hasSnapshot = true;
                 if (isBaseline && this.watch === watch && this.generation === generation) {
-                    void this.loadHealth(generation);
+                    void this.loadHealth(generation, this.watchMutation);
                 }
             }
         }
@@ -243,6 +272,7 @@ class RemoteJobBoardStore {
         }
     }
     applyFrame(frame) {
+        this.watchMutation += 1;
         this.publish({
             ...this.snapshot,
             jobs: frame.jobs,
@@ -253,11 +283,14 @@ class RemoteJobBoardStore {
             now: this.readNow(),
         });
     }
-    async loadHealth(generation) {
+    async loadHealth(generation, watchMutation) {
         try {
             const result = await this.remote.getHealth();
-            if (this.disposed || this.generation !== generation)
+            if (this.disposed ||
+                this.generation !== generation ||
+                this.watchMutation !== watchMutation) {
                 return;
+            }
             if (result.ok) {
                 this.publish({ ...this.snapshot, health: result.value });
             }
@@ -273,13 +306,7 @@ class RemoteJobBoardStore {
         if (this.disposed || this.generation !== generation)
             return;
         if (isPermissionDenied(error)) {
-            this.closeWatch();
-            this.publish({
-                ...this.snapshot,
-                jobs: [],
-                status: "permission-denied",
-                error: errorMessage(error),
-            });
+            this.enterPermissionDenied(error);
             return;
         }
         this.publish({
@@ -292,20 +319,36 @@ class RemoteJobBoardStore {
     scheduleReconnect() {
         if (!this.running || this.reconnectHandle !== undefined)
             return;
-        this.reconnectHandle = this.scheduler.setTimeout(() => {
+        const generation = this.generation;
+        const handle = this.scheduler.setTimeout(() => {
+            if (this.reconnectHandle !== handle)
+                return;
             this.reconnectHandle = undefined;
+            if (!this.running ||
+                this.disposed ||
+                this.generation !== generation ||
+                this.snapshot.status === "permission-denied") {
+                return;
+            }
             this.openWatch();
         }, this.reconnectDelayMs);
+        this.reconnectHandle = handle;
+    }
+    enterPermissionDenied(error) {
+        this.clearReconnect();
+        this.generation += 1;
+        this.watchMutation += 1;
+        this.closeWatch();
+        this.publish({
+            ...this.snapshot,
+            jobs: [],
+            status: "permission-denied",
+            error: errorMessage(error),
+        });
     }
     applyReadFailure(error) {
         if (isPermissionDenied(error)) {
-            this.closeWatch();
-            this.publish({
-                ...this.snapshot,
-                jobs: [],
-                status: "permission-denied",
-                error: errorMessage(error),
-            });
+            this.enterPermissionDenied(error);
             return;
         }
         this.publish({
