@@ -31,6 +31,11 @@ export class JobBoard {
   #listeners = new Set()
   #revision = 0
   #aliasCounter = 0
+  #closed = false
+  #closePromise
+  #observedWrites = Promise.resolve()
+  #persistenceFailure
+  #persistenceDiagnostics = []
 
   constructor({ clock, idGenerator, store } = {}) {
     this.#clock = normalizeClock(clock)
@@ -52,11 +57,22 @@ export class JobBoard {
     return this.#revision
   }
 
+  get diagnostics() {
+    const storeDiagnostics = this.#store?.diagnostics ?? []
+    const storeCauses = new Set(storeDiagnostics.map((diagnostic) => diagnostic.cause))
+    return [...storeDiagnostics, ...this.#persistenceDiagnostics]
+      .filter(
+        (diagnostic, index) => index < storeDiagnostics.length || !storeCauses.has(diagnostic.cause)
+      )
+      .map((diagnostic) => ({ ...diagnostic }))
+  }
+
   now() {
     return this.#clock()
   }
 
   registerLaunch(launch) {
+    this.#assertOpen()
     const key = hostTaskKey(launch.host, launch.hostTaskId)
     const existingId = this.#hostTaskIndex.get(key)
     if (existingId !== undefined) return this.#jobs.get(existingId)
@@ -77,6 +93,7 @@ export class JobBoard {
   }
 
   requestCancellation(idOrAlias) {
+    this.#assertOpen()
     const job = this.#find(idOrAlias)
     if (!job || job.executionState !== "running") return job
 
@@ -88,6 +105,7 @@ export class JobBoard {
   }
 
   markTerminal(idOrAlias, { state, resultSummary, error }) {
+    this.#assertOpen()
     assertTerminalState(state)
     const job = this.#find(idOrAlias)
     if (!job || isTerminalState(job.executionState)) return job
@@ -103,6 +121,7 @@ export class JobBoard {
   }
 
   markInjected(ids) {
+    this.#assertOpen()
     for (const id of ids) {
       const job = this.#find(id)
       if (job?.notificationState !== "pending") continue
@@ -113,6 +132,7 @@ export class JobBoard {
   }
 
   acknowledgeInjected(parentSessionId) {
+    this.#assertOpen()
     for (const job of this.list({ parentSessionId })) {
       if (job.notificationState !== "injected") continue
 
@@ -122,6 +142,7 @@ export class JobBoard {
   }
 
   async reconcile({ query } = {}) {
+    this.#assertOpen()
     if (typeof query !== "function") throw new TypeError("query must be a function")
     const activeJobs = this.list().filter(
       (job) => job.executionState === "running" || job.executionState === "cancelling"
@@ -151,6 +172,7 @@ export class JobBoard {
   }
 
   prune({ maxAcknowledged = 100 } = {}) {
+    this.#assertOpen()
     if (!Number.isInteger(maxAcknowledged) || maxAcknowledged < 0) {
       throw new RangeError("maxAcknowledged must be a non-negative integer")
     }
@@ -207,11 +229,32 @@ export class JobBoard {
   }
 
   async flush() {
-    await this.#store?.flush()
+    await this.#observedWrites
+    try {
+      await this.#store?.flush()
+    } catch (error) {
+      this.#recordPersistenceFailure(error, "flush")
+    }
+    if (this.#persistenceFailure) throw this.#persistenceFailure
   }
 
-  async close() {
-    await this.#store?.close()
+  close() {
+    if (this.#closePromise) return this.#closePromise
+    this.#closed = true
+    this.#closePromise = (async () => {
+      try {
+        await this.#store?.close()
+      } catch (error) {
+        this.#recordPersistenceFailure(error, "close")
+      }
+      await this.#observedWrites
+      if (this.#persistenceFailure) throw this.#persistenceFailure
+    })()
+    return this.#closePromise
+  }
+
+  #assertOpen() {
+    if (this.#closed) throw new Error("JobBoard is closed")
   }
 
   #restore(snapshot) {
@@ -252,11 +295,35 @@ export class JobBoard {
 
   #persist() {
     if (!this.#store) return
-    const snapshot = {
-      version: 1,
-      revision: this.#revision,
-      jobs: structuredClone(this.list()),
+
+    try {
+      const snapshot = {
+        version: 1,
+        revision: this.#revision,
+        jobs: structuredClone(this.list()),
+      }
+      const observed = Promise.resolve(this.#store.save(snapshot)).catch((error) => {
+        this.#recordPersistenceFailure(error, "save")
+      })
+      this.#observedWrites = Promise.all([this.#observedWrites, observed]).then(() => {})
+    } catch (error) {
+      this.#recordPersistenceFailure(error, "save")
     }
-    Promise.resolve(this.#store.save(snapshot)).catch(() => {})
+  }
+
+  #recordPersistenceFailure(error, operation) {
+    this.#persistenceFailure ??= error
+    if (
+      operation !== "save" &&
+      this.#persistenceDiagnostics.some((diagnostic) => diagnostic.cause === error)
+    ) {
+      return
+    }
+    this.#persistenceDiagnostics.push({
+      code: "ERR_JOB_BOARD_PERSIST",
+      operation,
+      message: `Job board persistence ${operation} failure: ${error.message}`,
+      cause: error,
+    })
   }
 }

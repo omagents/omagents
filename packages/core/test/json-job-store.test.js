@@ -160,7 +160,7 @@ test("concurrent saves are serialized in invocation order without overlapping wr
   )
 })
 
-test("invalid outbound snapshots reject without replacing the last valid file", async (t) => {
+test("pre-queue validation failures remain visible after later valid saves", async (t) => {
   const directory = await createTempDirectory(t)
   const filePath = join(directory, "jobs.json")
   const store = new JsonJobStore({ filePath, clock: () => 1_000 })
@@ -171,9 +171,89 @@ test("invalid outbound snapshots reject without replacing the last valid file", 
     /executionState/
   )
   await assert.rejects(store.save({ version: 2, revision: 2, jobs: [] }), /version/)
-  await store.close()
-
   assert.deepEqual(JSON.parse(await fs.readFile(filePath, "utf8")), createSnapshot())
+
+  const recovered = createSnapshot({
+    revision: 2,
+    jobs: [createJob({ updatedAt: 2_000, revision: 2 })],
+  })
+  await store.save(recovered)
+  await assert.rejects(store.flush(), /executionState/)
+  await assert.rejects(store.close(), /executionState/)
+  await assert.rejects(store.close(), /executionState/)
+
+  assert.deepEqual(JSON.parse(await fs.readFile(filePath, "utf8")), recovered)
+  assert.equal(store.diagnostics.length, 2)
+  for (const diagnostic of store.diagnostics) {
+    assert.equal(diagnostic.code, "ERR_JOB_STORE_WRITE")
+    assert.equal(diagnostic.phase, "validation")
+    assert.equal(diagnostic.operation, "save")
+  }
+})
+
+test("pre-queue serialization failures are retained with structured diagnostics", async (t) => {
+  const directory = await createTempDirectory(t)
+  const filePath = join(directory, "jobs.json")
+  const store = new JsonJobStore({ filePath, clock: () => 1_000 })
+  const unserializable = createSnapshot({
+    jobs: [
+      createJob({
+        executionState: "failed",
+        notificationState: "pending",
+        error: { value: 1n },
+        terminalAt: 1_000,
+      }),
+    ],
+  })
+
+  await assert.rejects(store.save(unserializable), /BigInt/)
+  const recovered = createSnapshot({
+    revision: 2,
+    jobs: [createJob({ updatedAt: 2_000, revision: 2 })],
+  })
+  await store.save(recovered)
+
+  await assert.rejects(store.flush(), /BigInt/)
+  await assert.rejects(store.close(), /BigInt/)
+  assert.deepEqual(JSON.parse(await fs.readFile(filePath, "utf8")), recovered)
+  assert.equal(store.diagnostics.length, 1)
+  assert.equal(store.diagnostics[0].code, "ERR_JOB_STORE_WRITE")
+  assert.equal(store.diagnostics[0].phase, "serialization")
+  assert.match(store.diagnostics[0].message, /BigInt/)
+})
+
+test("queued I/O failures remain visible after the write queue recovers", async (t) => {
+  const directory = await createTempDirectory(t)
+  const filePath = join(directory, "jobs.json")
+  const store = new JsonJobStore({ filePath, clock: () => 1_000 })
+  const originalRename = fs.rename
+  let failNextRename = true
+  t.mock.method(fs, "rename", async (...args) => {
+    if (failNextRename) {
+      failNextRename = false
+      throw new Error("injected atomic replacement failure")
+    }
+    return originalRename(...args)
+  })
+
+  await assert.rejects(store.save(createSnapshot()), /injected atomic replacement failure/)
+  const recovered = createSnapshot({
+    revision: 2,
+    jobs: [createJob({ updatedAt: 2_000, revision: 2 })],
+  })
+  await store.save(recovered)
+
+  await assert.rejects(store.flush(), /injected atomic replacement failure/)
+  await assert.rejects(store.close(), /injected atomic replacement failure/)
+  assert.deepEqual(JSON.parse(await fs.readFile(filePath, "utf8")), recovered)
+  assert.equal(store.diagnostics.length, 1)
+  assert.equal(store.diagnostics[0].code, "ERR_JOB_STORE_WRITE")
+  assert.equal(store.diagnostics[0].phase, "io")
+  assert.match(store.diagnostics[0].message, /injected atomic replacement failure/)
+  assert.deepEqual(
+    (await fs.readdir(directory)).filter((name) => name.endsWith(".tmp")),
+    []
+  )
 })
 
 test("corrupt JSON and malformed schemas are preserved with visible diagnostics", async (t) => {

@@ -11,11 +11,11 @@ function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
-function requireString(job, field, index, { optional = false } = {}) {
+function requireString(job, field, index, { optional = false, allowEmpty = false } = {}) {
   const value = job[field]
   if (optional && value === undefined) return
-  if (typeof value !== "string" || value.length === 0) {
-    invalid(`jobs[${index}].${field} must be a non-empty string`)
+  if (typeof value !== "string" || (!allowEmpty && value.length === 0)) {
+    invalid(`jobs[${index}].${field} must be ${allowEmpty ? "a" : "a non-empty"} string`)
   }
 }
 
@@ -42,7 +42,7 @@ function validateJob(job, index) {
     requireString(job, field, index)
   }
   requireString(job, "childName", index, { optional: true })
-  requireString(job, "resultSummary", index, { optional: true })
+  requireString(job, "resultSummary", index, { optional: true, allowEmpty: true })
 
   if (!EXECUTION_STATE_SET.has(job.executionState)) {
     invalid(`jobs[${index}].executionState is invalid: ${job.executionState}`)

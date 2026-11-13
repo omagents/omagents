@@ -21,7 +21,7 @@ export class JsonJobStore {
   #clock
   #diagnostics = []
   #tail = Promise.resolve()
-  #lastWrite = Promise.resolve()
+  #writeFailure
   #closed = false
   #closePromise
 
@@ -76,19 +76,28 @@ export class JsonJobStore {
     let serialized
     try {
       validateJobSnapshot(snapshot)
+    } catch (error) {
+      this.#recordWriteFailure(error, { phase: "validation", snapshot })
+      return Promise.reject(error)
+    }
+
+    try {
       serialized = `${JSON.stringify(snapshot, null, 2)}\n`
     } catch (error) {
+      this.#recordWriteFailure(error, { phase: "serialization", snapshot })
       return Promise.reject(error)
     }
 
     const write = this.#tail.then(() => this.#replace(serialized))
-    this.#tail = write.catch(() => {})
-    this.#lastWrite = write
+    this.#tail = write.catch((error) => {
+      this.#recordWriteFailure(error, { phase: "io", snapshot })
+    })
     return write
   }
 
-  flush() {
-    return this.#lastWrite
+  async flush() {
+    await this.#tail
+    if (this.#writeFailure) throw this.#writeFailure
   }
 
   close() {
@@ -96,6 +105,18 @@ export class JsonJobStore {
     this.#closed = true
     this.#closePromise = this.flush()
     return this.#closePromise
+  }
+
+  #recordWriteFailure(error, { phase, snapshot }) {
+    this.#writeFailure ??= error
+    this.#diagnostics.push({
+      code: "ERR_JOB_STORE_WRITE",
+      operation: "save",
+      phase,
+      snapshotRevision: snapshot?.revision,
+      message: `Job store ${phase} failure: ${error.message}`,
+      cause: error,
+    })
   }
 
   async #replace(serialized) {

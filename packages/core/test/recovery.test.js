@@ -1,7 +1,10 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import fs from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
-import { JobBoard } from "../src/index.js"
+import { JobBoard, JsonJobStore } from "../src/index.js"
 
 function clone(value) {
   return structuredClone(value)
@@ -66,6 +69,14 @@ async function openBoard(snapshot, clock = () => 5_000) {
     idGenerator: () => "generated-job",
   })
   return { board, store }
+}
+
+async function createTempDirectory(t) {
+  const directory = await fs.mkdtemp(join(tmpdir(), "omagents-recovery-"))
+  t.after(async () => {
+    await fs.rm(directory, { recursive: true, force: true })
+  })
+  return directory
 }
 
 test("open restores revision, indexes, pending outcomes, and alias uniqueness without saving", async () => {
@@ -271,6 +282,144 @@ test("terminal and notification transitions enqueue immediate snapshots and clos
   assert.equal(store.closed, true)
   assert.equal(store.snapshot.jobs[0].notificationState, "acknowledged")
   assert.equal(store.flushCount >= 1, true)
+})
+
+test("an empty terminal resultSummary is durable through flush, close, and reopen", async (t) => {
+  const directory = await createTempDirectory(t)
+  const filePath = join(directory, "jobs.json")
+  const store = new JsonJobStore({ filePath, clock: () => 7_000 })
+  const board = await JobBoard.open({
+    store,
+    clock: () => 7_000,
+    idGenerator: () => "job-empty-result",
+  })
+  const job = board.registerLaunch({
+    host: "host-a",
+    hostTaskId: "host-task-empty-result",
+    parentSessionId: "parent-1",
+    agent: "explore",
+    description: "persist an empty result",
+  })
+  await board.flush()
+
+  board.markTerminal(job.id, { state: "completed", resultSummary: "" })
+  await board.flush()
+  await board.close()
+
+  const persisted = JSON.parse(await fs.readFile(filePath, "utf8"))
+  assert.equal(persisted.jobs[0].executionState, "completed")
+  assert.equal(persisted.jobs[0].notificationState, "pending")
+  assert.equal(persisted.jobs[0].resultSummary, "")
+
+  const reopenedStore = new JsonJobStore({ filePath, clock: () => 8_000 })
+  const reopened = await JobBoard.open({ store: reopenedStore, clock: () => 8_000 })
+  assert.equal(reopened.get(job.id).executionState, "completed")
+  assert.equal(reopened.get(job.id).notificationState, "pending")
+  assert.equal(reopened.get(job.id).resultSummary, "")
+  await reopened.close()
+})
+
+test("transition serialization failures surface through flush, close, and diagnostics", async (t) => {
+  const directory = await createTempDirectory(t)
+  const filePath = join(directory, "jobs.json")
+  const store = new JsonJobStore({ filePath, clock: () => 7_000 })
+  const board = await JobBoard.open({
+    store,
+    clock: () => 7_000,
+    idGenerator: () => "job-unserializable-result",
+  })
+  const job = board.registerLaunch({
+    host: "host-a",
+    hostTaskId: "host-task-unserializable-result",
+    parentSessionId: "parent-1",
+    agent: "explore",
+  })
+  await board.flush()
+
+  board.markTerminal(job.id, { state: "failed", error: { value: 1n } })
+  assert.equal(job.executionState, "failed", "the synchronous transition API is preserved")
+  await assert.rejects(board.flush(), /BigInt/)
+  await assert.rejects(board.close(), /BigInt/)
+  await assert.rejects(board.close(), /BigInt/)
+
+  const diagnostic = board.diagnostics.find((entry) => entry.cause?.message.includes("BigInt"))
+  assert.equal(diagnostic.code, "ERR_JOB_STORE_WRITE")
+  assert.equal(diagnostic.phase, "serialization")
+  const persisted = JSON.parse(await fs.readFile(filePath, "utf8"))
+  assert.equal(persisted.jobs[0].executionState, "running")
+  assert.equal(persisted.jobs[0].notificationState, undefined)
+})
+
+test("JobBoard retains rejected writes even when an injected store flush succeeds", async () => {
+  const { board, store } = await openBoard()
+  const originalSave = store.save.bind(store)
+  store.save = () => Promise.reject(new Error("injected store rejection"))
+  const job = board.registerLaunch({
+    host: "host-a",
+    hostTaskId: "host-task-rejected-write",
+    parentSessionId: "parent-1",
+    agent: "explore",
+  })
+
+  await assert.rejects(board.flush(), /injected store rejection/)
+  assert.equal(
+    board.diagnostics.some((entry) => entry.cause?.message === "injected store rejection"),
+    true
+  )
+
+  store.save = originalSave
+  board.markTerminal(job.id, { state: "completed", resultSummary: "recovered write" })
+  await assert.rejects(board.flush(), /injected store rejection/)
+  assert.equal(store.snapshot.jobs[0].executionState, "completed")
+  await assert.rejects(board.close(), /injected store rejection/)
+})
+
+test("every public job mutation rejects after close without changing board state", async () => {
+  const jobs = [
+    createJob("job-1"),
+    createJob("job-2", {
+      executionState: "completed",
+      notificationState: "pending",
+      terminalAt: 2_000,
+    }),
+    createJob("job-3", {
+      executionState: "failed",
+      notificationState: "injected",
+      terminalAt: 2_000,
+    }),
+    createJob("job-4", {
+      executionState: "completed",
+      notificationState: "acknowledged",
+      terminalAt: 2_000,
+    }),
+  ]
+  const { board, store } = await openBoard(snapshotWith(jobs))
+  await Promise.all([board.close(), board.close()])
+  const recordsBefore = clone(board.list())
+  const revisionBefore = board.revision
+  const saveCountBefore = store.saves.length
+  const mutations = [
+    () =>
+      board.registerLaunch({
+        host: "host-b",
+        hostTaskId: "post-close-launch",
+        parentSessionId: "parent-1",
+        agent: "explore",
+      }),
+    () => board.requestCancellation("job-1"),
+    () => board.markTerminal("job-1", { state: "completed", resultSummary: "too late" }),
+    () => board.markInjected(["job-2"]),
+    () => board.acknowledgeInjected("parent-1"),
+    () => board.prune({ maxAcknowledged: 0 }),
+  ]
+
+  for (const mutate of mutations) assert.throws(mutate, /closed/i)
+  await assert.rejects(board.reconcile({ query: async () => ({ kind: "active" }) }), /closed/i)
+
+  assert.deepEqual(board.list(), recordsBefore)
+  assert.equal(board.revision, revisionBefore)
+  assert.equal(store.saves.length, saveCountBefore)
+  assert.equal(board.get("post-close-launch"), undefined)
 })
 
 test("retention evicts only bounded acknowledged terminal history", async () => {
