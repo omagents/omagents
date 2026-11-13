@@ -230,3 +230,96 @@ test("DSH MCP adapter completes a real Streamable HTTP handshake with a local se
   await registration.dispose()
   assert.equal(tools.size, 0)
 })
+
+test("per-registration MCP disposal returns the same in-flight promise", async () => {
+  let releaseCleanup
+  let cleanupCalls = 0
+  const cleanup = new Promise((resolve) => {
+    releaseCleanup = resolve
+  })
+  const fiber = {
+    dispose() {
+      cleanupCalls += 1
+      return cleanup
+    },
+  }
+  const ctx = {
+    get(name) {
+      return name === "tools" ? {} : undefined
+    },
+    plugin() {
+      return fiber
+    },
+  }
+  const manager = createDshMcpManager(ctx)
+  const registration = manager.register(
+    "delayed",
+    toDshMcpConfig("delayed", { type: "local", command: ["node", "server.js"] })
+  )
+
+  const first = registration.dispose()
+  const concurrent = registration.dispose()
+  assert.strictEqual(concurrent, first)
+  assert.equal(cleanupCalls, 1)
+  let settled = false
+  void first.then(() => {
+    settled = true
+  })
+  await Promise.resolve()
+  assert.equal(settled, false)
+
+  releaseCleanup()
+  await first
+  assert.strictEqual(registration.dispose(), first)
+  await registration.dispose()
+  assert.equal(cleanupCalls, 1)
+})
+
+test("aggregate MCP disposal caches delayed cleanup across concurrent and repeated calls", async () => {
+  let releaseCleanup
+  let cleanupCalls = 0
+  const cleanup = new Promise((resolve) => {
+    releaseCleanup = resolve
+  })
+  const registration = {
+    ready: Promise.resolve(),
+    dispose() {
+      cleanupCalls += 1
+      return cleanup
+    },
+  }
+  const manager = {
+    has(name) {
+      return name !== "agentmemory"
+    },
+    register(name) {
+      assert.equal(name, "agentmemory")
+      return registration
+    },
+  }
+  const health = healthyRecords()
+  const ctx = {
+    mcpManager: manager,
+    get(name) {
+      return name === "tools" ? {} : undefined
+    },
+  }
+  const dispose = registerDshMcp(ctx, {}, health)
+
+  const first = dispose()
+  const concurrent = dispose()
+  assert.strictEqual(concurrent, first)
+  assert.equal(cleanupCalls, 1)
+  let settled = false
+  void first.then(() => {
+    settled = true
+  })
+  await Promise.resolve()
+  assert.equal(settled, false)
+
+  releaseCleanup()
+  await first
+  assert.strictEqual(dispose(), first)
+  await dispose()
+  assert.equal(cleanupCalls, 1)
+})

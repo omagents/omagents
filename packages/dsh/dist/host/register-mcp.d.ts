@@ -30,6 +30,6 @@ export declare function toDshMcpConfig(serverName: string, definition: CoreMcpDe
  * registration, user-name precedence, readiness, and disposal in one seam.
  */
 export declare function createDshMcpManager(ctx: Context): DshMcpManager;
-/** Register the canonical Core catalog without replacing user-configured MCP names. */
+/** Register the canonical Core catalog when DSH tools are available, preserving user names. */
 export declare function registerDshMcp(ctx: Context, env: NodeJS.ProcessEnv, health: DshHealth): () => Promise<void>;
 export {};

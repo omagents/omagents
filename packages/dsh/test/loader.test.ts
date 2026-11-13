@@ -19,6 +19,30 @@ const launch = {
   description: "Verify the real DSH Loader and durable disposal",
 }
 
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+async function within(promise, label) {
+  let timer
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out`)), 2_000)
+      }),
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function createIsolatedProfile(t: TestContext) {
   const home = await fs.mkdtemp(join(tmpdir(), "omagents-dsh-home-"))
   const userHome = join(home, "user-home")
@@ -107,6 +131,117 @@ test("real Loader starts and disposes the package-root Host entry", async (t) =>
   assert.equal(persisted.jobs[0].hostTaskId, launch.hostTaskId)
 })
 
+test("Loader activates delayed skill and tool services without blocking Host or Python", { timeout: 10_000 }, async (t) => {
+  const isolated = await createIsolatedProfile(t)
+  const root = new Context()
+  const python = deferred()
+  let pythonStarted = false
+
+  function createSkillBatch() {
+    const batch = { registrations: [], activated: deferred() }
+    batch.registry = {
+      register(skill) {
+        const registration = { name: skill.name, disposed: false }
+        batch.registrations.push(registration)
+        if (batch.registrations.length === 33) batch.activated.resolve()
+        return () => {
+          registration.disposed = true
+        }
+      },
+    }
+    return batch
+  }
+
+  const mcpBatches = []
+  let currentMcpBatch
+  function createMcpBatch() {
+    const batch = { registrations: [], activated: deferred() }
+    mcpBatches.push(batch)
+    currentMcpBatch = batch
+    return batch
+  }
+  createMcpBatch()
+
+  root.provide("mcpManager", {
+    has() {
+      return false
+    },
+    register(name) {
+      const registration = { name, disposed: false }
+      currentMcpBatch.registrations.push(registration)
+      currentMcpBatch.activated.resolve()
+      return {
+        ready: Promise.resolve(),
+        async dispose() {
+          registration.disposed = true
+        },
+      }
+    },
+  })
+  root.provide("omagentsPython", {
+    ensureBaseEnvironment() {
+      pythonStarted = true
+      return python.promise
+    },
+  })
+  await root.plugin(Loader, { baseUrl: isolated.baseUrl })
+  t.after(() => root.fiber.dispose())
+
+  const id = await root.loader.create({ name: "@omagents/omagents-dsh" })
+  await root.loader.await()
+  const entry = root.loader.resolve(id)
+  assert.ok(entry.fiber)
+  await entry.fiber.await()
+  const runtime = (entry.fiber.ctx as Context & { omagents?: DshRuntime }).omagents
+  assert.ok(runtime, "Host startup must not wait for skills or tools")
+  assert.equal(pythonStarted, true, "Python starts independently of delayed capabilities")
+  assert.equal(mcpBatches[0].registrations.length, 0)
+
+  const firstSkills = createSkillBatch()
+  const firstMcp = currentMcpBatch
+  const removeFirstSkills = root.provide("skills", firstSkills.registry)
+  const removeFirstTools = root.provide("tools", {})
+  await within(
+    Promise.all([firstSkills.activated.promise, firstMcp.activated.promise]),
+    "initial delayed capability activation"
+  )
+  assert.equal(firstSkills.registrations.length, 33)
+  assert.ok(firstMcp.registrations.length > 0)
+  assert.equal(runtime.health.skills.status, "ready")
+  assert.equal(runtime.health.mcp.status, "ready")
+  assert.equal(runtime.health.host.status, "ready")
+
+  await removeFirstSkills()
+  await removeFirstTools()
+  const secondSkills = createSkillBatch()
+  const secondMcp = createMcpBatch()
+  const removeSecondSkills = root.provide("skills", secondSkills.registry)
+  const removeSecondTools = root.provide("tools", {})
+  await within(
+    Promise.all([secondSkills.activated.promise, secondMcp.activated.promise]),
+    "capability reactivation"
+  )
+  assert.equal(secondSkills.registrations.length, 33)
+  assert.equal(secondMcp.registrations.length, firstMcp.registrations.length)
+  assert.ok(firstSkills.registrations.every((skill) => skill.disposed))
+  assert.ok(firstMcp.registrations.every((mcp) => mcp.disposed))
+
+  python.resolve({ status: "ready" })
+  await entry.fiber.dispose()
+  assert.ok(secondSkills.registrations.every((skill) => skill.disposed))
+  assert.ok(secondMcp.registrations.every((mcp) => mcp.disposed))
+
+  await removeSecondSkills()
+  await removeSecondTools()
+  const lateSkills = createSkillBatch()
+  const lateMcp = createMcpBatch()
+  root.provide("skills", lateSkills.registry)
+  root.provide("tools", {})
+  await Promise.resolve()
+  assert.equal(lateSkills.registrations.length, 0, "late skills must not register after disposal")
+  assert.equal(lateMcp.registrations.length, 0, "late MCP must not register after disposal")
+})
+
 test("Loader teardown composes capability disposers and blocks late Python health", async (t) => {
   const isolated = await createIsolatedProfile(t)
   const root = new Context()
@@ -125,6 +260,7 @@ test("Loader teardown composes capability disposers and blocks late Python healt
       }
     },
   })
+  root.provide("tools", {})
   root.provide("mcpManager", {
     has() {
       return false

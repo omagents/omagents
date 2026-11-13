@@ -68,7 +68,7 @@ export function createDshMcpManager(ctx) {
                 throw new Error(`Cannot register MCP server "${name}": the DSH tool registry is unavailable`);
             }
             const fiber = ctx.plugin(McpClient, config);
-            let disposed = false;
+            let disposal;
             const ready = (async () => {
                 await fiber;
             })();
@@ -78,13 +78,19 @@ export function createDshMcpManager(ctx) {
             void ready.catch(() => { });
             const registration = {
                 ready,
-                async dispose() {
-                    if (disposed)
-                        return;
-                    disposed = true;
-                    if (owned.get(name) === registration)
-                        owned.delete(name);
-                    await fiber.dispose();
+                dispose() {
+                    if (!disposal) {
+                        disposal = (async () => {
+                            try {
+                                await fiber.dispose();
+                            }
+                            finally {
+                                if (owned.get(name) === registration)
+                                    owned.delete(name);
+                            }
+                        })();
+                    }
+                    return disposal;
                 },
             };
             owned.set(name, registration);
@@ -92,58 +98,117 @@ export function createDshMcpManager(ctx) {
         },
     };
 }
-/** Register the canonical Core catalog without replacing user-configured MCP names. */
+/** Register the canonical Core catalog when DSH tools are available, preserving user names. */
 export function registerDshMcp(ctx, env, health) {
     setDshCapabilityDiagnostics(health, "mcp", []);
-    const registrations = [];
+    let capabilityFiber;
+    let activeCleanup;
     let disposed = false;
-    try {
-        const manager = ctx.mcpManager ?? createDshMcpManager(ctx);
-        if (!ctx.mcpManager)
-            ctx.provide("mcpManager", manager);
-        for (const [name, definition] of Object.entries(resolveMcpServers({ env }))) {
-            try {
-                if (manager.has(name))
-                    continue;
-                const registration = manager.register(name, toDshMcpConfig(name, definition));
-                registrations.push(registration);
-                void registration.ready.catch((error) => {
-                    if (disposed)
-                        return;
-                    appendDshCapabilityDiagnostic(health, "mcp", {
-                        code: "ERR_DSH_MCP_STARTUP",
-                        message: `MCP server "${name}" failed its initial handshake: ${errorMessage(error)}`,
+    let disposal;
+    const activate = (inner) => {
+        if (disposed)
+            return () => Promise.resolve();
+        if (activeCleanup)
+            return activeCleanup;
+        const registrations = [];
+        let activationDisposed = false;
+        let activationDisposal;
+        const cleanup = () => {
+            if (!activationDisposal) {
+                activationDisposed = true;
+                activationDisposal = (async () => {
+                    for (const registration of registrations.splice(0).reverse()) {
+                        try {
+                            await registration.dispose();
+                        }
+                        catch (error) {
+                            appendDshCapabilityDiagnostic(health, "mcp", {
+                                code: "ERR_DSH_MCP_DISPOSAL",
+                                message: `Unable to dispose an MCP registration: ${errorMessage(error)}`,
+                            });
+                        }
+                    }
+                })();
+                const reset = () => {
+                    if (activeCleanup === cleanup && !disposed)
+                        activeCleanup = undefined;
+                };
+                void activationDisposal.then(reset, reset);
+            }
+            return activationDisposal;
+        };
+        activeCleanup = cleanup;
+        setDshCapabilityDiagnostics(health, "mcp", []);
+        try {
+            const manager = inner.mcpManager ?? createDshMcpManager(inner);
+            if (!inner.mcpManager)
+                inner.provide("mcpManager", manager);
+            for (const [name, definition] of Object.entries(resolveMcpServers({ env }))) {
+                try {
+                    if (manager.has(name))
+                        continue;
+                    const registration = manager.register(name, toDshMcpConfig(name, definition));
+                    registrations.push(registration);
+                    void registration.ready.catch((error) => {
+                        if (disposed || activationDisposed)
+                            return;
+                        appendDshCapabilityDiagnostic(health, "mcp", {
+                            code: "ERR_DSH_MCP_STARTUP",
+                            message: `MCP server "${name}" failed its initial handshake: ${errorMessage(error)}`,
+                        });
                     });
-                });
+                }
+                catch (error) {
+                    appendDshCapabilityDiagnostic(health, "mcp", {
+                        code: "ERR_DSH_MCP_REGISTRATION",
+                        message: `Unable to register MCP server "${name}": ${errorMessage(error)}`,
+                    });
+                }
             }
-            catch (error) {
-                appendDshCapabilityDiagnostic(health, "mcp", {
-                    code: "ERR_DSH_MCP_REGISTRATION",
-                    message: `Unable to register MCP server "${name}": ${errorMessage(error)}`,
-                });
-            }
+        }
+        catch (error) {
+            appendDshCapabilityDiagnostic(health, "mcp", {
+                code: "ERR_DSH_MCP_UNAVAILABLE",
+                message: `Unable to initialize DSH MCP registration: ${errorMessage(error)}`,
+            });
+        }
+        return cleanup;
+    };
+    try {
+        if (typeof ctx.inject === "function" && typeof ctx.get === "function" && !ctx.get("tools")) {
+            capabilityFiber = ctx.inject(["tools"], activate);
+        }
+        else {
+            activate(ctx);
         }
     }
     catch (error) {
         appendDshCapabilityDiagnostic(health, "mcp", {
             code: "ERR_DSH_MCP_UNAVAILABLE",
-            message: `Unable to initialize DSH MCP registration: ${errorMessage(error)}`,
+            message: `Unable to subscribe to DSH tool availability: ${errorMessage(error)}`,
         });
     }
-    return async () => {
-        if (disposed)
-            return;
-        disposed = true;
-        for (const registration of registrations.splice(0).reverse()) {
-            try {
-                await registration.dispose();
-            }
-            catch (error) {
-                appendDshCapabilityDiagnostic(health, "mcp", {
-                    code: "ERR_DSH_MCP_DISPOSAL",
-                    message: `Unable to dispose an MCP registration: ${errorMessage(error)}`,
-                });
-            }
+    return () => {
+        if (!disposal) {
+            disposed = true;
+            const activeDisposal = activeCleanup?.();
+            const capabilityDisposal = capabilityFiber?.dispose();
+            disposal = (async () => {
+                if (activeDisposal)
+                    await activeDisposal;
+                if (capabilityDisposal) {
+                    try {
+                        await capabilityDisposal;
+                    }
+                    catch (error) {
+                        appendDshCapabilityDiagnostic(health, "mcp", {
+                            code: "ERR_DSH_MCP_DISPOSAL",
+                            message: `Unable to dispose DSH tool availability: ${errorMessage(error)}`,
+                        });
+                    }
+                }
+            })();
         }
+        return disposal;
     };
 }
