@@ -1,15 +1,14 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { execFile } from "node:child_process"
 import { readFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { promisify } from "node:util"
 
 import { evaluatePluginCompatibility } from "@deepseek-ai/dsh-app-boot"
 import yaml from "js-yaml"
 
-const execFileAsync = promisify(execFile)
+import { runNpm } from "./npm-launcher.js"
+
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const packageJsonPath = resolve(packageDir, "package.json")
 
@@ -63,11 +62,10 @@ test("bundle patch is a bare package-root row and DSH engine range is release-te
 })
 
 test("publish dry-run contains built runtime artifacts but no source or test tooling", async () => {
-  const { stdout } = await execFileAsync(
-    "npm",
-    ["pack", "--dry-run", "--ignore-scripts", "--json"],
-    { cwd: packageDir, env: { ...process.env, npm_config_ignore_scripts: "true" } }
-  )
+  const { stdout } = await runNpm(["pack", "--dry-run", "--ignore-scripts", "--json"], {
+    cwd: packageDir,
+    env: { ...process.env, npm_config_ignore_scripts: "true" },
+  })
   const [result] = JSON.parse(stdout)
   const paths = result.files.map((file) => file.path)
 
