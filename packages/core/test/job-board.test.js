@@ -85,6 +85,77 @@ test("duplicate launches are idempotent and the host task index is host-scoped",
   assert.equal(board.revision, 2)
 })
 
+test("an injected Core ID cannot collide with an existing alias", () => {
+  const generatedIds = ["job-1", "exp-1", "exp-1", "job-2"]
+  const board = new JobBoard({
+    clock: () => 1_000,
+    idGenerator: () => generatedIds.shift(),
+  })
+  const first = board.registerLaunch(launch())
+  const secondLaunch = launch({ hostTaskId: "host-task-2", childName: "child-two" })
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    assert.throws(() => board.registerLaunch(secondLaunch), {
+      name: "Error",
+      message: "Duplicate job ID: exp-1",
+    })
+  }
+
+  assert.equal(first.alias, "exp-1")
+  assert.strictEqual(board.get("exp-1"), first)
+  assert.equal(board.list().length, 1)
+  assert.equal(board.revision, 1)
+
+  const second = board.registerLaunch(secondLaunch)
+  assert.equal(second.id, "job-2")
+  assert.equal(second.alias, "exp-2", "rejected launches must not consume aliases")
+  assert.strictEqual(board.get(second.id), second)
+  assert.strictEqual(board.get(first.alias), first)
+
+  board.requestCancellation(second.id)
+  assert.equal(second.executionState, "cancelling")
+  assert.equal(first.executionState, "running")
+
+  board.markTerminal(second.id, { state: "cancelled" })
+  assert.equal(second.executionState, "cancelled")
+  assert.equal(second.notificationState, "pending")
+  assert.equal(first.executionState, "running")
+  assert.equal(first.notificationState, undefined)
+
+  board.markTerminal(first.id, { state: "completed", resultSummary: "first done" })
+  assert.equal(first.executionState, "completed")
+  assert.equal(first.resultSummary, "first done")
+  assert.equal(second.executionState, "cancelled")
+})
+
+test("repeated injected Core IDs fail deterministically before insertion", () => {
+  const generatedIds = ["job-1", "job-1", "job-1", "job-2"]
+  const board = new JobBoard({
+    clock: () => 1_000,
+    idGenerator: () => generatedIds.shift(),
+  })
+  const first = board.registerLaunch(launch())
+  const secondLaunch = launch({ hostTaskId: "host-task-2" })
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    assert.throws(() => board.registerLaunch(secondLaunch), {
+      name: "Error",
+      message: "Duplicate job ID: job-1",
+    })
+  }
+
+  assert.strictEqual(board.registerLaunch(launch()), first)
+  assert.equal(generatedIds.length, 1, "idempotent host launches do not consume IDs")
+  assert.equal(board.list().length, 1)
+  assert.equal(board.revision, 1)
+
+  const second = board.registerLaunch(secondLaunch)
+  assert.equal(second.id, "job-2")
+  assert.equal(second.alias, "exp-2", "rejected launches must not consume aliases")
+  assert.strictEqual(board.get(first.id), first)
+  assert.strictEqual(board.get(second.id), second)
+})
+
 test("accepted cancellation is not confirmed cancellation", () => {
   const { board, setNow } = createHarness()
   const job = board.registerLaunch(launch())

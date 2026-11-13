@@ -43,7 +43,9 @@ export class JobBoard {
 
     const timestamp = this.now()
     const id = this.#idGenerator()
-    if (this.#jobs.has(id)) throw new Error(`Duplicate job ID: ${id}`)
+    if (this.#jobs.has(id) || this.#aliases.has(id)) {
+      throw new Error(`Duplicate job ID: ${id}`)
+    }
 
     const alias = this.#nextAlias(launch.agent)
     const job = createJobRecord(launch, { id, alias, timestamp })
