@@ -10,7 +10,7 @@ import path from "path"
 import fs from "fs"
 import { fileURLToPath } from "url"
 import { createParallelHooks, setupParallelV2 } from "./parallel.js"
-import baseMcps from "../../../mcp-servers/base.json" with { type: "json" }
+import { resolveMcpServers } from "../../core/src/index.js"
 import { AGENT_VENV_BIN, ensureBaseEnvironment } from "../../../hooks/python-env.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -25,52 +25,11 @@ const SKILL_SCRIPT_DIRS = [
   path.join(OMAGENTS_DIR, "skills", "_shared", "scripts"),
 ]
 
-// Built-in MCP servers bundled by this plugin
+// Built-in MCP servers bundled by this plugin. Core resolves the canonical
+// catalog; OpenCode V1 serialization adds `enabled` at this adapter boundary.
 const BUILTIN_MCPS = {}
-for (const [name, def] of Object.entries(baseMcps)) {
+for (const [name, def] of Object.entries(resolveMcpServers())) {
   BUILTIN_MCPS[name] = { ...def, enabled: true }
-}
-
-// context7: always run the local MCP server (@upstash/context7-mcp). Works
-// without a key; CONTEXT7_API_KEY raises the rate limits when provided.
-BUILTIN_MCPS.context7 = {
-  type: "local",
-  command: ["npx", "-y", "@upstash/context7-mcp"],
-  enabled: true,
-  ...(process.env.CONTEXT7_API_KEY
-    ? { environment: { CONTEXT7_API_KEY: process.env.CONTEXT7_API_KEY } }
-    : {}),
-}
-
-// websearch (exa): always use the hosted MCP. Anonymous access works without
-// setup; an API key enables authenticated, higher-limit access on the same URL.
-if (process.env.EXA_API_KEY) {
-  BUILTIN_MCPS.websearch = {
-    type: "remote",
-    url: "https://mcp.exa.ai/mcp",
-    oauth: false,
-    headers: { "x-api-key": process.env.EXA_API_KEY },
-    enabled: true,
-  }
-}
-
-// GitHub code search: use the full GitHub Copilot MCP when a token is
-// available; otherwise fall back to Vercel's public Grep.app MCP.
-if (process.env.GITHUB_TOKEN) {
-  BUILTIN_MCPS.github = {
-    type: "remote",
-    url: "https://api.githubcopilot.com/mcp/",
-    enabled: true,
-    oauth: false,
-    headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
-  }
-} else {
-  BUILTIN_MCPS.grep_app = {
-    type: "remote",
-    url: "https://mcp.grep.app",
-    enabled: true,
-    oauth: false,
-  }
 }
 
 function warnIfDebug(...args) {

@@ -241,7 +241,7 @@ export async function installCodex() {
   }
 
   const pkg = readJson(path.join(PKG_ROOT, "package.json"))
-  const baseJson = readJson(path.join(PKG_ROOT, "mcp-servers", "base.json"))
+  const baseJson = readJson(path.join(PKG_ROOT, "packages", "core", "mcp-servers", "base.json"))
   const hasGithubToken = !!process.env.GITHUB_TOKEN
 
   // Use "local" as version dir - Codex always prefers it over semver versions

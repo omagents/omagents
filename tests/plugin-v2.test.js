@@ -373,7 +373,7 @@ function makeInstalledCopy(t) {
   const pkgDir = path.join(tmp, "node_modules", "@omagents", "omagents")
   const moduleDir = path.join(pkgDir, "packages", "opencode", "src")
   fs.mkdirSync(moduleDir, { recursive: true })
-  fs.mkdirSync(path.join(pkgDir, "mcp-servers"), { recursive: true })
+  fs.mkdirSync(path.join(pkgDir, "packages", "core", "mcp-servers"), { recursive: true })
   fs.mkdirSync(path.join(pkgDir, "hooks"), { recursive: true })
   for (const f of fs.readdirSync(PLUGINS_DIR).filter((file) => file.endsWith(".js"))) {
     fs.copyFileSync(path.join(PLUGINS_DIR, f), path.join(moduleDir, f))
@@ -390,8 +390,8 @@ function makeInstalledCopy(t) {
     path.join(pkgDir, "hooks", "python-env.js")
   )
   fs.copyFileSync(
-    path.join(ROOT, "mcp-servers", "base.json"),
-    path.join(pkgDir, "mcp-servers", "base.json")
+    path.join(ROOT, "packages", "core", "mcp-servers", "base.json"),
+    path.join(pkgDir, "packages", "core", "mcp-servers", "base.json")
   )
   return path.join(moduleDir, "index.js")
 }

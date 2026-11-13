@@ -137,7 +137,7 @@ Registered automatically (V1: `config` hook; V2: `ctx.mcp.transform`). User conf
 | `github` | remote | `https://api.githubcopilot.com/mcp/` (requires `GITHUB_TOKEN`) |
 | `grep_app` | remote | `https://mcp.grep.app` (fallback when no `GITHUB_TOKEN`) |
 
-On the V2 path, local servers are registered with `timeout: { startup: 180s }` (`toV2McpConfig` in `.opencode/plugins/index.js`) because `npx -y <pkg>` must download the package before the server can answer the MCP initialize handshake on a cold npx cache. The V1 path and `mcp-servers/base.json` keep the plain V1 shape.
+On the V2 path, local servers are registered with `timeout: { startup: 180s }` (`toV2McpConfig` in `.opencode/plugins/index.js`) because `npx -y <pkg>` must download the package before the server can answer the MCP initialize handshake on a cold npx cache. Core's `packages/core/mcp-servers/base.json` and `resolveMcpServers()` stay host-neutral; the OpenCode V1 adapter adds `enabled`.
 
 ## Skills
 

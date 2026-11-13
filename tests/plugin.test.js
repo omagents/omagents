@@ -36,9 +36,10 @@ test("index.js exports dual V1/V2 entry point", async () => {
   assert.strictEqual(mod.default.server, mod.OmagentsPlugin)
 })
 
-test("index.js imports MCP definitions from base.json", async () => {
+test("index.js consumes canonical MCP definitions from Core", async () => {
   const indexSource = fs.readFileSync(path.join(PLUGINS_DIR, "index.js"), "utf-8")
-  assert.ok(indexSource.includes("base.json"), "index.js should import base.json")
+  assert.ok(indexSource.includes("resolveMcpServers"), "index.js should use the Core resolver")
+  assert.ok(!indexSource.includes("base.json"), "Core should own the base catalog import")
 })
 
 test("SKILL_SCRIPT_DIRS includes _shared/scripts", () => {
@@ -77,9 +78,9 @@ test("superpowers dependency is pinned to a commit", () => {
   assert.ok(!dep.endsWith(".git"), "superpowers should not be unpinned (missing #commit)")
 })
 
-test("mcp-servers/base.json exists and contains only unconditional servers", () => {
-  const basePath = path.join(ROOT, "mcp-servers", "base.json")
-  assert.ok(fs.existsSync(basePath), "mcp-servers/base.json should exist")
+test("Core mcp-servers/base.json contains only unconditional servers", () => {
+  const basePath = path.join(ROOT, "packages", "core", "mcp-servers", "base.json")
+  assert.ok(fs.existsSync(basePath), "packages/core/mcp-servers/base.json should exist")
   const data = JSON.parse(fs.readFileSync(basePath, "utf-8"))
   const expected = ["agentmemory", "codegraph", "context7", "websearch"]
   assert.deepStrictEqual(
@@ -89,19 +90,19 @@ test("mcp-servers/base.json exists and contains only unconditional servers", () 
   )
 })
 
-test("index.js contains conditional github/grep_app fallback logic", () => {
+test("index.js leaves conditional github/grep_app fallback logic to Core", () => {
   const indexSource = fs.readFileSync(path.join(PLUGINS_DIR, "index.js"), "utf-8")
   assert.ok(
-    indexSource.includes("if (process.env.GITHUB_TOKEN)"),
-    "index.js should check GITHUB_TOKEN"
+    !indexSource.includes("process.env.GITHUB_TOKEN"),
+    "index.js should not inspect GITHUB_TOKEN"
   )
   assert.ok(
-    indexSource.includes("BUILTIN_MCPS.github"),
-    "index.js should conditionally register github"
+    !indexSource.includes("BUILTIN_MCPS.github"),
+    "Core should conditionally resolve github"
   )
   assert.ok(
-    indexSource.includes("BUILTIN_MCPS.grep_app"),
-    "index.js should conditionally register grep_app"
+    !indexSource.includes("BUILTIN_MCPS.grep_app"),
+    "Core should conditionally resolve grep_app"
   )
 })
 
