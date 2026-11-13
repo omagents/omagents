@@ -1,4 +1,13 @@
-import { buildJobBoardContext, listSkillDefinitions, renderSkillForHost } from "@omagents/core"
+import path from "node:path"
+
+import {
+  AGENT_VENV,
+  buildJobBoardContext,
+  getCorePaths,
+  getVenvPython,
+  listSkillDefinitions,
+  renderSkillForHost,
+} from "@omagents/core"
 
 import type { DshJobBoard } from "./runtime.js"
 
@@ -70,11 +79,14 @@ export function buildDshTopLevelInstructions(isSubagent = false): string {
   return bootstrap ? `${bootstrap}\n\n${DSH_PARALLEL_INSTRUCTIONS}` : DSH_PARALLEL_INSTRUCTIONS
 }
 
+const DSH_LOOP_ENGINE = path.join(getCorePaths().skillsDir, "_shared", "scripts", "loop_engine.py")
+const DSH_BASE_PYTHON = getVenvPython(AGENT_VENV)
+
 export const DSH_STATE_PRESERVATION_NOTE = `## OmAgents State Preservation
 This operational context is regenerated from durable state for model requests, including after compaction; compacted conversation history is not its only copy.
 If you were processing a loop_engine task queue, run:
-  loop_engine.py status <skill>
-  loop_engine.py next <skill>
+  ${DSH_BASE_PYTHON} ${DSH_LOOP_ENGINE} status <skill>
+  ${DSH_BASE_PYTHON} ${DSH_LOOP_ENGINE} next <skill>
 to resume where you left off.
 If you had delegated jobs running, use parallel_status to inspect their durable state without changing their notification state.`
 

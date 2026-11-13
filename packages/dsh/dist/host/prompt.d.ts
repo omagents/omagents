@@ -7,6 +7,6 @@ export declare const DSH_SUPERPOWERS_TOOL_MAPPING = "**Tool Mapping for DeepSeek
 export declare function buildDshSuperpowersBootstrap(): string;
 /** Keep controller workflows out of delegated children while retaining their native skills. */
 export declare function buildDshTopLevelInstructions(isSubagent?: boolean): string;
-export declare const DSH_STATE_PRESERVATION_NOTE = "## OmAgents State Preservation\nThis operational context is regenerated from durable state for model requests, including after compaction; compacted conversation history is not its only copy.\nIf you were processing a loop_engine task queue, run:\n  loop_engine.py status <skill>\n  loop_engine.py next <skill>\nto resume where you left off.\nIf you had delegated jobs running, use parallel_status to inspect their durable state without changing their notification state.";
+export declare const DSH_STATE_PRESERVATION_NOTE: string;
 /** Build a fresh required runtime snapshot; no compactable message history is consulted. */
 export declare function buildDshStatePreservationContext(board: DshJobBoard, parentSessionId?: string): string;

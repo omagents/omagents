@@ -92,12 +92,12 @@ export function registerDshContext(
           name: DSH_PARALLEL_SECTION_NAME,
           order: inner.systemPrompt.getSectionOrder("TOOL_SUBAGENT") + 1,
           text: (assembly: AssembleContext) => {
-            const session = (
+            const header = (
               assembly as AssembleContext & {
-                agent?: { readonly session: { readonly origin?: string } }
+                agent?: { readonly session: { readonly header: { readonly origin?: string } } }
               }
-            ).agent?.session
-            return buildDshTopLevelInstructions(session?.origin === "subagent")
+            ).agent?.session.header
+            return buildDshTopLevelInstructions(header?.origin === "subagent")
           },
           interpolate: false,
         })

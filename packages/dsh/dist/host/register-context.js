@@ -64,8 +64,8 @@ export function registerDshContext(ctx, board, health) {
                 name: DSH_PARALLEL_SECTION_NAME,
                 order: inner.systemPrompt.getSectionOrder("TOOL_SUBAGENT") + 1,
                 text: (assembly) => {
-                    const session = assembly.agent?.session;
-                    return buildDshTopLevelInstructions(session?.origin === "subagent");
+                    const header = assembly.agent?.session.header;
+                    return buildDshTopLevelInstructions(header?.origin === "subagent");
                 },
                 interpolate: false,
             }));

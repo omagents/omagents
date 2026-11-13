@@ -94,7 +94,7 @@ For a project using `.omagents/venv`:
 
 DSH skill results provide absolute `resourceBase` directories.
 
-- **PASS:** deep research resolves `<skill-dir>/scripts/deep_research.py` and `<skill-dir>/../_shared/scripts/loop_engine.py`, and loop-based skills use those absolute resources.
+- **PASS:** deep research resolves `<omagents-core>/skills/deep-research/scripts/deep_research.py` and `<omagents-core>/skills/_shared/scripts/loop_engine.py`, and loop-based skills use those absolute resources.
 - **PASS:** research runs from the project root and resumes the same run-scoped queue.
 - **FAIL:** do not assume bare `deep_research.py`, `loop_engine.py`, or venv executables are on `PATH`. DSH does not use the OpenCode shell-environment hook.
 

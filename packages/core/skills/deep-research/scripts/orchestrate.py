@@ -50,6 +50,21 @@ def shell_name() -> str:
 
 
 def resume_command(layout: ResearchLayout) -> dict[str, Any]:
+    """Return the canonical, PATH-independent machine-readable resume command."""
+    return {
+        "executable": sys.executable,
+        "args": [
+            str(SCRIPTS_DIR / "deep_research.py"),
+            "run-all",
+            "--resume",
+            "--workspace",
+            str(layout.workspace),
+        ],
+    }
+
+
+def legacy_resume_command(layout: ResearchLayout) -> dict[str, Any]:
+    """Retain the former metadata separately for older consumers."""
     return {
         "executable": "deep_research.py",
         "args": ["run-all", "--resume", "--workspace", str(layout.workspace)],
@@ -113,15 +128,17 @@ def get_pending_tasks(batch_size: int, layout: ResearchLayout) -> list[dict[str,
     queue_path = layout.loop_state_path()
     try:
         state = json.loads(queue_path.read_text(encoding="utf-8"))
-        tasks = state.get("tasks", [])
-        if not isinstance(tasks, list):
-            return []
-        return [
-            task for task in tasks
-            if isinstance(task, dict) and task.get("status") == "pending"
-        ][:batch_size]
-    except (OSError, json.JSONDecodeError):
-        return []
+    except FileNotFoundError as exc:
+        raise LayoutError(f"Research loop queue is missing: {queue_path}") from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LayoutError(f"Research loop queue is unreadable: {queue_path}: {exc}") from exc
+    if not isinstance(state, dict) or not isinstance(state.get("tasks"), list):
+        raise LayoutError(f"Research loop queue is invalid: {queue_path}: expected a tasks array")
+    tasks = state["tasks"]
+    return [
+        task for task in tasks
+        if isinstance(task, dict) and task.get("status") == "pending"
+    ][:batch_size]
 
 
 def init_loop_engine(tasks: list[dict[str, Any]], layout: ResearchLayout) -> None:
@@ -228,8 +245,22 @@ def _resume_invocation(layout: ResearchLayout) -> str:
     )
 
 
+def _research_plan(layout: ResearchLayout) -> dict[str, Any]:
+    """Load the canonical plan that supplies fresh children with full context."""
+    try:
+        plan = json.loads(layout.plan_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise LayoutError(f"Research plan is missing: {layout.plan_path}") from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LayoutError(f"Research plan is unreadable: {layout.plan_path}: {exc}") from exc
+    if not isinstance(plan, dict):
+        raise LayoutError(f"Research plan is invalid: {layout.plan_path}: expected an object")
+    return plan
+
+
 def _subagent_dispatch(
-    task: dict[str, Any], layout: ResearchLayout, date_str: str, year_str: str
+    task: dict[str, Any], layout: ResearchLayout, date_str: str, year_str: str,
+    plan: dict[str, Any],
 ) -> dict[str, Any]:
     """Describe one host-neutral delegation and its complete child prompt."""
     task_id = task["task_id"]
@@ -239,12 +270,33 @@ def _subagent_dispatch(
         f"validate --task-id {command_arg(task_id)} --workspace {command_arg(layout.workspace)}"
     )
     field_ids = task.get("field_ids", [])
+    item_id = task.get("item_id", "")
+    items = plan.get("items", [])
+    if not isinstance(items, list):
+        items = []
+    item = next(
+        (candidate for candidate in items if isinstance(candidate, dict) and candidate.get("id") == item_id),
+        {"id": item_id},
+    )
+    plan_fields = plan.get("fields", [])
+    if not isinstance(plan_fields, list):
+        plan_fields = []
+    fields_by_id = {
+        field.get("id"): field for field in plan_fields
+        if isinstance(field, dict) and isinstance(field.get("id"), str)
+    }
+    fields = [fields_by_id.get(field_id, {"id": field_id}) for field_id in field_ids]
     prompt = "\n".join([
         f"Research {task_id}: {task.get('focus') or task.get('description') or task_id}",
         "",
+        f"Research query: {plan.get('query', '')}",
+        f"Item details (complete JSON): {json.dumps(item, ensure_ascii=False)}",
+        f"Field definitions (complete JSON for every requested field): {json.dumps(fields, indent=2, ensure_ascii=False)}",
+        f"Plan path: {layout.plan_path}",
+        "The query, item details, and every requested field definition are embedded above. Read the absolute plan path only for additional context; field IDs are not self-describing.",
         f"Current date: {date_str}. Include '{year_str}' in search queries and use current sources; do not rely on training data.",
         f"Task type: {task.get('type', 'web')}",
-        f"Item ID: {task.get('item_id', '')}",
+        f"Item ID: {item_id}",
         f"Field IDs: {json.dumps(field_ids, ensure_ascii=False)}",
         f"Run ID: {layout.run_id}",
         f"Findings directory: {layout.findings_dir}",
@@ -300,8 +352,9 @@ def output_dispatch_instructions(
         })
     date_str = _current_date_string()
     year_str = _current_year()
+    plan = _research_plan(layout)
     dispatches = [
-        _subagent_dispatch(task, layout, date_str, year_str)
+        _subagent_dispatch(task, layout, date_str, year_str, plan)
         for task in tasks_with_paths
     ]
     common = {
@@ -311,6 +364,7 @@ def output_dispatch_instructions(
         "shell": shell_name(),
         "workspace_quoted": command_arg(layout.workspace),
         "resume_command": resume_command(layout),
+        "legacy_resume_command": legacy_resume_command(layout),
         "current_date": date_str,
     }
 
@@ -356,6 +410,7 @@ def output_pre_research_instructions(
         "shell": shell_name(),
         "workspace_quoted": command_arg(layout.workspace),
         "resume_command": resume_command(layout),
+        "legacy_resume_command": legacy_resume_command(layout),
         "current_date": date_str,
         "task": task_data,
         "instruction": (

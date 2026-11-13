@@ -1,12 +1,10 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import { join } from "node:path"
 
 import { Context } from "@deepseek-ai/cordis"
-import SystemPrompt, {
-  renderContextSnapshot,
-  renderPrompt,
-} from "@deepseek-ai/dsh-system-prompt"
-import { JobBoard } from "@omagents/core"
+import SystemPrompt, { renderContextSnapshot, renderPrompt } from "@deepseek-ai/dsh-system-prompt"
+import { getCorePaths, JobBoard } from "@omagents/core"
 
 import { createHealthRecords } from "../dist/host/health.js"
 import { registerDshContext } from "../dist/host/register-context.js"
@@ -135,7 +133,10 @@ test("DSH prompt has native instructions and one dynamic running/pending Board s
   }
 
   const refreshed = root.systemPrompt.refreshContext(first, assemblyContext)
-  assert.equal(refreshed.contexts.filter((entry) => entry.name === first.contexts[0].name).length, 1)
+  assert.equal(
+    refreshed.contexts.filter((entry) => entry.name === first.contexts[0].name).length,
+    1
+  )
   assert.equal(occurrences(renderContextSnapshot(refreshed), "### Background Job Board"), 1)
   assert.equal(board.revision, revision)
   assert.equal(finished.notificationState, "pending")
@@ -160,14 +161,14 @@ test("required state-preservation context is restored after compactable history 
   const assemblyContext = { agent, scope: agent }
   const accepted = await root.systemPrompt.assemble(assemblyContext)
 
-  const compacted = root.systemPrompt.refreshContext(
-    { ...accepted, contexts: [] },
-    assemblyContext
-  )
+  const compacted = root.systemPrompt.refreshContext({ ...accepted, contexts: [] }, assemblyContext)
   const compactedText = renderContextSnapshot(compacted)
   assert.match(compactedText, /OmAgents State Preservation/)
   assert.match(compactedText, /Survives compaction/)
   assert.match(compactedText, /loop_engine\.py status <skill>/)
+  const loopEngine = join(getCorePaths().skillsDir, "_shared", "scripts", "loop_engine.py")
+  assert.ok(compactedText.includes(`${loopEngine} status <skill>`))
+  assert.doesNotMatch(compactedText, /(?:^|\n)\s*loop_engine\.py\s+/)
   assert.match(compactedText, /parallel_status/)
   assert.equal(compacted.contexts.length, 1)
   assert.equal(compacted.contexts[0].interpolate, false)

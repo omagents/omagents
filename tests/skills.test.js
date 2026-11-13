@@ -18,6 +18,54 @@ function getSkillDirs() {
     .map((d) => d.name)
 }
 
+function assertDshResourceCommands(content, skillName) {
+  assert.ok(
+    !content.includes(`${CORE_PATHS.root}${path.sep}${CORE_PATHS.root}`),
+    `${skillName} duplicated an absolute Core resource path`
+  )
+  const scriptCommands = {
+    "loop_engine.py": ["init", "next", "complete", "fail", "status", "summary", "reset", "add"],
+    "deep_research.py": [
+      "plan",
+      "add-items",
+      "add-fields",
+      "run-all",
+      "validate",
+      "gaps",
+      "merge",
+      "report",
+      "polish",
+      "audit",
+      "package",
+      "provenance",
+      "status",
+      "<subcommand>",
+    ],
+    "pre_research.py": ["init", "next", "complete", "evaluate", "finalize"],
+  }
+  for (const [script, commands] of Object.entries(scriptCommands)) {
+    const pattern = new RegExp(`\\b${script.replace(".", "\\.")}\\s+(${commands.join("|")})`, "g")
+    for (const match of content.matchAll(pattern)) {
+      assert.ok(
+        match.index > 0 && /[\\/]/.test(content[match.index - 1]),
+        `${skillName} has a bare script invocation: ${match[0]}`
+      )
+    }
+  }
+  assert.doesNotMatch(
+    content,
+    /\b(?:bash|node|python|python3)\s+(?:\.\/)?scripts\//,
+    `${skillName} resolves a bundled script through cwd instead of its absolute resourceBase`
+  )
+  assert.doesNotMatch(
+    content,
+    /\bpython3?\s+-m\s+py_compile\s+packages\/core\//,
+    `${skillName} assumes a source-checkout relative Core path`
+  )
+  assert.doesNotMatch(content, /(?:^|\n)\s*markitdown\s+/, `${skillName} uses bare markitdown`)
+  assert.doesNotMatch(content, /\|\s*markitdown\s+/, `${skillName} pipes into bare markitdown`)
+}
+
 function parseFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/)
   if (!match) return null
@@ -110,6 +158,7 @@ test("DSH discovers all 33 skills and renders every skill without wrong-host con
       /websearch_web_search_exa|websearch_web_fetch_exa|\bwebfetch\b|codegraph_codegraph_explore|\bgithub_[a-z_]+/,
       `${definition.name} leaked OpenCode tool names into DSH`
     )
+    assertDshResourceCommands(rendered.content, definition.name)
   }
 })
 
@@ -133,7 +182,10 @@ test("material DSH workflows use full overrides and native tool mappings", () =>
   assert.match(research, /web_fetch/)
   assert.match(research, /mcp__codegraph__codegraph_explore/)
   assert.match(research, /mcp__github__search_code/)
-  assert.match(research, /<skill-dir>\/scripts\/deep_research\.py/)
+  assert.ok(
+    research.includes(path.join(byName["deep-research"].directory, "scripts", "deep_research.py")),
+    "DSH research must render the absolute packaged CLI path"
+  )
 
   const hyperplan = renderSkillForHost(byName.hyperplan, "dsh").content
   assert.equal(
@@ -148,6 +200,13 @@ test("material DSH workflows use full overrides and native tool mappings", () =>
   assert.match(doctor, /@omagents\/omagents-dsh/)
   assert.match(doctor, /33/)
   assert.match(doctor, /native `subagent`|native DSH `subagent`/)
+  assert.ok(
+    doctor.includes(
+      path.join(CORE_PATHS.root, "skills", "deep-research", "scripts", "deep_research.py")
+    ),
+    "doctor must diagnose the deep-research package, not its own scripts directory"
+  )
+  assert.ok(!doctor.includes(path.join(byName.doctor.directory, "scripts", "deep_research.py")))
 
   const lsp = renderSkillForHost(byName["lsp-guide"], "dsh").content
   assert.match(lsp, /mcp__codegraph__codegraph_explore/)
@@ -155,7 +214,9 @@ test("material DSH workflows use full overrides and native tool mappings", () =>
 
   const office = renderSkillForHost(byName.officecli, "dsh").content
   assert.match(office, /`skill` once/)
-  assert.doesNotMatch(office, /load_skill/)
+  assert.ok(office.includes("`officecli load_skill <name>`"))
+  assert.ok(office.includes("`officecli load_skill pitch-deck`"))
+  assert.doesNotMatch(office, /officecli\s+skill(?:\s|$)/)
 })
 
 test("OpenCode and Codex keep their own native subagent rendering", () => {

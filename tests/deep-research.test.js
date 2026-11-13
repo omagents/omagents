@@ -481,14 +481,51 @@ test("test_default_and_ancestor_workspaces_are_rejected_before_writes", (t) => {
 
 test("structured subagent dispatch is host-neutral and complete", (t) => {
   const project = makeProject(t)
+  const plan = {
+    query: "Compare Alpha and Beta agent frameworks in 2026",
+    items: [
+      {
+        id: "item-1",
+        name: "Alpha Framework",
+        type: "framework",
+        description: "Alpha's orchestration runtime and maintainer",
+      },
+      {
+        id: "item-2",
+        name: "Beta Framework",
+        type: "framework",
+        description: "Beta's graph runtime and maintainer",
+      },
+    ],
+    fields: [
+      {
+        id: "field-1",
+        name: "Latest Version",
+        category: "Version",
+        description: "Most recent stable upstream release with its release date",
+        required: true,
+      },
+      {
+        id: "field-2",
+        name: "Strengths",
+        category: "Assessment",
+        description: "Evidence-backed architectural and developer-experience advantages",
+        required: false,
+      },
+    ],
+  }
   const source = `
+import json
 import sys
 sys.path.insert(0, ${JSON.stringify(SCRIPTS)})
 from layout import ResearchLayout
 from orchestrate import output_dispatch_instructions
 layout = ResearchLayout.resolve("structured", ${JSON.stringify(project)})
+plan = json.loads(r'''${JSON.stringify(plan)}''')
+layout.plan_path.parent.mkdir(parents=True, exist_ok=True)
+layout.plan_path.write_text(json.dumps(plan), encoding="utf-8")
 tasks = [
-    {"task_id": "task-a", "type": "web", "item_id": "item-1", "field_ids": ["field-1"], "focus": "Research Alpha", "description": "Research Alpha"},
+    {"task_id": "task-a", "type": "web", "item_id": "item-1", "field_ids": ["field-1", "field-2"], "focus": "Research Alpha", "description": "Research Alpha"},
     {"task_id": "task-b", "type": "github", "item_id": "item-2", "field_ids": ["field-2"], "focus": "Research Beta", "description": "Research Beta"},
 ]
 output_dispatch_instructions(tasks[:1], layout.workspace, layout)
@@ -509,6 +546,38 @@ output_dispatch_instructions(tasks, layout.workspace, layout)
   assert.match(single.prompt, /Research Alpha/)
   assert.match(single.prompt, /task-a\.json/)
   assert.match(single.prompt, /deep_research\.py/)
+  for (const expected of [
+    "Compare Alpha and Beta agent frameworks in 2026",
+    "Alpha Framework",
+    "Alpha's orchestration runtime and maintainer",
+    "Latest Version",
+    "Most recent stable upstream release with its release date",
+    '"required": true',
+    "Strengths",
+    "Evidence-backed architectural and developer-experience advantages",
+    '"required": false',
+    path.join(project, ".omagents", "deep-research", single.run_id, "plan.json"),
+  ]) {
+    assert.ok(
+      single.prompt.includes(expected),
+      `fresh child prompt is missing research context: ${expected}\n${single.prompt}`
+    )
+  }
+  assert.ok(path.isAbsolute(single.resume_command.executable))
+  assert.strictEqual(single.resume_command.args[0], path.join(SCRIPTS, "deep_research.py"))
+  assert.deepStrictEqual(single.resume_command.args.slice(1), [
+    "run-all",
+    "--resume",
+    "--workspace",
+    path.join(project, "structured"),
+  ])
+  assert.strictEqual(single.legacy_resume_command.executable, "deep_research.py")
+  assert.deepStrictEqual(single.legacy_resume_command.args, [
+    "run-all",
+    "--resume",
+    "--workspace",
+    path.join(project, "structured"),
+  ])
   assert.doesNotMatch(result.stdout, /\btask\s*\(\s*background|background\s*[:=]\s*true|OPENCODE_/)
 
   assert.strictEqual(batch.action, "dispatch_subagents_batch")
@@ -519,6 +588,14 @@ output_dispatch_instructions(tasks, layout.workspace, layout)
     assert.strictEqual(dispatch.cwd, project)
     assert.ok(dispatch.description)
     assert.match(dispatch.prompt, new RegExp(`task-${index === 0 ? "a" : "b"}\\.json`))
+    assert.match(dispatch.prompt, /Compare Alpha and Beta agent frameworks in 2026/)
+    assert.match(dispatch.prompt, new RegExp(index === 0 ? "Alpha Framework" : "Beta Framework"))
+    assert.match(dispatch.prompt, /Strengths/)
+    assert.match(
+      dispatch.prompt,
+      /Evidence-backed architectural and developer-experience advantages/
+    )
+    assert.match(dispatch.prompt, /"required": false/)
   }
 })
 
@@ -600,6 +677,108 @@ test("gap analysis adds a run-scoped task and resumes the same research lane", (
   assert.ok(!fs.existsSync(path.join(project, "gap-resume", "plan.json")))
 })
 
+test("missing and corrupt loop queues fail resume before gap or report stages", (t) => {
+  for (const mode of ["missing", "corrupt"]) {
+    const project = makeProject(t)
+    const first = dispatchFrom(
+      runPython(
+        DEEP_RESEARCH,
+        [
+          "run-all",
+          "--query",
+          `Queue ${mode}`,
+          "--workspace",
+          "queue-failure",
+          "--skip-pre-research",
+        ],
+        project
+      ).stdout
+    )
+    const queuePath = path.join(
+      project,
+      ".omagents",
+      "loops",
+      `deep-research-${first.run_id}`,
+      "tasks.json"
+    )
+    if (mode === "missing") fs.rmSync(queuePath)
+    else fs.writeFileSync(queuePath, "{not-json", "utf-8")
+
+    const resumed = runPython(
+      DEEP_RESEARCH,
+      ["run-all", "--resume", "--workspace", "queue-failure"],
+      project,
+      1
+    )
+    const output = `${resumed.stdout}\n${resumed.stderr}`
+    assert.match(output, /loop queue.*(missing|unreadable|invalid)/i)
+    assert.doesNotMatch(output, /Phase 3|Phase 4|Phase 5|Research complete/)
+    assert.ok(!fs.existsSync(path.join(project, "queue-failure", "report.md")))
+    assert.ok(
+      !fs.existsSync(
+        path.join(
+          project,
+          ".omagents",
+          "deep-research",
+          first.run_id,
+          "artifacts",
+          "gap_report.json"
+        )
+      )
+    )
+    const checkpoint = JSON.parse(
+      fs.readFileSync(
+        path.join(
+          project,
+          ".omagents",
+          "deep-research",
+          first.run_id,
+          "state",
+          "orchestration_state.json"
+        ),
+        "utf-8"
+      )
+    )
+    assert.strictEqual(checkpoint.phase, "dispatch")
+  }
+
+  const project = makeProject(t)
+  const first = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      [
+        "run-all",
+        "--query",
+        "Valid empty queue",
+        "--workspace",
+        "valid-empty",
+        "--skip-pre-research",
+      ],
+      project
+    ).stdout
+  )
+  const queuePath = path.join(
+    project,
+    ".omagents",
+    "loops",
+    `deep-research-${first.run_id}`,
+    "tasks.json"
+  )
+  const queue = JSON.parse(fs.readFileSync(queuePath, "utf-8"))
+  writeJson(queuePath, { ...queue, tasks: [] })
+  const resumed = runPython(
+    DEEP_RESEARCH,
+    ["run-all", "--resume", "--workspace", "valid-empty"],
+    project
+  )
+  assert.match(resumed.stdout, /Phase 3: Running gap analysis/)
+  assert.ok(
+    fs.existsSync(
+      path.join(project, ".omagents", "deep-research", first.run_id, "artifacts", "gap_report.json")
+    )
+  )
+})
+
 test("test_agent_output_paths_shell_round_trip", (t) => {
   const project = makeProject(t)
   const preWorkspace = "研究 topic's & spaces"
@@ -617,7 +796,16 @@ test("test_agent_output_paths_shell_round_trip", (t) => {
   })
   assert.strictEqual(preRoundTrip.status, 0, preRoundTrip.stderr)
   assert.strictEqual(preRoundTrip.stdout, pre.output_path)
+  assert.ok(path.isAbsolute(pre.resume_command.executable))
   assert.deepStrictEqual(pre.resume_command.args, [
+    path.join(SCRIPTS, "deep_research.py"),
+    "run-all",
+    "--resume",
+    "--workspace",
+    path.join(project, preWorkspace),
+  ])
+  assert.strictEqual(pre.legacy_resume_command.executable, "deep_research.py")
+  assert.deepStrictEqual(pre.legacy_resume_command.args, [
     "run-all",
     "--resume",
     "--workspace",

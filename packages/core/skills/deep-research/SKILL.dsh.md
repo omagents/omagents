@@ -137,7 +137,7 @@ A batch pause has `action: "dispatch_subagents_batch"` and a `dispatches` array 
 3. Treat `name` as the research/loop correlation hint, not as a native tool argument.
 4. Continue useful work while children run. Do not poll; native completion and the OmAgents Job Board deliver outcomes.
 
-The prompt is self-contained because a child has its own context. It includes the current date, task type, item and field IDs, run ID, absolute output path, findings schema, and absolute validation command. Each child must read current sources, cite URLs/repositories/files and dates, collect every field, mark uncertainty, write its JSON, validate it, and return a concise result.
+The prompt is self-contained because a child has its own context. It includes the research query, complete item details, every requested field's name/description/requirements, the absolute plan path, current date, task type, item and field IDs, run ID, absolute output path, findings schema, and absolute validation command. The structured `resume_command` uses absolute Python and CLI paths; `legacy_resume_command` is only backward-compatibility metadata. Each child must read current sources, cite URLs/repositories/files and dates, collect every field, mark uncertainty, write its JSON, validate it, and return a concise result.
 
 Findings use this shape:
 

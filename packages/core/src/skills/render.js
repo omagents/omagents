@@ -1,6 +1,8 @@
 import fs from "node:fs"
 import path from "node:path"
 
+import { AGENT_VENV, AGENT_VENV_BIN, getVenvPython } from "../../hooks/python-env.js"
+
 export const SKILL_HOSTS = Object.freeze(["opencode-v1", "opencode-v2", "codex", "dsh"])
 
 const CODEX_TOOL_MAPPING = {
@@ -42,7 +44,7 @@ const DSH_TOOL_MAPPING = {
   websearch_web_fetch_exa: "web_fetch",
   webfetch: "web_fetch",
   codegraph_codegraph_explore: "mcp__codegraph__codegraph_explore",
-  load_skill: "skill",
+  "`load_skill`": "`skill`",
   github_list_issues: "mcp__github__list_issues",
   github_issue_read: "mcp__github__issue_read",
   github_search_issues: "mcp__github__search_issues",
@@ -125,6 +127,67 @@ function applyToolMapping(content, host) {
 }
 
 /**
+ * Resolve DSH skill resources without assuming a cwd, PATH injection, or a
+ * source checkout. Model-tool mappings stay separate from CLI subcommands.
+ */
+function applyDshResourceMapping(content, definition, sharedSkill) {
+  const python = getVenvPython(AGENT_VENV)
+  const skillDirectory = definition.directory
+  const skillScripts = path.join(skillDirectory, "scripts")
+  let rendered = content
+
+  for (const interpreter of ["bash", "node", "python", "python3"]) {
+    const commandPython = interpreter.startsWith("python") ? python : interpreter
+    rendered = rendered
+      .replaceAll(`${interpreter} scripts/`, `${commandPython} ${skillScripts}${path.sep}`)
+      .replaceAll(`${interpreter} ./scripts/`, `${commandPython} ${skillScripts}${path.sep}`)
+  }
+  rendered = rendered.replaceAll(
+    "node ./render-graphs.js",
+    `node ${path.join(skillDirectory, "render-graphs.js")}`
+  )
+
+  if (definition.source === "omagents") {
+    const coreRoot = path.resolve(skillDirectory, "..", "..")
+    const coreSkills = path.join(coreRoot, "skills")
+    const loopEngine = path.join(coreSkills, "_shared", "scripts", "loop_engine.py")
+    const deepResearch = path.join(coreSkills, "deep-research", "scripts", "deep_research.py")
+    const preResearch = path.join(coreSkills, "deep-research", "scripts", "pre_research.py")
+
+    rendered = rendered
+      .replaceAll(
+        "packages/core/skills/deep-research/scripts/",
+        `${path.dirname(deepResearch)}${path.sep}`
+      )
+      .replaceAll("packages/core/skills/_shared/scripts/loop_engine.py", loopEngine)
+      .replaceAll("<omagents-core>", coreRoot)
+
+    if (sharedSkill) {
+      rendered = rendered
+        .replaceAll("loop_engine.py ", `${python} ${loopEngine} `)
+        .replaceAll("deep_research.py ", `${python} ${deepResearch} `)
+        .replaceAll("pre_research.py ", `${python} ${preResearch} `)
+    }
+  }
+
+  if (definition.name === "markitdown-converter") {
+    const executable = path.join(
+      AGENT_VENV_BIN,
+      process.platform === "win32" ? "markitdown.exe" : "markitdown"
+    )
+    rendered = rendered
+      .replace(/^[ \t]*markitdown\s+/gm, `${executable} `)
+      .replaceAll("| markitdown ", `| ${executable} `)
+  }
+
+  return rendered
+    .replaceAll("<skill-dir>/..", path.dirname(skillDirectory))
+    .replaceAll("<skill-dir>", skillDirectory)
+    .replaceAll("<python>", python)
+    .replaceAll("<base-venv>", AGENT_VENV)
+}
+
+/**
  * Render one discovered skill for an explicit host. A SKILL.<host>.md file is
  * a complete replacement for SKILL.md, not a patch. `content` retains the full
  * Markdown document; `body` is provided for hosts that require no frontmatter.
@@ -136,7 +199,11 @@ export function renderSkillForHost(definition, host) {
   }
 
   const skillPath = selectSkillPath(definition.directory, host)
-  const content = applyToolMapping(fs.readFileSync(skillPath, "utf8"), host)
+  const sharedSkill = skillPath === path.join(definition.directory, "SKILL.md")
+  let content = applyToolMapping(fs.readFileSync(skillPath, "utf8"), host)
+  if (host === "dsh") {
+    content = applyDshResourceMapping(content, definition, sharedSkill)
+  }
   const { frontmatter, body } = parseSkillFrontmatter(content)
 
   return {

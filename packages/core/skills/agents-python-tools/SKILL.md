@@ -35,7 +35,7 @@ Use the absolute base interpreter or base console script so an active project ve
 
 Create the project environment only when a project dependency is needed. An existing project `.venv` is left untouched.
 
-The CLI is at `<omagents-core>/hooks/project-venv.js`. In a source checkout, `<omagents-core>` is `packages/core`; for an installed Codex plugin, use `${PLUGIN_ROOT}`:
+The CLI is at `<omagents-core>/hooks/project-venv.js`. Resolve `<omagents-core>` through the active host's packaged Core resources; in a source checkout it is `packages/core`:
 
 ```bash
 # Create or reuse the project environment and base overlay
