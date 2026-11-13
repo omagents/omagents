@@ -108,7 +108,23 @@ export class JobBoard {
     this.#assertOpen()
     assertTerminalState(state)
     const job = this.#find(idOrAlias)
-    if (!job || isTerminalState(job.executionState)) return job
+    if (!job) return job
+
+    if (isTerminalState(job.executionState)) {
+      if (job.executionState !== state) return job
+
+      let backfilled = false
+      if (job.resultSummary === undefined && resultSummary !== undefined) {
+        job.resultSummary = resultSummary
+        backfilled = true
+      }
+      if (job.error === undefined && error !== undefined) {
+        job.error = error
+        backfilled = true
+      }
+      if (backfilled) this.#commit(job)
+      return job
+    }
 
     const timestamp = this.now()
     job.executionState = state

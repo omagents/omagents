@@ -177,41 +177,80 @@ function parseTaskResultFromOutput(output) {
   return match?.[2]?.trim() || undefined
 }
 
-// A Host context represents one plugin process. Repeated V1 entry-point
-// discovery reuses this Board rather than opening independent stores.
-const boardEntries = new WeakMap()
+// File-backed Boards are process-wide by storage identity. Explicitly injected
+// test Boards remain context-scoped and are never closed by the adapter.
+const boardEntriesByPath = new Map()
+const injectedBoardEntries = new WeakMap()
 
 function getBoardEntry(ctx) {
-  if (ctx && typeof ctx === "object" && boardEntries.has(ctx)) return boardEntries.get(ctx)
-
   const injected = ctx?.omagents?.jobBoard
-  const filePath = ctx?.omagents?.jobStorePath || getJobStorePath()
+  if (injected) {
+    if (ctx && typeof ctx === "object" && injectedBoardEntries.has(ctx)) {
+      return injectedBoardEntries.get(ctx)
+    }
+    const entry = {
+      owned: false,
+      promise: Promise.resolve(injected),
+      references: 0,
+    }
+    if (ctx && typeof ctx === "object") injectedBoardEntries.set(ctx, entry)
+    return entry
+  }
+
+  const filePath = path.resolve(ctx?.omagents?.jobStorePath || getJobStorePath())
+  if (boardEntriesByPath.has(filePath)) return boardEntriesByPath.get(filePath)
+
   const entry = {
     filePath,
-    owned: !injected,
-    promise: injected
-      ? Promise.resolve(injected)
-      : JobBoard.open({ store: new JsonJobStore({ filePath }) }),
+    owned: true,
+    promise: JobBoard.open({ store: new JsonJobStore({ filePath }) }),
+    references: 0,
   }
-  if (ctx && typeof ctx === "object") boardEntries.set(ctx, entry)
+  boardEntriesByPath.set(filePath, entry)
   return entry
 }
 
 function createBoardRuntime(ctx, query) {
   const entry = getBoardEntry(ctx)
-  const tuiStatePath = ctx?.omagents?.tuiStatePath || getTuiStatePath()
-  const ready = entry.promise.then(async (board) => {
-    const unsubscribe = board.subscribe(() => writeTuiState(board, tuiStatePath))
-    try {
-      await board.reconcile({ query })
-    } catch (error) {
-      // Keep the in-memory adapter available, but never hide degraded health.
-      warnIfDebug("[omagents] job recovery failed:", error.message)
-    }
-    return { board, unsubscribe }
-  })
-  ready.catch((error) => warnIfDebug("[omagents] job store initialization failed:", error.message))
-  return { ctx, entry, ready, tuiStatePath }
+  entry.references += 1
+  entry.tuiStatePath ??= ctx?.omagents?.tuiStatePath || getTuiStatePath()
+  entry.runtimePromise ??= entry.promise
+    .then(async (board) => {
+      entry.board = board
+      entry.unsubscribe = board.subscribe(() => writeTuiState(board, entry.tuiStatePath))
+      try {
+        await board.reconcile({ query })
+      } catch (error) {
+        warnIfDebug("[omagents] job recovery failed:", error.message)
+      }
+      return { board }
+    })
+    .catch((error) => {
+      // An unreadable store must not reject every model-context transformation.
+      warnIfDebug("[omagents] job store initialization failed:", error.message)
+      const board = new JobBoard()
+      entry.board = board
+      entry.unsubscribe = board.subscribe(() => writeTuiState(board, entry.tuiStatePath))
+      return { board }
+    })
+  return { entry, ready: entry.runtimePromise, tuiStatePath: entry.tuiStatePath }
+}
+
+async function releaseBoardRuntime(runtime) {
+  const { entry } = runtime
+  const { board } = await runtime.ready
+  entry.references = Math.max(0, entry.references - 1)
+  if (entry.references > 0) {
+    await board.flush()
+    return
+  }
+
+  if (entry.owned && boardEntriesByPath.get(entry.filePath) === entry) {
+    boardEntriesByPath.delete(entry.filePath)
+  }
+  entry.unsubscribe?.()
+  if (entry.owned) await board.close()
+  else await board.flush()
 }
 
 function findJob(board, idOrAlias) {
@@ -267,7 +306,12 @@ function recoveryError(error) {
 }
 
 function sessionOutcome(response) {
-  if (response?.error) return recoveryError(response.error)
+  const hasSessionState =
+    response &&
+    typeof response === "object" &&
+    (["executionState", "state", "status", "outcome"].some((field) => field in response) ||
+      typeof response.execution?.state === "string")
+  if (response?.error && !hasSessionState) return recoveryError(response.error)
   const session =
     response && typeof response === "object" && "data" in response ? response.data : response
   if (!session) return { kind: "missing", reason: "host session not found" }
@@ -276,8 +320,9 @@ function sessionOutcome(response) {
     session.executionState ??
     session.state ??
     (typeof session.status === "string" ? session.status : session.status?.type) ??
-    session.execution?.state
-  const status = typeof statusValue === "string" ? statusValue.toLowerCase() : "running"
+    session.execution?.state ??
+    session.outcome
+  const status = typeof statusValue === "string" ? statusValue.toLowerCase() : undefined
   const resultSummary = [session.resultSummary, session.result, session.output].find(
     (value) => typeof value === "string"
   )
@@ -302,7 +347,15 @@ function sessionOutcome(response) {
   if (["cancelled", "canceled", "interrupted", "aborted"].includes(status)) {
     return { kind: "terminal", state: "cancelled", resultSummary }
   }
-  return { kind: "active" }
+  if (["running", "busy", "active", "cancelling", "pending"].includes(status)) {
+    return { kind: "active" }
+  }
+  return {
+    kind: "unreadable",
+    reason: status
+      ? `Unrecognized host session state: ${status}`
+      : "Host session has no readable execution state or outcome",
+  }
 }
 
 async function queryV1Session(client, job) {
@@ -327,23 +380,85 @@ async function queryV2Session(ctx, job) {
   }
 }
 
-function injectBoardIntoParts(board, sessionID, parts) {
-  const boardText = buildOpenCodeJobBoardContext(board, sessionID)
-  if (!boardText) return
+const JOB_BOARD_HEADING = "### Background Job Board"
+const JOB_BOARD_END = "<!-- omagents-job-board-end -->"
+const JOB_BOARD_ACK = "Acknowledge completed jobs before your final response."
 
-  const alreadyInjected = parts.some(
-    (part) =>
-      part?.type === "text" &&
-      typeof part.text === "string" &&
-      part.text.includes("SENTINEL: omagents-job-board-v1")
-  )
-  if (!alreadyInjected) {
-    const firstPart = parts.find((part) => part?.type === "text")
-    if (firstPart) firstPart.text = `${boardText}\n\n${firstPart.text || ""}`
-    else parts.unshift({ type: "text", text: boardText })
+function formatJobBoardBlock(boardText) {
+  return `${boardText}\n${JOB_BOARD_END}`
+}
+
+function remainingTextAfterBoard(text, end, hasReplacement) {
+  const remainder = text.slice(end)
+  return hasReplacement ? remainder : remainder.replace(/^\r?\n\r?\n/, "")
+}
+
+function replaceExistingJobBoard(text, boardText) {
+  const start = text.indexOf(JOB_BOARD_HEADING)
+  if (start < 0 || !text.slice(start).includes("SENTINEL: omagents-job-board-v1")) {
+    return undefined
+  }
+  const replacement = boardText ? formatJobBoardBlock(boardText) : ""
+
+  const markedEnd = text.indexOf(JOB_BOARD_END, start)
+  if (markedEnd >= 0) {
+    const end = markedEnd + JOB_BOARD_END.length
+    const remainder = remainingTextAfterBoard(text, end, !!replacement)
+    return `${text.slice(0, start)}${replacement}${remainder}`
   }
 
-  board.markInjected(board.listPendingOutcomes(sessionID).map((job) => job.id))
+  // Blocks written before the end marker existed end with the acknowledgement
+  // when outcomes were present, or with a trailing newline for active-only
+  // Boards (followed by the two-newline user-text separator).
+  const acknowledged = text.indexOf(JOB_BOARD_ACK, start)
+  const activeOnlySeparator = text.indexOf("\n\n\n", start)
+  if (acknowledged >= 0 && (activeOnlySeparator < 0 || acknowledged < activeOnlySeparator)) {
+    const end = acknowledged + JOB_BOARD_ACK.length
+    const remainder = remainingTextAfterBoard(text, end, !!replacement)
+    return `${text.slice(0, start)}${replacement}${remainder}`
+  }
+  if (activeOnlySeparator >= 0) {
+    const end = activeOnlySeparator + 1
+    const remainder = remainingTextAfterBoard(text, end, !!replacement)
+    return `${text.slice(0, start)}${replacement}${remainder}`
+  }
+  return undefined
+}
+
+function injectBoardIntoParts(board, sessionID, parts) {
+  const boardText = buildOpenCodeJobBoardContext(board, sessionID)
+  let updated = false
+  let foundExisting = false
+
+  for (const part of parts) {
+    if (part?.type !== "text" || typeof part.text !== "string") continue
+    if (!part.text.includes("SENTINEL: omagents-job-board-v1")) continue
+    foundExisting = true
+    const replaced = replaceExistingJobBoard(part.text, boardText)
+    if (replaced === undefined) return
+    part.text = replaced
+    updated = true
+    break
+  }
+
+  if (!foundExisting && boardText) {
+    const block = formatJobBoardBlock(boardText)
+    const firstPart = parts.find((part) => part?.type === "text")
+    if (firstPart) firstPart.text = `${block}\n\n${firstPart.text || ""}`
+    else parts.unshift({ type: "text", text: block })
+    updated = true
+  }
+  if (!updated) return
+
+  const contextText = parts
+    .filter((part) => part?.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("\n")
+  const injectedIds = board
+    .listPendingOutcomes(sessionID)
+    .filter((job) => contextText.includes(`- ${job.alias} / ${job.hostTaskId} /`))
+    .map((job) => job.id)
+  board.markInjected(injectedIds)
 }
 
 /**
@@ -644,7 +759,7 @@ export async function setupParallelV2(ctx) {
 
   const pendingCalls = new Map()
   const runtime = createBoardRuntime(ctx, (job) => queryV2Session(ctx, job))
-  const { board, unsubscribe } = await runtime.ready
+  const { board } = await runtime.ready
 
   await ctx.tool.hook("execute.before", (event) => {
     try {
@@ -787,7 +902,15 @@ export async function setupParallelV2(ctx) {
         }
 
         try {
-          await ctx.session.interrupt({ sessionID: job.hostTaskId, continue: false })
+          const result = await ctx.session.interrupt({
+            sessionID: job.hostTaskId,
+            continue: false,
+          })
+          if (result?.interrupted !== true) {
+            return {
+              content: `Host did not accept cancellation for task '${job.alias}' (${job.hostTaskId}).`,
+            }
+          }
           board.requestCancellation(job.id)
           return {
             content: `Cancellation requested for task '${job.alias}' (${job.hostTaskId}).`,
@@ -827,13 +950,7 @@ export async function setupParallelV2(ctx) {
     if (cleaned) return
     cleaned = true
     controller.abort()
-    unsubscribe()
-    if (runtime.entry.owned) {
-      if (ctx && typeof ctx === "object") boardEntries.delete(ctx)
-      await board.close()
-    } else {
-      await board.flush()
-    }
+    await releaseBoardRuntime(runtime)
   }
 }
 

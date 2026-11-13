@@ -68,7 +68,8 @@ function makeV2Context(filePath, { getSession, interrupt } = {}) {
       get: getSession || (async ({ sessionID }) => ({ id: sessionID, status: "running" })),
       interrupt: async (request) => {
         interruptions.push(request)
-        await interrupt?.(request)
+        if (interrupt) return await interrupt(request)
+        return { interrupted: true }
       },
       prompt: async () => {},
     },
@@ -427,6 +428,216 @@ test("pending outcomes survive restart without duplicate injection", async (t) =
     )
   } finally {
     await restartedCleanup?.()
+  }
+})
+
+test("restart reads actual V2 outcomes and rejects ambiguous Host responses", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const children = {
+    active: "v2-outcome-active",
+    succeeded: "v2-outcome-succeeded",
+    failed: "v2-outcome-failed",
+    interrupted: "v2-outcome-interrupted",
+    statusless: "v2-outcome-statusless",
+    unknown: "v2-outcome-unknown",
+  }
+  const first = makeV2Context(filePath)
+  const firstCleanup = await setupParallelV2(first.ctx)
+  try {
+    for (const child of Object.values(children)) await launchV2(first.captured, { child })
+  } finally {
+    await firstCleanup?.()
+  }
+  await waitForStoreJobs(filePath, Object.values(children))
+
+  const restarted = makeV2Context(filePath, {
+    getSession: async ({ sessionID }) => {
+      if (sessionID === children.active) return { id: sessionID, status: "running" }
+      if (sessionID === children.succeeded) {
+        return { id: sessionID, outcome: "succeeded", result: "recovered result" }
+      }
+      if (sessionID === children.failed) {
+        return { id: sessionID, outcome: "failed", error: { message: "recovered failure" } }
+      }
+      if (sessionID === children.interrupted) return { id: sessionID, outcome: "interrupted" }
+      if (sessionID === children.unknown) return { id: sessionID, outcome: "future-outcome" }
+      return { id: sessionID }
+    },
+  })
+  const restartedCleanup = await setupParallelV2(restarted.ctx)
+  try {
+    const status = await statusV2(restarted.captured)
+    assert.equal(jobByHostId(status, children.active).state, "running")
+    assert.equal(jobByHostId(status, children.succeeded).state, "completed")
+    assert.equal(jobByHostId(status, children.succeeded).result, "recovered result")
+    assert.equal(jobByHostId(status, children.failed).state, "error")
+    assert.equal(jobByHostId(status, children.failed).error.message, "recovered failure")
+    assert.equal(jobByHostId(status, children.interrupted).state, "cancelled")
+    assert.equal(jobByHostId(status, children.statusless).state, "interrupted")
+    assert.equal(jobByHostId(status, children.statusless).error.code, "HOST_UNREADABLE")
+    assert.equal(jobByHostId(status, children.unknown).state, "interrupted")
+    assert.equal(jobByHostId(status, children.unknown).error.code, "HOST_UNREADABLE")
+  } finally {
+    await restartedCleanup?.()
+  }
+})
+
+test("V2 declined interruption does not enter cancelling", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { ctx, captured, interruptions } = makeV2Context(filePath, {
+    interrupt: async () => ({ interrupted: false }),
+  })
+  const cleanup = await setupParallelV2(ctx)
+  const child = "v2-cancel-declined"
+  try {
+    await launchV2(captured, { child })
+    const launched = jobByHostId(await statusV2(captured), child)
+    const declined = await captured.tools.get("cancel_task").execute({ task_id: launched.alias })
+    assert.match(declined.content, /not accept|declined/i)
+    assert.equal(interruptions.length, 1)
+    assert.equal(jobByHostId(await statusV2(captured), child).state, "running")
+  } finally {
+    await cleanup?.()
+  }
+})
+
+test("independent Host contexts share one Board by storage identity", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const first = makeV2Context(filePath)
+  const second = makeV2Context(filePath)
+  const [firstCleanup, secondCleanup] = await Promise.all([
+    setupParallelV2(first.ctx),
+    setupParallelV2(second.ctx),
+  ])
+  try {
+    await launchV2(first.captured, { child: "v2-shared-first" })
+    await launchV2(second.captured, { child: "v2-shared-second" })
+    const firstStatus = await statusV2(first.captured)
+    const secondStatus = await statusV2(second.captured)
+    for (const child of ["v2-shared-first", "v2-shared-second"]) {
+      assert.ok(jobByHostId(firstStatus, child), `first context sees ${child}`)
+      assert.ok(jobByHostId(secondStatus, child), `second context sees ${child}`)
+    }
+    assert.equal(
+      jobByHostId(firstStatus, "v2-shared-first").id,
+      jobByHostId(secondStatus, "v2-shared-first").id
+    )
+
+    await secondCleanup?.()
+    await launchV2(first.captured, { child: "v2-shared-after-other-cleanup" })
+    assert.ok(jobByHostId(await statusV2(first.captured), "v2-shared-after-other-cleanup"))
+  } finally {
+    await secondCleanup?.()
+    await firstCleanup?.()
+  }
+  const persisted = readStore(filePath)
+  assert.equal(persisted.jobs.length, 3)
+  assert.equal(new Set(persisted.jobs.map((job) => job.id)).size, 3)
+  assert.equal(new Set(persisted.jobs.map((job) => job.alias)).size, 3)
+})
+
+test("repeated setup reconciles once and reference-counts Board ownership", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const seed = makeV2Context(filePath)
+  const seedCleanup = await setupParallelV2(seed.ctx)
+  try {
+    await launchV2(seed.captured, { child: "v2-repeated-seed" })
+  } finally {
+    await seedCleanup?.()
+  }
+
+  let queries = 0
+  const repeated = makeV2Context(filePath, {
+    getSession: async ({ sessionID }) => {
+      queries += 1
+      return { id: sessionID, status: "running" }
+    },
+  })
+  const firstCleanup = await setupParallelV2(repeated.ctx)
+  const secondCleanup = await setupParallelV2(repeated.ctx)
+  try {
+    assert.equal(queries, 1, "shared initialization reconciles only once")
+    await secondCleanup?.()
+    await launchV2(repeated.captured, { child: "v2-repeated-after-cleanup" })
+    assert.ok(jobByHostId(await statusV2(repeated.captured), "v2-repeated-after-cleanup"))
+  } finally {
+    await secondCleanup?.()
+    await firstCleanup?.()
+  }
+})
+
+test("a new pending outcome replaces an old sentinel block before injection", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { ctx, captured } = makeV2Context(filePath)
+  const cleanup = await setupParallelV2(ctx)
+  const firstChild = "v2-sentinel-first"
+  const secondChild = "v2-sentinel-second"
+  try {
+    await launchV2(captured, { child: firstChild })
+    await launchV2(captured, { child: secondChild })
+    const first = await contextV2(captured, "parent-v2", "original instructions", [
+      completionNotice(firstChild, "completed", "first outcome"),
+    ])
+    const oldText = first.messages
+      .at(-1)
+      .content[0].text.replace("\n<!-- omagents-job-board-end -->", "")
+    assert.ok(oldText.includes("first outcome"))
+
+    const second = await contextV2(captured, "parent-v2", oldText, [
+      completionNotice(secondChild, "completed", "second outcome"),
+    ])
+    const updatedText = second.messages.at(-1).content[0].text
+    assert.ok(updatedText.includes("second outcome"), "new outcome is present in context")
+    assert.ok(updatedText.includes("original instructions"), "original text is preserved")
+    assert.equal(updatedText.split(SENTINEL).length - 1, 1, "one current Board block")
+    assert.equal(jobByHostId(await statusV2(captured), secondChild).notificationState, "injected")
+  } finally {
+    await cleanup?.()
+  }
+})
+
+test("V1 store initialization failure degrades context injection independently", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  fs.mkdirSync(filePath, { recursive: true })
+  const { createParallelHooks } = await import(PARALLEL_PATH)
+  const { ctx } = makeV1Context(filePath)
+  const hooks = createParallelHooks(ctx)
+  const message = {
+    info: { id: "init-failure-message", role: "user", sessionID: "parent-v1" },
+    parts: [{ type: "text", text: "model request survives" }],
+  }
+
+  await assert.doesNotReject(() => transformV1(hooks, [message]))
+  assert.equal(message.parts[0].text, "model request survives")
+  const system = { system: [] }
+  await assert.doesNotReject(() => hooks["experimental.chat.system.transform"]({}, system))
+  assert.equal(system.system.length, 1)
+})
+
+test("a completion notice backfills a result after lifecycle settlement", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { ctx, captured, events } = makeV2Context(filePath)
+  const cleanup = await setupParallelV2(ctx)
+  const child = "v2-late-result"
+  try {
+    await launchV2(captured, { child })
+    events.push({ type: "session.execution.succeeded", data: { sessionID: child } })
+    await waitFor(async () => jobByHostId(await statusV2(captured), child)?.state === "completed")
+    assert.equal(jobByHostId(await statusV2(captured), child).result, undefined)
+
+    const injected = await contextV2(captured, "parent-v2", "late result turn", [
+      completionNotice(child, "completed", "late lifecycle result"),
+    ])
+    assert.equal(jobByHostId(await statusV2(captured), child).result, "late lifecycle result")
+    assert.ok(injected.messages.at(-1).content[0].text.includes("late lifecycle result"))
+  } finally {
+    await cleanup?.()
   }
 })
 

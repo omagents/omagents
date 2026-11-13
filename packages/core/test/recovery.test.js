@@ -374,6 +374,33 @@ test("JobBoard retains rejected writes even when an injected store flush succeed
   await assert.rejects(board.close(), /injected store rejection/)
 })
 
+test("equivalent terminal backfill is revisioned, persisted, and restored", async () => {
+  const { board, store } = await openBoard(undefined, () => 7_000)
+  const job = board.registerLaunch({
+    host: "host-a",
+    hostTaskId: "host-task-late-detail",
+    parentSessionId: "parent-1",
+    agent: "explore",
+  })
+  board.markTerminal(job.id, { state: "completed" })
+  const terminalRevision = board.revision
+  const savesBeforeBackfill = store.saves.length
+
+  board.markTerminal(job.id, { state: "completed", resultSummary: "persisted late result" })
+  assert.equal(board.revision, terminalRevision + 1)
+  assert.equal(job.revision, terminalRevision + 1)
+  assert.equal(store.saves.length, savesBeforeBackfill + 1)
+  assert.equal(store.saves.at(-1).jobs[0].resultSummary, "persisted late result")
+  assert.equal(store.saves.at(-1).jobs[0].terminalAt, job.terminalAt)
+  await board.close()
+
+  const reopened = await openBoard(store.snapshot, () => 8_000)
+  assert.equal(reopened.board.get(job.id).resultSummary, "persisted late result")
+  assert.equal(reopened.board.get(job.id).executionState, "completed")
+  assert.equal(reopened.board.get(job.id).notificationState, "pending")
+  await reopened.board.close()
+})
+
 test("every public job mutation rejects after close without changing board state", async () => {
   const jobs = [
     createJob("job-1"),

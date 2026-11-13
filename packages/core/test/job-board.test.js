@@ -213,6 +213,39 @@ test("terminal outcomes are sticky and independently delivered", () => {
   assert.equal(board.revision, 4)
 })
 
+test("equivalent terminal outcomes backfill only missing details", () => {
+  const { board, setNow } = createHarness()
+  const completed = board.registerLaunch(launch())
+  const failed = board.registerLaunch(launch({ hostTaskId: "host-task-2" }))
+
+  board.markTerminal(completed.id, { state: "completed" })
+  board.markTerminal(failed.id, { state: "failed" })
+  const terminalRevision = board.revision
+  const terminalAt = completed.terminalAt
+  setNow(3_000)
+
+  board.markTerminal(completed.id, { state: "completed", resultSummary: "late result" })
+  board.markTerminal(failed.id, {
+    state: "failed",
+    resultSummary: "failure output",
+    error: { message: "late failure" },
+  })
+  assert.equal(completed.resultSummary, "late result")
+  assert.equal(completed.terminalAt, terminalAt)
+  assert.equal(completed.executionState, "completed")
+  assert.equal(failed.resultSummary, "failure output")
+  assert.deepEqual(failed.error, { message: "late failure" })
+  assert.equal(board.revision, terminalRevision + 2)
+
+  board.markTerminal(completed.id, { state: "completed", resultSummary: "replacement" })
+  board.markTerminal(completed.id, { state: "failed", error: "regression" })
+  board.markTerminal(failed.id, { state: "failed", error: { message: "replacement" } })
+  assert.equal(completed.resultSummary, "late result")
+  assert.equal(completed.error, undefined)
+  assert.deepEqual(failed.error, { message: "late failure" })
+  assert.equal(board.revision, terminalRevision + 2)
+})
+
 test("running and cancelling jobs accept every authoritative outcome state", () => {
   const states = ["completed", "failed", "cancelled", "interrupted"]
 
