@@ -42,6 +42,9 @@ test("Host module has only named plugin exports and no default or Client export"
   assert.equal(typeof host.registerDshSkills, "function")
   assert.equal(typeof host.registerDshMcp, "function")
   assert.equal(typeof host.provisionDshPython, "function")
+  assert.equal(typeof host.registerDshTools, "function")
+  assert.equal(typeof host.registerDshCommands, "function")
+  assert.equal(typeof host.registerDshContext, "function")
   assert.equal(host.client, undefined)
 })
 
@@ -84,6 +87,14 @@ test("publish dry-run contains built runtime artifacts but no source or test too
     "dist/host/register-mcp.d.ts",
     "dist/host/register-python.js",
     "dist/host/register-python.d.ts",
+    "dist/host/register-tools.js",
+    "dist/host/register-tools.d.ts",
+    "dist/host/register-commands.js",
+    "dist/host/register-commands.d.ts",
+    "dist/host/register-context.js",
+    "dist/host/register-context.d.ts",
+    "dist/host/prompt.js",
+    "dist/host/prompt.d.ts",
     "package.json",
   ]) {
     assert.ok(paths.includes(required), `${required} must be published`)

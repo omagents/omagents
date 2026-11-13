@@ -10,7 +10,7 @@ export interface HealthRecord {
   diagnostics: readonly HealthDiagnostic[]
 }
 
-export type DshCapability = "skills" | "mcp" | "python"
+export type DshCapability = "skills" | "mcp" | "python" | "tools" | "commands" | "context"
 
 export interface DshHealth {
   readonly host: HealthRecord
@@ -18,6 +18,9 @@ export interface DshHealth {
   readonly skills: HealthRecord
   readonly mcp: HealthRecord
   readonly python: HealthRecord
+  readonly tools: HealthRecord
+  readonly commands: HealthRecord
+  readonly context: HealthRecord
 }
 
 type CapabilityDiagnostics = Record<DshCapability, readonly HealthDiagnostic[]>
@@ -63,6 +66,9 @@ export function createHealthRecords(
     skills: [],
     mcp: [],
     python: [],
+    tools: [],
+    commands: [],
+    context: [],
   }
   const health: DshHealth = {
     host,
@@ -77,6 +83,15 @@ export function createHealthRecords(
     },
     get python(): HealthRecord {
       return healthRecord(diagnostics.python)
+    },
+    get tools(): HealthRecord {
+      return healthRecord(diagnostics.tools)
+    },
+    get commands(): HealthRecord {
+      return healthRecord(diagnostics.commands)
+    },
+    get context(): HealthRecord {
+      return healthRecord(diagnostics.context)
     },
   }
 

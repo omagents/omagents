@@ -23,7 +23,10 @@ export interface DshJobRecord {
 
 export interface DshJobBoard {
   readonly diagnostics: readonly HealthDiagnostic[]
+  readonly revision: number
+  now(): number
   list(options?: { parentSessionId?: string }): DshJobRecord[]
+  listPendingOutcomes(parentSessionId?: string): DshJobRecord[]
   registerLaunch(launch: DshJobLaunch): DshJobRecord
   flush(): Promise<void>
   close(): Promise<void>

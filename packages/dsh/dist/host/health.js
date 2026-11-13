@@ -23,6 +23,9 @@ export function createHealthRecords(readPersistenceDiagnostics) {
         skills: [],
         mcp: [],
         python: [],
+        tools: [],
+        commands: [],
+        context: [],
     };
     const health = {
         host,
@@ -37,6 +40,15 @@ export function createHealthRecords(readPersistenceDiagnostics) {
         },
         get python() {
             return healthRecord(diagnostics.python);
+        },
+        get tools() {
+            return healthRecord(diagnostics.tools);
+        },
+        get commands() {
+            return healthRecord(diagnostics.commands);
+        },
+        get context() {
+            return healthRecord(diagnostics.context);
         },
     };
     capabilityUpdaters.set(health, (capability, nextDiagnostics) => {

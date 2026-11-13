@@ -6,6 +6,8 @@ const files = [
   "skills.test.ts",
   "mcp.test.ts",
   "python.test.ts",
+  "tools.test.ts",
+  "context.test.ts",
   "package-surface.test.js",
   "npm-launcher.test.js",
 ]
