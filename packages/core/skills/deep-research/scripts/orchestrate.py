@@ -135,10 +135,22 @@ def get_pending_tasks(batch_size: int, layout: ResearchLayout) -> list[dict[str,
     if not isinstance(state, dict) or not isinstance(state.get("tasks"), list):
         raise LayoutError(f"Research loop queue is invalid: {queue_path}: expected a tasks array")
     tasks = state["tasks"]
-    return [
-        task for task in tasks
-        if isinstance(task, dict) and task.get("status") == "pending"
-    ][:batch_size]
+    for index, task in enumerate(tasks):
+        if not isinstance(task, dict):
+            raise LayoutError(
+                f"Research loop queue is invalid: {queue_path}: task row {index} must be an object"
+            )
+        task_id = task.get("task_id")
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise LayoutError(
+                f"Research loop queue is invalid: {queue_path}: task row {index} requires a non-empty string task_id"
+            )
+        status = task.get("status")
+        if not isinstance(status, str) or not status.strip():
+            raise LayoutError(
+                f"Research loop queue is invalid: {queue_path}: task row {index} requires a non-empty string status"
+            )
+    return [task for task in tasks if task["status"] == "pending"][:batch_size]
 
 
 def init_loop_engine(tasks: list[dict[str, Any]], layout: ResearchLayout) -> None:

@@ -678,7 +678,7 @@ test("gap analysis adds a run-scoped task and resumes the same research lane", (
 })
 
 test("missing and corrupt loop queues fail resume before gap or report stages", (t) => {
-  for (const mode of ["missing", "corrupt"]) {
+  for (const mode of ["missing", "corrupt", "null-row", "empty-row"]) {
     const project = makeProject(t)
     const first = dispatchFrom(
       runPython(
@@ -701,8 +701,17 @@ test("missing and corrupt loop queues fail resume before gap or report stages", 
       `deep-research-${first.run_id}`,
       "tasks.json"
     )
-    if (mode === "missing") fs.rmSync(queuePath)
-    else fs.writeFileSync(queuePath, "{not-json", "utf-8")
+    if (mode === "missing") {
+      fs.rmSync(queuePath)
+    } else if (mode === "corrupt") {
+      fs.writeFileSync(queuePath, "{not-json", "utf-8")
+    } else {
+      const queue = JSON.parse(fs.readFileSync(queuePath, "utf-8"))
+      writeJson(queuePath, {
+        ...queue,
+        tasks: [mode === "null-row" ? null : {}],
+      })
+    }
 
     const resumed = runPython(
       DEEP_RESEARCH,

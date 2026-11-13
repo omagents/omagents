@@ -130,22 +130,51 @@ function applyToolMapping(content, host) {
  * Resolve DSH skill resources without assuming a cwd, PATH injection, or a
  * source checkout. Model-tool mappings stay separate from CLI subcommands.
  */
+const BARE_PACKAGED_SCRIPT =
+  /(?<![\w/.-])(?:\.\.\/[a-z0-9-]+\/scripts\/|scripts\/)[a-z0-9_.-]+/g
+
+function isPackagedScriptCommand(lines, index) {
+  const line = lines[index]
+  const previous = index > 0 ? lines[index - 1] : ""
+  return (
+    /\b(?:run|invoke|execute)\b/i.test(line) ||
+    (/\b(?:run|invoke|execute)\b/i.test(previous) && /^\s*[`"']/.test(line)) ||
+    /^\s*[`"']?\s*(?:scripts\/|\.\.\/[a-z0-9-]+\/scripts\/)/i.test(line)
+  )
+}
+
+/** Resolve only actual command tokens that name existing packaged files. */
+function resolveBarePackagedScripts(content, skillDirectory) {
+  const lines = content.split("\n")
+  return lines
+    .map((line, index) => {
+      if (!isPackagedScriptCommand(lines, index)) return line
+      return line.replace(BARE_PACKAGED_SCRIPT, (script) => {
+        const absolute = path.resolve(skillDirectory, script)
+        return fs.existsSync(absolute) ? absolute : script
+      })
+    })
+    .join("\n")
+}
+
 function applyDshResourceMapping(content, definition, sharedSkill) {
   const python = getVenvPython(AGENT_VENV)
   const skillDirectory = definition.directory
-  const skillScripts = path.join(skillDirectory, "scripts")
   let rendered = content
 
   for (const interpreter of ["bash", "node", "python", "python3"]) {
     const commandPython = interpreter.startsWith("python") ? python : interpreter
-    rendered = rendered
-      .replaceAll(`${interpreter} scripts/`, `${commandPython} ${skillScripts}${path.sep}`)
-      .replaceAll(`${interpreter} ./scripts/`, `${commandPython} ${skillScripts}${path.sep}`)
+    const invocation = new RegExp(`\\b${interpreter} ((?:\\./)?scripts/[a-z0-9_.-]+)`, "g")
+    rendered = rendered.replace(invocation, (command, relative) => {
+      const absolute = path.resolve(skillDirectory, relative)
+      return fs.existsSync(absolute) ? `${commandPython} ${absolute}` : command
+    })
   }
   rendered = rendered.replaceAll(
     "node ./render-graphs.js",
     `node ${path.join(skillDirectory, "render-graphs.js")}`
   )
+  rendered = resolveBarePackagedScripts(rendered, skillDirectory)
 
   if (definition.source === "omagents") {
     const coreRoot = path.resolve(skillDirectory, "..", "..")

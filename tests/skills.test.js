@@ -18,10 +18,32 @@ function getSkillDirs() {
     .map((d) => d.name)
 }
 
-function assertDshResourceCommands(content, skillName) {
+const PACKAGED_SCRIPT_TOKEN = /(?<![\w/.-])(?:\.\.\/[a-z0-9-]+\/scripts\/|scripts\/)[a-z0-9_.-]+/g
+
+function packagedScriptCommandLines(lines, index) {
+  const line = lines[index]
+  const previous = index > 0 ? lines[index - 1] : ""
+  return (
+    /\b(?:run|invoke|execute)\b/i.test(line) ||
+    (/\b(?:run|invoke|execute)\b/i.test(previous) && /^\s*[`"']/.test(line)) ||
+    /^\s*[`"']?\s*(?:scripts\/|\.\.\/[a-z0-9-]+\/scripts\/)/i.test(line)
+  )
+}
+
+function assertDshResourceCommands(content, definition) {
+  const lines = content.split("\n")
+  for (const [index, line] of lines.entries()) {
+    if (!packagedScriptCommandLines(lines, index)) continue
+    for (const match of line.matchAll(PACKAGED_SCRIPT_TOKEN)) {
+      const absolute = path.resolve(definition.directory, match[0])
+      if (fs.existsSync(absolute)) {
+        assert.fail(`${definition.name} has a bare packaged-script invocation: ${match[0]}`)
+      }
+    }
+  }
   assert.ok(
     !content.includes(`${CORE_PATHS.root}${path.sep}${CORE_PATHS.root}`),
-    `${skillName} duplicated an absolute Core resource path`
+    `${definition.name} duplicated an absolute Core resource path`
   )
   const scriptCommands = {
     "loop_engine.py": ["init", "next", "complete", "fail", "status", "summary", "reset", "add"],
@@ -48,22 +70,34 @@ function assertDshResourceCommands(content, skillName) {
     for (const match of content.matchAll(pattern)) {
       assert.ok(
         match.index > 0 && /[\\/]/.test(content[match.index - 1]),
-        `${skillName} has a bare script invocation: ${match[0]}`
+        `${definition.name} has a bare script invocation: ${match[0]}`
+      )
+    }
+  }
+  for (const match of content.matchAll(
+    /\b(?:bash|node|python|python3)\s+((?:\.\/)?scripts\/[a-z0-9_.-]+)/g
+  )) {
+    if (fs.existsSync(path.resolve(definition.directory, match[1]))) {
+      assert.fail(
+        `${definition.name} resolves a bundled script through cwd instead of its absolute resourceBase: ${match[0]}`
       )
     }
   }
   assert.doesNotMatch(
     content,
-    /\b(?:bash|node|python|python3)\s+(?:\.\/)?scripts\//,
-    `${skillName} resolves a bundled script through cwd instead of its absolute resourceBase`
+    /\bpython3?\s+-m\s+py_compile\s+packages\/core\//,
+    `${definition.name} assumes a source-checkout relative Core path`
   )
   assert.doesNotMatch(
     content,
-    /\bpython3?\s+-m\s+py_compile\s+packages\/core\//,
-    `${skillName} assumes a source-checkout relative Core path`
+    /(?:^|\n)\s*markitdown\s+/,
+    `${definition.name} uses bare markitdown`
   )
-  assert.doesNotMatch(content, /(?:^|\n)\s*markitdown\s+/, `${skillName} uses bare markitdown`)
-  assert.doesNotMatch(content, /\|\s*markitdown\s+/, `${skillName} pipes into bare markitdown`)
+  assert.doesNotMatch(
+    content,
+    /\|\s*markitdown\s+/,
+    `${definition.name} pipes into bare markitdown`
+  )
 }
 
 function parseFrontmatter(content) {
@@ -158,7 +192,7 @@ test("DSH discovers all 33 skills and renders every skill without wrong-host con
       /websearch_web_search_exa|websearch_web_fetch_exa|\bwebfetch\b|codegraph_codegraph_explore|\bgithub_[a-z_]+/,
       `${definition.name} leaked OpenCode tool names into DSH`
     )
-    assertDshResourceCommands(rendered.content, definition.name)
+    assertDshResourceCommands(rendered.content, definition)
   }
 })
 
@@ -217,6 +251,46 @@ test("material DSH workflows use full overrides and native tool mappings", () =>
   assert.ok(office.includes("`officecli load_skill <name>`"))
   assert.ok(office.includes("`officecli load_skill pitch-deck`"))
   assert.doesNotMatch(office, /officecli\s+skill(?:\s|$)/)
+})
+
+test("DSH resolves bare Superpowers packaged scripts with normalized absolute paths and exact arguments", () => {
+  const definitions = listSkillDefinitions({ host: "dsh" })
+  const executing = definitions.find((skill) => skill.name === "executing-plans")
+  assert.ok(executing)
+  const content = renderSkillForHost(executing, "dsh").content
+  const siblingDirectory = path.resolve(executing.directory, "..", "subagent-driven-development")
+  const expectedCommands = [
+    [path.join(executing.directory, "scripts", "task-start"), "PLAN_FILE N"],
+    [path.join(executing.directory, "scripts", "task-done"), "PLAN_FILE N BASE -- <test command>"],
+    [path.join(siblingDirectory, "scripts", "sdd-workspace"), "PLAN_FILE"],
+    [path.join(siblingDirectory, "scripts", "review-package"), "PLAN_FILE MERGE_BASE HEAD"],
+  ]
+  for (const [script, args] of expectedCommands) {
+    assert.ok(path.isAbsolute(script), `${script} must be absolute`)
+    assert.ok(!script.includes(`${path.sep}..${path.sep}`), `${script} must be normalized`)
+    assert.ok(fs.existsSync(script), `${script} must identify a packaged file`)
+    assert.ok(
+      content.includes(`${script} ${args}`),
+      `rendered command must preserve script and arguments exactly: ${script} ${args}`
+    )
+  }
+  assert.doesNotMatch(
+    content,
+    /`(?:scripts\/task-(?:start|done)|\.\.\/subagent-driven-development\/scripts\/)/,
+    "bare executing-plans script tokens must not survive"
+  )
+
+  const writing = definitions.find((skill) => skill.name === "writing-skills")
+  const writingContent = renderSkillForHost(writing, "dsh").content
+  assert.ok(
+    writingContent.includes("`bash scripts/tool.sh`") &&
+      writingContent.includes("`node scripts/tool.js`"),
+    "hypothetical script examples in legitimate prose must remain unchanged"
+  )
+  assert.ok(
+    content.includes("[code-reviewer.md](../requesting-code-review/code-reviewer.md)"),
+    "legitimate Markdown resource prose must remain unchanged"
+  )
 })
 
 test("OpenCode and Codex keep their own native subagent rendering", () => {
