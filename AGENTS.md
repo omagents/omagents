@@ -61,10 +61,13 @@ omagents/
 │   │   │       ├── scripts/    # Pipeline + layout.py canonical run paths
 │   │   │       └── templates/  # Jinja2 report templates
 │   │   └── mcp-servers/base.json
-│   └── opencode/               # @omagents/omagents OpenCode adapter
-│       ├── src/index.js        # Dual V1/V2 entry; merges superpowers + OmAgents
-│       ├── src/parallel.js     # OpenCode lifecycle adapter
-│       └── bin/install.js      # No-argument installer
+│   ├── opencode/               # @omagents/omagents OpenCode adapter
+│   │   ├── src/index.js        # Dual V1/V2 entry; merges superpowers + OmAgents
+│   │   ├── src/parallel.js     # OpenCode lifecycle adapter
+│   │   └── bin/install.js      # No-argument installer
+│   └── codex/                  # @omagents/omagents-codex standalone installer
+│       ├── src/setup.js        # Codex artifact generation through Core
+│       └── bin/install.js      # No-argument Codex CLI
 ├── package.json                # Private npm-workspaces root
 ├── package-lock.json
 ├── CHANGELOG.md
@@ -107,6 +110,12 @@ Key variables:
 - `AGENT_VENV` / `AGENT_VENV_BIN` = persistent base path and its platform-specific executable directory, defined in `packages/core/hooks/python-env.js`
 - `getProjectVenvPath(projectRoot)` = `<project-root>/.omagents/venv`, the on-demand project overlay
 - `SKILL_SCRIPT_DIRS` = script directories from deep-research, markitdown-converter, playwright-web-scraping, _shared beneath Core's skill root
+
+## Standalone Codex Installer (`packages/codex/`)
+
+- `npx @omagents/omagents-codex` installs Codex with no arguments; `--help` and `--version` are the only supported options, and unknown arguments fail.
+- `src/setup.js` exports `installCodex(options?)`. It resolves hooks and assets through `getCorePaths()`, renders skills through Core for the `codex` host, and serializes `resolveMcpServers()` without duplicating MCP selection or tool mappings.
+- Codex retains native subagents and does not load the OpenCode parallel engine. There is no root dispatcher, legacy `.codex/` implementation, or compatibility command.
 
 ## Parallel Execution Engine (`packages/opencode/src/parallel.js`)
 
@@ -226,7 +235,7 @@ Raw evidence and state are durable. Derived `artifacts/` are rebuildable but ret
 - **No build step.** Plugin code is plain JavaScript (ESM). Skills are plain Markdown + optional Python.
 - **Syntax check:** `node --check packages/opencode/src/index.js`
 - **Python check:** `python3 -m py_compile packages/core/skills/deep-research/scripts/*.py`
-- **Unit tests:** `node --test tests/*.test.js packages/core/test/*.test.js` (plugin structure, Core state/assets, skills frontmatter and host rendering, loop engine, deep-research storage/legacy/pipeline integration). Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
+- **Unit tests:** `node --test packages/codex/test/*.test.js tests/*.test.js packages/core/test/*.test.js` (standalone Codex installation, plugin structure, Core state/assets, skills frontmatter and host rendering, loop engine, deep-research storage/legacy/pipeline integration). Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
 - **Local testing:** Point OpenCode config to local clone:
   ```json
   { "plugin": ["omagents@git+file:///path/to/omagents"] }
@@ -315,7 +324,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 18; superpowers has 15. They're registered separately.
 8. **Don't change README.md without updating all language versions.** README exists in 4 languages (EN, ZH-CN, JA, KO). All must be updated in the same commit.
 9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.
-10. **Don't put non-plugin scripts in `.opencode/plugins/`.** OpenCode auto-discovers and loads EVERY `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions. A CLI script there (this broke startup when developing in this repo — see v0.9.1) crashes plugin init. CLI entry scripts live in `setup/` instead; only true plugin files belong in `.opencode/plugins/`.
+10. **Don't put non-plugin scripts in `.opencode/plugins/`.** OpenCode auto-discovers and loads EVERY `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions. A CLI script there (this broke startup when developing in this repo — see v0.9.1) crashes plugin init. CLI entry scripts live in each host package's `bin/` directory; only true plugin files belong in `.opencode/plugins/`.
 11. **Don't point package `main` at the CLI wrapper.** OpenCode imports the plugin via `main`; module-level `process.argv` dispatch (plus `process.exit`) in that file kills the host process (this broke `opencode run` for npm installs of 0.7.0–0.9.1 — see v0.9.2). `main` must be the plugin entry (`packages/opencode/src/index.js`); only `bin` may point at the CLI wrapper.
 12. **Don't export a bare function as `default` from `.opencode/plugins/*.js`.** OpenCode V2 requires the default export to be a `{ id, setup }` descriptor object and hard-fails the plugin otherwise (`PluginModule.LoadError`). Keep the dual shape `{ id, server, setup }`: `server` is the V1 plugin function, `setup` the V2 one. V1 hosts may invoke exported functions (including `setup`) with a V1-shaped ctx — guard V2 entry points by checking V2-only domains (e.g. `typeof ctx.session?.hook === "function"`) and return quietly.
 13. **Don't import `@opencode/plugin` (V2 SDK) or `@opencode-ai/plugin` (V1 SDK) in plugin code.** The dual entry point is a plain object; importing a host SDK package breaks the other runtime. superpowers does the same.

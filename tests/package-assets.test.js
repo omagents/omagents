@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { getCorePaths } from "../packages/core/src/paths.js"
+import { withCorePackLock } from "./core-pack-lock.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
 const NPM = process.platform === "win32" ? "npm.cmd" : "npm"
@@ -30,11 +31,13 @@ test("workspace-packed Core bundles the pinned Superpowers plugin and all 15 ski
   const superpowersPackage = JSON.parse(
     fs.readFileSync(path.join(CORE_PATHS.superpowersDir, "package.json"), "utf8")
   )
-  const result = spawnSync(NPM, ["pack", "--workspace", "@omagents/core", "--dry-run", "--json"], {
-    cwd: ROOT,
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-  })
+  const result = withCorePackLock(() =>
+    spawnSync(NPM, ["pack", "--workspace", "@omagents/core", "--dry-run", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  )
 
   assert.equal(result.status, 0, result.stderr || result.stdout)
   const [artifact] = JSON.parse(result.stdout)

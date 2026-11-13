@@ -189,20 +189,3 @@ test("without EXA_API_KEY, websearch uses the anonymous remote exa endpoint", ()
   assert.strictEqual(mcps.websearch.headers, undefined)
   assert.strictEqual(mcps.websearch.environment, undefined)
 })
-
-test("Codex setup exists and exports installCodex", async () => {
-  const setupPath = path.join(ROOT, ".codex", "plugins", "setup.js")
-  assert.ok(fs.existsSync(setupPath), ".codex/plugins/setup.js should exist")
-  const mod = await import(setupPath)
-  assert.strictEqual(typeof mod.installCodex, "function")
-})
-
-test("unified index.js re-exports OpenCode plugin", async () => {
-  const mod = await import(path.join(ROOT, "index.js"))
-  // Default export is the dual V1/V2 descriptor object
-  assert.strictEqual(typeof mod.default, "object")
-  assert.strictEqual(mod.default.id, "omagents")
-  assert.strictEqual(typeof mod.default.server, "function")
-  assert.strictEqual(typeof mod.default.setup, "function")
-  assert.strictEqual(typeof mod.OmagentsPlugin, "function")
-})

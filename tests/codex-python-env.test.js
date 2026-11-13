@@ -5,19 +5,15 @@ import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
-import { installCodex } from "../.codex/plugins/setup.js"
+import { installCodex } from "../packages/codex/src/setup.js"
+
+const ROOT = path.resolve(import.meta.dirname, "..")
 
 test("Codex installer bundles shared Python environment hooks", async (t) => {
   const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-codex-home-"))
-  const previousCodexHome = process.env.CODEX_HOME
-  process.env.CODEX_HOME = codexHome
-  t.after(() => {
-    if (previousCodexHome === undefined) delete process.env.CODEX_HOME
-    else process.env.CODEX_HOME = previousCodexHome
-    fs.rmSync(codexHome, { recursive: true, force: true })
-  })
+  t.after(() => fs.rmSync(codexHome, { recursive: true, force: true }))
 
-  await installCodex()
+  await installCodex({ codexHome, env: {} })
 
   const hooksDir = path.join(
     codexHome,
@@ -40,42 +36,35 @@ test("Codex installer bundles shared Python environment hooks", async (t) => {
 
 test("Codex installs OmAgents skills and warns without Superpowers", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-codex-no-superpowers-"))
-  const checkout = path.join(root, "checkout")
   const codexHome = path.join(root, "codex-home")
-  const setupDir = path.join(checkout, ".codex", "plugins")
-  fs.mkdirSync(setupDir, { recursive: true })
+  const packagesRoot = path.join(root, "node_modules", "@omagents")
+  const corePackageDir = path.join(packagesRoot, "core")
+  const codexPackageDir = path.join(packagesRoot, "omagents-codex")
   fs.mkdirSync(codexHome, { recursive: true })
+  fs.mkdirSync(path.join(codexPackageDir, "src"), { recursive: true })
+  fs.cpSync(path.join(ROOT, "packages", "core"), corePackageDir, {
+    recursive: true,
+    filter: (source) => !source.includes(`${path.sep}node_modules`),
+  })
   fs.copyFileSync(
-    path.join(import.meta.dirname, "..", ".codex", "plugins", "setup.js"),
-    path.join(setupDir, "setup.js")
+    path.join(ROOT, "packages", "codex", "package.json"),
+    path.join(codexPackageDir, "package.json")
   )
   fs.copyFileSync(
-    path.join(import.meta.dirname, "..", "package.json"),
-    path.join(checkout, "package.json")
-  )
-  fs.cpSync(
-    path.join(import.meta.dirname, "..", "packages", "core"),
-    path.join(checkout, "packages", "core"),
-    {
-      recursive: true,
-      filter: (source) => !source.includes(`${path.sep}node_modules`),
-    }
+    path.join(ROOT, "packages", "codex", "src", "setup.js"),
+    path.join(codexPackageDir, "src", "setup.js")
   )
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
 
-  const previousCodexHome = process.env.CODEX_HOME
   const previousWarn = console.warn
   const warnings = []
-  process.env.CODEX_HOME = codexHome
   console.warn = (...args) => warnings.push(args.join(" "))
   t.after(() => {
-    if (previousCodexHome === undefined) delete process.env.CODEX_HOME
-    else process.env.CODEX_HOME = previousCodexHome
     console.warn = previousWarn
   })
 
-  const setup = await import(pathToFileURL(path.join(setupDir, "setup.js")).href)
-  await setup.installCodex()
+  const setup = await import(pathToFileURL(path.join(codexPackageDir, "src", "setup.js")).href)
+  await setup.installCodex({ codexHome, env: {} })
 
   const pluginRoot = path.join(codexHome, "plugins", "cache", "omagents", "omagents", "local")
   assert.equal(fs.existsSync(path.join(pluginRoot, "skills", "deep-research", "SKILL.md")), true)
