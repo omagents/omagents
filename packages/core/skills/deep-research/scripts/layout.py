@@ -153,6 +153,12 @@ class ResearchLayout:
             return base
         return f"{base}-{self.run_id}"
 
+    def loop_state_path(self, pre: bool = False) -> Path:
+        """Resolve the durable queue without duplicating loop-store layout."""
+        return (
+            self.project_root / ".omagents" / "loops" / self.loop_skill(pre) / "tasks.json"
+        )
+
     def display_path(self, path: Path) -> str:
         resolved = path.resolve()
         try:

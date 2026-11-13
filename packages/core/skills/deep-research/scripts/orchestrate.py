@@ -104,32 +104,24 @@ def save_state(layout: ResearchLayout, state: dict[str, Any]) -> None:
 # Loop engine helpers
 # ---------------------------------------------------------------------------
 
-def get_next_task(layout: ResearchLayout) -> dict[str, Any] | None:
-    """Check loop_engine for the next pending task."""
-    result = subprocess.run(
-        [sys.executable, str(LOOP_ENGINE), "next", layout.loop_skill()],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        return None
-    output = result.stdout.strip()
-    if not output or output == "null":
-        return None
-    try:
-        return json.loads(output)
-    except json.JSONDecodeError:
-        return None
-
-
 def get_pending_tasks(batch_size: int, layout: ResearchLayout) -> list[dict[str, Any]]:
-    """Get up to batch_size pending tasks from the loop engine."""
-    tasks: list[dict[str, Any]] = []
-    for _ in range(batch_size):
-        task = get_next_task(layout)
-        if task is None:
-            break
-        tasks.append(task)
-    return tasks
+    """Read a distinct pending batch from the durable loop queue.
+
+    `loop_engine.py next` is a read-only single-task view, so invoking it
+    repeatedly without completing a task would return the same row repeatedly.
+    """
+    queue_path = layout.loop_state_path()
+    try:
+        state = json.loads(queue_path.read_text(encoding="utf-8"))
+        tasks = state.get("tasks", [])
+        if not isinstance(tasks, list):
+            return []
+        return [
+            task for task in tasks
+            if isinstance(task, dict) and task.get("status") == "pending"
+        ][:batch_size]
+    except (OSError, json.JSONDecodeError):
+        return []
 
 
 def init_loop_engine(tasks: list[dict[str, Any]], layout: ResearchLayout) -> None:
@@ -228,10 +220,76 @@ def pre_research_finalize(workspace: Path, layout: ResearchLayout) -> None:
 # Dispatch helpers
 # ---------------------------------------------------------------------------
 
+def _resume_invocation(layout: ResearchLayout) -> str:
+    """Return a resume command that does not depend on PATH injection."""
+    return (
+        f"{command_arg(sys.executable)} {command_arg(SCRIPTS_DIR / 'deep_research.py')} "
+        f"run-all --resume --workspace {command_arg(layout.workspace)}"
+    )
+
+
+def _subagent_dispatch(
+    task: dict[str, Any], layout: ResearchLayout, date_str: str, year_str: str
+) -> dict[str, Any]:
+    """Describe one host-neutral delegation and its complete child prompt."""
+    task_id = task["task_id"]
+    output_path = Path(task["output_path"])
+    validate_invocation = (
+        f"{command_arg(sys.executable)} {command_arg(SCRIPTS_DIR / 'deep_research.py')} "
+        f"validate --task-id {command_arg(task_id)} --workspace {command_arg(layout.workspace)}"
+    )
+    field_ids = task.get("field_ids", [])
+    prompt = "\n".join([
+        f"Research {task_id}: {task.get('focus') or task.get('description') or task_id}",
+        "",
+        f"Current date: {date_str}. Include '{year_str}' in search queries and use current sources; do not rely on training data.",
+        f"Task type: {task.get('type', 'web')}",
+        f"Item ID: {task.get('item_id', '')}",
+        f"Field IDs: {json.dumps(field_ids, ensure_ascii=False)}",
+        f"Run ID: {layout.run_id}",
+        f"Findings directory: {layout.findings_dir}",
+        f"Output path: {output_path}",
+        f"Shell-quoted output path: {task['output_path_quoted']}",
+        f"Shell: {shell_name()}",
+        "",
+        "Use the host's available web, GitHub, or codebase research tools appropriate to the task type. Read key sources, extract every requested field, cite original sources with publication dates when available, mark uncertainty explicitly, and perform targeted follow-up searches for missing or contradictory evidence.",
+        "Write one JSON object to the exact output path with this shape:",
+        json.dumps({
+            "type": task.get("type", "web"),
+            "task_id": task_id,
+            "item_id": task.get("item_id", ""),
+            "field_ids": field_ids,
+            "focus": task.get("focus", ""),
+            "iteration": task.get("iteration", 0),
+            "findings": [{
+                "source": "URL, repository, or file",
+                "title": "...",
+                "published_date": "YYYY-MM-DD or null",
+                "field_data": {field_id: "evidence" for field_id in field_ids},
+                "summary": "...",
+                "key_quotes": ["..."],
+                "relevance": "high|medium|low",
+                "uncertain": False,
+            }],
+            "gaps": ["..."],
+        }, indent=2, ensure_ascii=False),
+        "Create the parent directory if needed. Use the supplied absolute output path and shell-safe quoted value when writing through a shell.",
+        f"Validate the findings with: {validate_invocation}",
+        "Return a concise evidence summary to the parent agent. The parent will resume the orchestrator after all delegated findings are complete.",
+    ])
+    return {
+        "action": "dispatch_subagent",
+        "description": f"Research {task_id}",
+        "prompt": prompt,
+        "name": task_id,
+        "cwd": str(layout.project_root),
+    }
+
+
 def output_dispatch_instructions(
     tasks: list[dict[str, Any]], workspace: Path, layout: ResearchLayout
 ) -> None:
-    """Output JSON instructions for the agent to dispatch subagents."""
+    """Output structured, host-neutral instructions for native subagent dispatch."""
     tasks_with_paths = []
     for task in tasks:
         output_path = layout.findings_dir / f"{task['task_id']}.json"
@@ -242,47 +300,40 @@ def output_dispatch_instructions(
         })
     date_str = _current_date_string()
     year_str = _current_year()
-    date_context = f"Current date: {date_str}. Include '{year_str}' in search queries. Do NOT rely on training data. "
+    dispatches = [
+        _subagent_dispatch(task, layout, date_str, year_str)
+        for task in tasks_with_paths
+    ]
+    common = {
+        "workspace": str(layout.workspace),
+        "run_id": layout.run_id,
+        "findings_dir": str(layout.findings_dir),
+        "shell": shell_name(),
+        "workspace_quoted": command_arg(layout.workspace),
+        "resume_command": resume_command(layout),
+        "current_date": date_str,
+    }
 
-    if len(tasks) == 1:
+    if len(dispatches) == 1:
         print(json.dumps({
             "action": "dispatch_subagent",
-            "workspace": str(layout.workspace),
-            "run_id": layout.run_id,
-            "findings_dir": str(layout.findings_dir),
-            "shell": shell_name(),
-            "workspace_quoted": command_arg(layout.workspace),
-            "resume_command": resume_command(layout),
-            "current_date": date_str,
+            **common,
+            **{key: value for key, value in dispatches[0].items() if key != "action"},
             "task": tasks_with_paths[0],
             "instruction": (
-                date_context +
-                "Dispatch a subagent for the task above using task(background: true). "
-                "The subagent MUST search for the latest information and cite sources with dates. "
-                "Use the task's output_path and shell-safe output_path_quoted when writing findings. "
-                "After the subagent completes and findings are written, run: "
-                f"deep_research.py run-all --resume --workspace {command_arg(layout.workspace)}"
+                "Translate dispatch_subagent into the current host's native asynchronous subagent mechanism. "
+                f"After the child completes and its findings are validated, resume with: {_resume_invocation(layout)}"
             ),
         }, indent=2, ensure_ascii=False))
     else:
         print(json.dumps({
             "action": "dispatch_subagents_batch",
-            "workspace": str(layout.workspace),
-            "run_id": layout.run_id,
-            "findings_dir": str(layout.findings_dir),
-            "shell": shell_name(),
-            "workspace_quoted": command_arg(layout.workspace),
-            "resume_command": resume_command(layout),
-            "current_date": date_str,
+            **common,
             "tasks": tasks_with_paths,
+            "dispatches": dispatches,
             "instruction": (
-                date_context +
-                f"Dispatch a subagent for EACH task above using task(background: true). "
-                f"All {len(tasks)} tasks can run in parallel. "
-                "Each subagent MUST search for the latest information and cite sources with dates. "
-                "Use each task's output_path and shell-safe output_path_quoted when writing findings. "
-                "After all subagents complete and findings are written, run: "
-                f"deep_research.py run-all --resume --workspace {command_arg(layout.workspace)}"
+                "Translate every dispatch_subagent entry into the current host's native asynchronous subagent mechanism and start independent entries concurrently. "
+                f"After all children complete and their findings are validated, resume with: {_resume_invocation(layout)}"
             ),
         }, indent=2, ensure_ascii=False))
 
@@ -316,7 +367,7 @@ def output_pre_research_instructions(
             "vendors, and source URLs. "
             f"Write findings to {command_arg(output_path)} using a {shell_name()} shell command. "
             "The same value is available as output_path and output_path_quoted. "
-            f"After writing findings, run: deep_research.py run-all --resume --workspace {command_arg(layout.workspace)}"
+            f"After writing findings, run: {_resume_invocation(layout)}"
         ),
         "output_schema": {
             "task_id": task_id,
@@ -533,8 +584,7 @@ def run_all(
                 "Rewrite the report into a polished, coherent narrative following "
                 f"the polish prompt file. Save the polished version to {report_path} "
                 "(overwrite). Keep SVG charts and source citations intact. "
-                "After polishing, run: deep_research.py run-all --resume --workspace "
-                + command_arg(layout.workspace)
+                f"After polishing, run: {_resume_invocation(layout)}"
             ),
         }, indent=2, ensure_ascii=False))
         state["phase"] = "auditing"

@@ -4,6 +4,12 @@ import path from "node:path"
 export const SKILL_HOSTS = Object.freeze(["opencode-v1", "opencode-v2", "codex", "dsh"])
 
 const CODEX_TOOL_MAPPING = {
+  "# OpenCode Deep Research": "# Codex Deep Research",
+  "native to OpenCode's subagent and MCP infrastructure": "native to Codex subagents and MCP infrastructure",
+  "- OpenCode's built-in web search, GitHub, and codegraph tools (or MCP equivalents)": "- Codex-native subagents plus web search, GitHub, and codegraph tools (or MCP equivalents)",
+  "Background task completions are automatically injected via the Background Job Board.": "Codex delivers native subagent completion results to your mailbox.",
+  "`task(background: true)`": "`spawn_agent` with `fork_turns: \"none\"`",
+  "Multiple `task` calls in one response execute simultaneously.": "Independent `spawn_agent` calls execute asynchronously; continue useful work while they run.",
   websearch_web_search_exa: "web_search",
   webfetch: "web_fetch",
   codegraph_codegraph_explore: "mcp__codegraph__explore",
@@ -25,12 +31,42 @@ const CODEX_TOOL_MAPPING = {
   github_list_releases: "mcp__github__list_releases",
 }
 
+const OPENCODE_V2_TOOL_MAPPING = {
+  "`task(background: true)`": "`subagent(..., background: true)`",
+  "task(background=true,": "subagent(background=true,",
+  "Multiple `task` calls": "Multiple `subagent` calls",
+}
+
+const DSH_TOOL_MAPPING = {
+  websearch_web_search_exa: "web_search",
+  websearch_web_fetch_exa: "web_fetch",
+  webfetch: "web_fetch",
+  codegraph_codegraph_explore: "mcp__codegraph__codegraph_explore",
+  load_skill: "skill",
+  github_list_issues: "mcp__github__list_issues",
+  github_issue_read: "mcp__github__issue_read",
+  github_search_issues: "mcp__github__search_issues",
+  github_issue_write: "mcp__github__issue_write",
+  github_add_issue_comment: "mcp__github__add_issue_comment",
+  github_create_pull_request: "mcp__github__create_pull_request",
+  github_pull_request_read: "mcp__github__pull_request_read",
+  github_update_pull_request: "mcp__github__update_pull_request",
+  github_update_pull_request_branch: "mcp__github__update_pull_request_branch",
+  github_pull_request_review_write: "mcp__github__pull_request_review_write",
+  github_add_comment_to_pending_review: "mcp__github__add_comment_to_pending_review",
+  github_merge_pull_request: "mcp__github__merge_pull_request",
+  github_add_reply_to_pull_request_comment: "mcp__github__add_reply_to_pull_request_comment",
+  github_search_code: "mcp__github__search_code",
+  github_search_pull_requests: "mcp__github__search_pull_requests",
+  github_list_releases: "mcp__github__list_releases",
+}
+
 // Hosts are explicit API inputs. Never infer a host from the runtime or cwd.
 const TOOL_MAPPINGS = {
   "opencode-v1": {},
-  "opencode-v2": {},
+  "opencode-v2": OPENCODE_V2_TOOL_MAPPING,
   codex: CODEX_TOOL_MAPPING,
-  dsh: {},
+  dsh: DSH_TOOL_MAPPING,
 }
 
 const SORTED_TOOL_NAMES = Object.fromEntries(

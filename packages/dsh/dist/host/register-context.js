@@ -1,5 +1,5 @@
 import { appendDshCapabilityDiagnostic, setDshCapabilityDiagnostics, } from "./health.js";
-import { buildDshStatePreservationContext, DSH_JOB_BOARD_CONTEXT_NAME, DSH_PARALLEL_INSTRUCTIONS, DSH_PARALLEL_SECTION_NAME, DSH_STATE_PRESERVATION_NOTE, } from "./prompt.js";
+import { buildDshStatePreservationContext, buildDshTopLevelInstructions, DSH_JOB_BOARD_CONTEXT_NAME, DSH_PARALLEL_SECTION_NAME, DSH_STATE_PRESERVATION_NOTE, } from "./prompt.js";
 const CONTEXT_ASSEMBLY_ERROR = "ERR_DSH_CONTEXT_ASSEMBLY";
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -63,7 +63,10 @@ export function registerDshContext(ctx, board, health) {
             disposers.push(inner.systemPrompt.section({
                 name: DSH_PARALLEL_SECTION_NAME,
                 order: inner.systemPrompt.getSectionOrder("TOOL_SUBAGENT") + 1,
-                text: DSH_PARALLEL_INSTRUCTIONS,
+                text: (assembly) => {
+                    const session = assembly.agent?.session;
+                    return buildDshTopLevelInstructions(session?.origin === "subagent");
+                },
                 interpolate: false,
             }));
         }

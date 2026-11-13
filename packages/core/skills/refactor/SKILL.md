@@ -66,7 +66,7 @@ Read the file, understand what it does currently, and plan the specific changes.
 
 **Step 3: Apply the refactoring**
 
-Use edit tools to make the changes. If using LSP-enabled OpenCode:
+Use the host's edit tools to make the changes. If the active host exposes LSP rename support:
 - Use `lsp` tool for `prepare_rename` and `rename` operations
 - Use `lsp` tool for `findReferences` to ensure all callers are updated
 

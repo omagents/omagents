@@ -479,6 +479,127 @@ test("test_default_and_ancestor_workspaces_are_rejected_before_writes", (t) => {
   assert.ok(!fs.existsSync(path.join(nested, ".omagents")))
 })
 
+test("structured subagent dispatch is host-neutral and complete", (t) => {
+  const project = makeProject(t)
+  const source = `
+import sys
+sys.path.insert(0, ${JSON.stringify(SCRIPTS)})
+from layout import ResearchLayout
+from orchestrate import output_dispatch_instructions
+layout = ResearchLayout.resolve("structured", ${JSON.stringify(project)})
+tasks = [
+    {"task_id": "task-a", "type": "web", "item_id": "item-1", "field_ids": ["field-1"], "focus": "Research Alpha", "description": "Research Alpha"},
+    {"task_id": "task-b", "type": "github", "item_id": "item-2", "field_ids": ["field-2"], "focus": "Research Beta", "description": "Research Beta"},
+]
+output_dispatch_instructions(tasks[:1], layout.workspace, layout)
+print("---BATCH---")
+output_dispatch_instructions(tasks, layout.workspace, layout)
+`
+  const result = runPython("-c", [source], project)
+  const [singleOutput, batchOutput] = result.stdout.split("---BATCH---")
+  const single = dispatchFrom(singleOutput)
+  const batch = dispatchFrom(batchOutput)
+
+  for (const key of ["action", "description", "prompt", "name", "cwd"]) {
+    assert.ok(single[key], `single dispatch is missing ${key}`)
+  }
+  assert.strictEqual(single.action, "dispatch_subagent")
+  assert.strictEqual(single.name, "task-a")
+  assert.strictEqual(single.cwd, project)
+  assert.match(single.prompt, /Research Alpha/)
+  assert.match(single.prompt, /task-a\.json/)
+  assert.match(single.prompt, /deep_research\.py/)
+  assert.doesNotMatch(result.stdout, /\btask\s*\(\s*background|background\s*[:=]\s*true|OPENCODE_/)
+
+  assert.strictEqual(batch.action, "dispatch_subagents_batch")
+  assert.strictEqual(batch.dispatches.length, 2)
+  for (const [index, dispatch] of batch.dispatches.entries()) {
+    assert.strictEqual(dispatch.action, "dispatch_subagent")
+    assert.strictEqual(dispatch.name, `task-${index === 0 ? "a" : "b"}`)
+    assert.strictEqual(dispatch.cwd, project)
+    assert.ok(dispatch.description)
+    assert.match(dispatch.prompt, new RegExp(`task-${index === 0 ? "a" : "b"}\\.json`))
+  }
+})
+
+test("gap analysis adds a run-scoped task and resumes the same research lane", (t) => {
+  const project = makeProject(t)
+  const first = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      ["run-all", "--query", "Gap resume", "--workspace", "gap-resume", "--skip-pre-research"],
+      project
+    ).stdout
+  )
+  const runId = first.run_id
+  const internal = path.join(project, ".omagents", "deep-research", runId)
+  const planPath = path.join(internal, "plan.json")
+  const plan = JSON.parse(fs.readFileSync(planPath, "utf-8"))
+  plan.fields.push({
+    id: "field-gap",
+    name: "Missing dimension",
+    category: "General",
+    description: "A required field with no initial research task",
+    required: true,
+  })
+  writeJson(planPath, plan)
+
+  let resumed = first
+  for (let batch = 0; batch < 5; batch += 1) {
+    for (const task of resumed.tasks) {
+      writeJson(task.output_path, {
+        type: task.type,
+        task_id: task.task_id,
+        item_id: task.item_id,
+        field_ids: task.field_ids,
+        focus: task.focus,
+        iteration: 0,
+        findings: [
+          {
+            source: `https://example.com/${task.task_id}`,
+            title: task.focus,
+            published_date: "2026-01-01",
+            field_data: Object.fromEntries(task.field_ids.map((field) => [field, "covered"])),
+            summary: "Covered initial fields",
+            key_quotes: [],
+            relevance: "high",
+            uncertain: false,
+          },
+        ],
+        gaps: [],
+      })
+      runPython(
+        LOOP_ENGINE,
+        ["complete", `deep-research-${runId}`, task.task_id, "initial findings written"],
+        project
+      )
+    }
+    resumed = dispatchFrom(
+      runPython(DEEP_RESEARCH, ["run-all", "--resume", "--workspace", "gap-resume"], project).stdout
+    )
+    if (resumed.action === "dispatch_subagent" && resumed.name?.startsWith("task-r1-")) break
+    assert.ok(batch < 4, "gap dispatch was not reached after draining initial tasks")
+  }
+
+  assert.strictEqual(resumed.run_id, runId)
+  assert.strictEqual(resumed.action, "dispatch_subagent")
+  assert.match(resumed.name, /^task-r1-/)
+  assert.match(resumed.prompt, /field-gap|Missing dimension/)
+  const checkpoint = JSON.parse(
+    fs.readFileSync(path.join(internal, "state", "orchestration_state.json"), "utf-8")
+  )
+  assert.strictEqual(checkpoint.phase, "dispatch")
+  assert.strictEqual(checkpoint.loop, 1)
+  const queue = JSON.parse(
+    fs.readFileSync(
+      path.join(project, ".omagents", "loops", `deep-research-${runId}`, "tasks.json"),
+      "utf-8"
+    )
+  )
+  assert.ok(queue.tasks.some((task) => task.task_id === resumed.name && task.status === "pending"))
+  assert.ok(!fs.existsSync(path.join(project, "gap-resume", "plan.json")))
+})
+
 test("test_agent_output_paths_shell_round_trip", (t) => {
   const project = makeProject(t)
   const preWorkspace = "研究 topic's & spaces"

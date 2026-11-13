@@ -73,7 +73,7 @@ test("shared skills fall back to SKILL.md and host overrides replace the full co
   )
   const sharedPath = path.join(definition.directory, "SKILL.md")
   const overridePath = path.join(definition.directory, "SKILL.dsh.md")
-  const shared = renderSkillForHost(definition, "opencode-v2")
+  const shared = renderSkillForHost(definition, "opencode-v1")
   const overridden = renderSkillForHost(definition, "dsh")
 
   assert.equal(shared.path, sharedPath)
@@ -89,6 +89,95 @@ test("DSH parallel skill never contains the OpenCode background argument", () =>
     (skill) => skill.name === "parallel-execution"
   )
   assert.doesNotMatch(renderSkillForHost(definition, "dsh").content, /background:\s*true/)
+})
+
+test("DSH discovers all 33 skills and renders every skill without wrong-host control flow", () => {
+  const definitions = listSkillDefinitions({ host: "dsh" })
+  assert.equal(definitions.length, 33)
+  assert.equal(definitions.filter((skill) => skill.source === "omagents").length, 18)
+  assert.equal(definitions.filter((skill) => skill.source === "superpowers").length, 15)
+
+  for (const definition of definitions) {
+    const rendered = renderSkillForHost(definition, "dsh")
+    assert.ok(rendered.body.trim(), `${definition.name} must have DSH instructions`)
+    assert.doesNotMatch(
+      rendered.content,
+      /\btask\s*\(\s*background|background\s*[:=]\s*true|OPENCODE_/,
+      `${definition.name} leaked OpenCode orchestration into DSH`
+    )
+    assert.doesNotMatch(
+      rendered.content,
+      /websearch_web_search_exa|websearch_web_fetch_exa|\bwebfetch\b|codegraph_codegraph_explore|\bgithub_[a-z_]+/,
+      `${definition.name} leaked OpenCode tool names into DSH`
+    )
+  }
+})
+
+test("material DSH workflows use full overrides and native tool mappings", () => {
+  const definitions = listSkillDefinitions({ host: "dsh" })
+  for (const name of ["parallel-execution", "deep-research", "hyperplan", "doctor", "lsp-guide"]) {
+    const definition = definitions.find((skill) => skill.name === name)
+    assert.ok(definition, `missing ${name}`)
+    assert.equal(
+      renderSkillForHost(definition, "dsh").path,
+      path.join(definition.directory, "SKILL.dsh.md"),
+      `${name} must use a full DSH override`
+    )
+  }
+
+  const byName = Object.fromEntries(definitions.map((definition) => [definition.name, definition]))
+  const research = renderSkillForHost(byName["deep-research"], "dsh").content
+  assert.match(research, /`subagent`/)
+  assert.match(research, /dispatch_subagent/)
+  assert.match(research, /web_search/)
+  assert.match(research, /web_fetch/)
+  assert.match(research, /mcp__codegraph__codegraph_explore/)
+  assert.match(research, /mcp__github__search_code/)
+  assert.match(research, /<skill-dir>\/scripts\/deep_research\.py/)
+
+  const hyperplan = renderSkillForHost(byName.hyperplan, "dsh").content
+  assert.equal(
+    (hyperplan.match(/description:\s*["'](?:Security|Architecture|Edge cases) critic/g) || [])
+      .length,
+    3
+  )
+  assert.match(hyperplan, /cancel_task/)
+  assert.match(hyperplan, /loop_engine\.py/)
+
+  const doctor = renderSkillForHost(byName.doctor, "dsh").content
+  assert.match(doctor, /@omagents\/omagents-dsh/)
+  assert.match(doctor, /33/)
+  assert.match(doctor, /native `subagent`|native DSH `subagent`/)
+
+  const lsp = renderSkillForHost(byName["lsp-guide"], "dsh").content
+  assert.match(lsp, /mcp__codegraph__codegraph_explore/)
+  assert.doesNotMatch(lsp, /opencode\.json|EXPERIMENTAL_LSP/)
+
+  const office = renderSkillForHost(byName.officecli, "dsh").content
+  assert.match(office, /`skill` once/)
+  assert.doesNotMatch(office, /load_skill/)
+})
+
+test("OpenCode and Codex keep their own native subagent rendering", () => {
+  const definitions = listSkillDefinitions({ host: "opencode-v2" })
+  const research = definitions.find((skill) => skill.name === "deep-research")
+  const hyperplan = definitions.find((skill) => skill.name === "hyperplan")
+
+  const v1Research = renderSkillForHost(research, "opencode-v1").content
+  assert.match(v1Research, /task\(background:\s*true\)/)
+  const v2Research = renderSkillForHost(research, "opencode-v2").content
+  assert.match(v2Research, /subagent\([^)]*background:\s*true/)
+  assert.doesNotMatch(v2Research, /\btask\s*\(/)
+  const codexResearch = renderSkillForHost(research, "codex").content
+  assert.match(codexResearch, /spawn_agent/)
+  assert.doesNotMatch(codexResearch, /\btask\s*\(|background\s*[:=]\s*true/)
+
+  const v2Hyperplan = renderSkillForHost(hyperplan, "opencode-v2").content
+  assert.match(v2Hyperplan, /subagent\(background\s*=\s*true/)
+  assert.doesNotMatch(v2Hyperplan, /\btask\s*\(/)
+  const codexHyperplan = renderSkillForHost(hyperplan, "codex").content
+  assert.match(codexHyperplan, /spawn_agent/)
+  assert.doesNotMatch(codexHyperplan, /\btask\s*\(|background\s*[:=]\s*true/)
 })
 
 test("all skill directories have SKILL.md", () => {

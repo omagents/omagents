@@ -8,8 +8,8 @@ import {
 } from "./health.js"
 import {
   buildDshStatePreservationContext,
+  buildDshTopLevelInstructions,
   DSH_JOB_BOARD_CONTEXT_NAME,
-  DSH_PARALLEL_INSTRUCTIONS,
   DSH_PARALLEL_SECTION_NAME,
   DSH_STATE_PRESERVATION_NOTE,
 } from "./prompt.js"
@@ -39,7 +39,9 @@ export function registerDshContext(
   const reportAssemblyFailure = (error: unknown) => {
     if (!health) return
     setDshCapabilityDiagnostics(health, "context", [
-      ...health.context.diagnostics.filter((diagnostic) => diagnostic.code !== CONTEXT_ASSEMBLY_ERROR),
+      ...health.context.diagnostics.filter(
+        (diagnostic) => diagnostic.code !== CONTEXT_ASSEMBLY_ERROR
+      ),
       {
         code: CONTEXT_ASSEMBLY_ERROR,
         message: `Unable to project the DSH Job Board into model context: ${errorMessage(error)}`,
@@ -89,7 +91,14 @@ export function registerDshContext(
         inner.systemPrompt.section({
           name: DSH_PARALLEL_SECTION_NAME,
           order: inner.systemPrompt.getSectionOrder("TOOL_SUBAGENT") + 1,
-          text: DSH_PARALLEL_INSTRUCTIONS,
+          text: (assembly: AssembleContext) => {
+            const session = (
+              assembly as AssembleContext & {
+                agent?: { readonly session: { readonly origin?: string } }
+              }
+            ).agent?.session
+            return buildDshTopLevelInstructions(session?.origin === "subagent")
+          },
           interpolate: false,
         })
       )

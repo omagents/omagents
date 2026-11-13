@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url"
 const files = [
   "loader.test.ts",
   "skills.test.ts",
+  "research-workflow.test.ts",
+  "superpowers.test.ts",
   "mcp.test.ts",
   "python.test.ts",
   "tools.test.ts",

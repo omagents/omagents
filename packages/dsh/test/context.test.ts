@@ -122,7 +122,7 @@ test("DSH prompt has native instructions and one dynamic running/pending Board s
     assert.equal(occurrences(prompt, "<Parallel_Execution>"), 1)
     assert.match(prompt, /native DSH.*subagent|native `subagent`/)
     assert.match(prompt, /parallel_status/)
-    assert.doesNotMatch(prompt, /\btask\s*\(|background\s*:/)
+    assert.doesNotMatch(prompt, /\btask\s*\(\s*background|background\s*:/)
     assert.equal(occurrences(context, "OmAgents State Preservation"), 1)
     assert.equal(occurrences(context, "### Background Job Board"), 1)
     assert.match(context, /#### Running/)
