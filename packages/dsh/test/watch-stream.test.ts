@@ -84,6 +84,45 @@ test("watchJobs yields an empty baseline and abort resolves a pending iteration 
   assert.deepEqual(await stream.next(), { done: true, value: undefined })
 })
 
+test("watchJobs return during an idle pending next closes immediately and detaches synchronously", async (t) => {
+  const { remote, activeSubscriptions } = setup(t)
+  const stream = remote.watchJobs({}, new AbortController().signal)[Symbol.asyncIterator]()
+  await stream.next()
+  assert.equal(activeSubscriptions(), 1)
+
+  const pending = stream.next()
+  const returned = stream.return()
+  assert.equal(activeSubscriptions(), 0, "return() must synchronously detach the Core listener")
+  assert.deepEqual(await within(Promise.all([pending, returned]), "overlapping next/return"), [
+    { done: true, value: undefined },
+    { done: true, value: undefined },
+  ])
+  assert.equal(activeSubscriptions(), 0)
+})
+
+test("watchJobs throw during an idle pending next cleans up before rejecting", async (t) => {
+  const { remote, activeSubscriptions } = setup(t)
+  const stream = remote.watchJobs({}, new AbortController().signal)[Symbol.asyncIterator]()
+  await stream.next()
+  const failure = new Error("consumer failed")
+  const pending = stream.next()
+  const thrownAssertion = assert.rejects(
+    within(stream.throw(failure), "overlapping next/throw"),
+    (error) => error === failure
+  )
+  const pendingSettlement = within(pending, "pending next after throw").then(
+    (value) => ({ value }),
+    (error) => ({ error })
+  )
+
+  assert.equal(activeSubscriptions(), 0, "throw() must synchronously detach the Core listener")
+  await thrownAssertion
+  assert.deepEqual(await pendingSettlement, {
+    value: { done: true, value: undefined },
+  })
+  assert.equal(activeSubscriptions(), 0)
+})
+
 test("watchJobs subscribes before its baseline so a change during subscription is not lost", async (t) => {
   let job
   let board

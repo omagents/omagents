@@ -165,7 +165,35 @@ export class OmAgentsRemote extends TypertRemoteService {
   }
 
   @Remote({ mode: "stream" })
-  async *watchJobs(scope: JobScope, signal: AbortSignal): AsyncIterable<JobWatchFrame> {
+  watchJobs(scope: JobScope, signal: AbortSignal): AsyncIterable<JobWatchFrame> {
+    return {
+      [Symbol.asyncIterator]: () => {
+        let close = () => {}
+        const iterator = this.streamJobs(scope, signal, (closeStream) => {
+          close = closeStream
+        })[Symbol.asyncIterator]()
+        return {
+          next: () => iterator.next(),
+          return: async () => {
+            // AsyncGenerator return() is queued behind a pending next(). Close
+            // first so that next can finish and the queued return can settle.
+            close()
+            return iterator.return(undefined)
+          },
+          throw: async (error?: unknown) => {
+            close()
+            return iterator.throw(error)
+          },
+        }
+      },
+    }
+  }
+
+  private async *streamJobs(
+    scope: JobScope,
+    signal: AbortSignal,
+    registerClose: (close: () => void) => void
+  ): AsyncGenerator<JobWatchFrame, void, unknown> {
     const normalized = normalizeScope(scope)
     this.assertAuthorized(normalized, "omagents/watchJobs", "session-scope-unauthorized")
     const lifetime = AbortSignal.any([signal, this.lifetime.signal])
@@ -181,13 +209,14 @@ export class OmAgentsRemote extends TypertRemoteService {
         queue.fail(error)
       }
     })
-    const onAbort = () => {
+    const close = () => {
       queue.close()
       // An AsyncGenerator suspended at yield has no pending finally transition;
-      // abort itself must still release the Core listener immediately.
+      // closure itself must still release the Core listener immediately.
       unsubscribe()
     }
-    lifetime.addEventListener("abort", onAbort, { once: true })
+    registerClose(close)
+    lifetime.addEventListener("abort", close, { once: true })
     try {
       const baseline = this.frame(normalized)
       queue.discardThrough(baseline.revision)
@@ -199,9 +228,8 @@ export class OmAgentsRemote extends TypertRemoteService {
         yield frame
       }
     } finally {
-      lifetime.removeEventListener("abort", onAbort)
-      queue.close()
-      unsubscribe()
+      lifetime.removeEventListener("abort", close)
+      close()
     }
   }
 

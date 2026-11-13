@@ -23,6 +23,7 @@ export declare class OmAgentsRemote extends TypertRemoteService {
     cancelJob(jobId: string): Promise<JobDto>;
     getHealth(): HealthDto;
     watchJobs(scope: JobScope, signal: AbortSignal): AsyncIterable<JobWatchFrame>;
+    private streamJobs;
     private assertAuthorized;
     private readJobs;
     private frame;

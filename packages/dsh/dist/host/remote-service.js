@@ -174,7 +174,30 @@ let OmAgentsRemote = (() => {
         getHealth() {
             return structuredClone(this.health);
         }
-        async *watchJobs(scope, signal) {
+        watchJobs(scope, signal) {
+            return {
+                [Symbol.asyncIterator]: () => {
+                    let close = () => { };
+                    const iterator = this.streamJobs(scope, signal, (closeStream) => {
+                        close = closeStream;
+                    })[Symbol.asyncIterator]();
+                    return {
+                        next: () => iterator.next(),
+                        return: async () => {
+                            // AsyncGenerator return() is queued behind a pending next(). Close
+                            // first so that next can finish and the queued return can settle.
+                            close();
+                            return iterator.return(undefined);
+                        },
+                        throw: async (error) => {
+                            close();
+                            return iterator.throw(error);
+                        },
+                    };
+                },
+            };
+        }
+        async *streamJobs(scope, signal, registerClose) {
             const normalized = normalizeScope(scope);
             this.assertAuthorized(normalized, "omagents/watchJobs", "session-scope-unauthorized");
             const lifetime = AbortSignal.any([signal, this.lifetime.signal]);
@@ -191,13 +214,14 @@ let OmAgentsRemote = (() => {
                     queue.fail(error);
                 }
             });
-            const onAbort = () => {
+            const close = () => {
                 queue.close();
                 // An AsyncGenerator suspended at yield has no pending finally transition;
-                // abort itself must still release the Core listener immediately.
+                // closure itself must still release the Core listener immediately.
                 unsubscribe();
             };
-            lifetime.addEventListener("abort", onAbort, { once: true });
+            registerClose(close);
+            lifetime.addEventListener("abort", close, { once: true });
             try {
                 const baseline = this.frame(normalized);
                 queue.discardThrough(baseline.revision);
@@ -212,9 +236,8 @@ let OmAgentsRemote = (() => {
                 }
             }
             finally {
-                lifetime.removeEventListener("abort", onAbort);
-                queue.close();
-                unsubscribe();
+                lifetime.removeEventListener("abort", close);
+                close();
             }
         }
         assertAuthorized(scope, action, reason) {
