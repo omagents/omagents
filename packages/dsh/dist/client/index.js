@@ -20,32 +20,38 @@ export function JobBoardIcon({ size = 20 }) {
 /** Mount the Host Remote and attach the native panel to the package-root fiber. */
 export async function apply(ctx) {
     const unmount = await ctx.remote.$mount(TYPERT_REMOTE);
-    const store = createJobBoardStore(ctx.remote.omagents);
+    let store;
     const disposers = [];
-    try {
-        disposers.push(ctx.slots.inject("main", () => ctx.slots.register({
+    const ui = ctx.inject(["remote.omagents"], (inner) => {
+        store = createJobBoardStore(inner.remote.omagents);
+        disposers.push(inner.slots.inject("main", () => inner.slots.register({
             name: "main",
             key: PANEL_ID,
-            inject: () => ({ store }),
+            inject: () => ({ store: store }),
         }, JobBoardPage)));
-        disposers.push(ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({
+        disposers.push(inner.slots.inject("sidebar.panellist", () => inner.slots.register({
             name: "sidebar.panellist",
             id: PANEL_ID,
             order: 20,
             label: "OmAgents",
         }, JobBoardIcon)));
+    });
+    try {
+        await ui;
     }
     catch (error) {
         for (const dispose of disposers.reverse())
             dispose();
-        store.dispose();
+        store?.dispose();
+        await ui.dispose();
         await unmount();
         throw error;
     }
     return async () => {
         for (const dispose of disposers.reverse())
             dispose();
-        store.dispose();
+        store?.dispose();
+        await ui.dispose();
         await unmount();
     };
 }

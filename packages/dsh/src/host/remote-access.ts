@@ -1,11 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis"
 import type { RemoteAccessService } from "@deepseek-ai/dsh-api-remote-access"
 import { SessionId } from "@deepseek-ai/dsh-session"
-import {
-  principalOf,
-  RemoteError,
-  type RemoteErrorCode,
-} from "@deepseek-ai/dsh-typert-protocol"
+import { principalOf, RemoteError, type RemoteErrorCode } from "@deepseek-ai/dsh-typert-protocol"
 
 import type { JobScope } from "./remote-types.js"
 
@@ -31,7 +27,7 @@ export function authorizeRemoteScope(ctx: Context, scope: Readonly<JobScope>): b
   if (scope.parentSessionId === undefined) return true
   // principalOf returns undefined for both the owner and trusted in-process calls.
   if (principalOf(ctx.invocation) === undefined) return true
-  const remoteAccess = ctx.remoteAccess as RemoteAccessService | undefined
+  const remoteAccess = ctx.get("remoteAccess") as RemoteAccessService | undefined
   if (!remoteAccess) return false
   return remoteAccess.allows({ kind: "session", id: SessionId(scope.parentSessionId) })
 }
@@ -55,7 +51,10 @@ export function jobNotFound(jobId: string): RemoteError<"omagents/job-not-found"
   )
 }
 
-export function cancellationFailed(jobId: string, cause: unknown): RemoteError<"omagents/cancel-failed"> {
+export function cancellationFailed(
+  jobId: string,
+  cause: unknown
+): RemoteError<"omagents/cancel-failed"> {
   return new RemoteError(
     "omagents/cancel-failed",
     "The native subagent cancellation could not be admitted",

@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { CORE_PYTHON_PACKAGES, ensureBaseEnvironment, } from "@omagents/core";
+import { CORE_PYTHON_PACKAGES, ensureBaseEnvironment } from "@omagents/core";
 import { appendDshCapabilityDiagnostic, setDshCapabilityDiagnostics, } from "./health.js";
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -10,7 +10,7 @@ export function provisionDshPython(ctx, health) {
     ctx.effect(() => {
         let active = true;
         setDshCapabilityDiagnostics(health, "python", []);
-        const provisionBase = ctx.omagentsPython?.ensureBaseEnvironment ?? ensureBaseEnvironment;
+        const provisionBase = ctx.get("omagentsPython")?.ensureBaseEnvironment ?? ensureBaseEnvironment;
         const venvPath = join(homedir(), ".venvs", "omagents");
         const env = { ...process.env };
         void (async () => {

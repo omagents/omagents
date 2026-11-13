@@ -41,7 +41,7 @@ export function registerDshSkills(ctx: Context, health: DshHealth): () => void {
     setDshCapabilityDiagnostics(health, "skills", [])
 
     try {
-      const registry = (inner as Context & { skills?: Context["skills"] }).skills
+      const registry = typeof inner.get === "function" ? inner.get("skills") : inner.skills
       if (!registry) throw new Error("The DSH skill registry is unavailable")
 
       for (const definition of listSkillDefinitions({ host: "dsh" })) {

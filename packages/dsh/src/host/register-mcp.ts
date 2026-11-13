@@ -113,7 +113,9 @@ export function createDshMcpManager(ctx: Context): DshMcpManager {
         throw new Error(`MCP server "${name}" is already registered`)
       }
       if (!ctx.get("tools")) {
-        throw new Error(`Cannot register MCP server "${name}": the DSH tool registry is unavailable`)
+        throw new Error(
+          `Cannot register MCP server "${name}": the DSH tool registry is unavailable`
+        )
       }
 
       const fiber = ctx.plugin(McpClient, config)
@@ -193,8 +195,11 @@ export function registerDshMcp(
     setDshCapabilityDiagnostics(health, "mcp", [])
 
     try {
-      const manager = inner.mcpManager ?? createDshMcpManager(inner)
-      if (!inner.mcpManager) inner.provide("mcpManager", manager)
+      const currentManager =
+        typeof inner.get === "function" ? inner.get("mcpManager") : inner.mcpManager
+      const manager = currentManager ?? createDshMcpManager(inner)
+      if (!currentManager && typeof inner.provide === "function")
+        inner.provide("mcpManager", manager)
 
       for (const [name, definition] of Object.entries(resolveMcpServers({ env }))) {
         try {

@@ -5,11 +5,7 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
 import { Context } from "@deepseek-ai/cordis"
-import {
-  CORE_PYTHON_PACKAGES,
-  ensureBaseEnvironment,
-  getVenvPython,
-} from "@omagents/core"
+import { CORE_PYTHON_PACKAGES, ensureBaseEnvironment, getVenvPython } from "@omagents/core"
 
 import { createHealthRecords } from "../dist/host/health.js"
 import { provisionDshPython } from "../dist/host/register-python.js"
@@ -72,6 +68,31 @@ test("Python base provisioning is nonblocking and reports failure independently"
   assert.equal(health.host.status, "ready")
   assert.equal(health.skills.status, "ready")
   assert.equal(health.mcp.status, "ready")
+})
+
+test("missing optional provisioner falls back without a Cordis property-access failure", async (t) => {
+  const home = await isolatedHome(t)
+  const pythonPath = getVenvPython(join(home, ".venvs", "omagents"))
+  await fs.mkdir(dirname(pythonPath), { recursive: true })
+  // Presence selects the Core fallback, while execution fails locally without
+  // creating a venv or contacting pip. The provisioning error stays asynchronous.
+  await fs.writeFile(pythonPath, "not an executable", "utf8")
+  const root = new Context()
+  root.provide("loader", {})
+  t.after(() => root.fiber.dispose())
+  const health = healthyRecords()
+
+  await root.plugin({
+    name: "python-fallback-probe",
+    inject: ["loader"],
+    apply(ctx) {
+      provisionDshPython(ctx, health)
+    },
+  })
+  await nextTurn()
+  assert.equal(health.python.status, "degraded")
+  assert.equal(health.python.diagnostics[0]?.code, "ERR_DSH_PYTHON_PROVISIONING")
+  assert.doesNotMatch(health.python.diagnostics[0]?.message ?? "", /without inject/)
 })
 
 test("late Python completion cannot mutate health after Loader teardown", async (t) => {
@@ -161,9 +182,18 @@ test("DSH delegates only jinja2 base installation and leaves project overlays on
   assert.equal(pipInstalls.length, 1)
   assert.deepEqual(pipInstalls[0].args, ["-I", "-m", "pip", "install", "jinja2"])
   assert.equal(calls.filter(({ args }) => args.includes("venv")).length, 1)
-  assert.equal(calls.some(({ args }) => args.includes("markitdown")), false)
-  assert.equal(calls.some(({ args }) => args.includes("playwright")), false)
-  assert.equal(calls.some(({ args }) => args.some((arg) => arg.includes(".omagents/venv"))), false)
+  assert.equal(
+    calls.some(({ args }) => args.includes("markitdown")),
+    false
+  )
+  assert.equal(
+    calls.some(({ args }) => args.includes("playwright")),
+    false
+  )
+  assert.equal(
+    calls.some(({ args }) => args.some((arg) => arg.includes(".omagents/venv"))),
+    false
+  )
   assert.equal(health.python.status, "ready")
   assert.deepEqual(health.python.diagnostics, [])
 })

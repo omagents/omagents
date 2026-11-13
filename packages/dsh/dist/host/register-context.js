@@ -55,14 +55,17 @@ export function registerDshContext(ctx, board, health) {
         activeCleanup = cleanup;
         if (health)
             setDshCapabilityDiagnostics(health, "context", []);
-        if (typeof inner.systemPrompt?.section !== "function" || !inner.systemPrompt.context) {
+        const systemPrompt = typeof inner.get === "function"
+            ? inner.get("systemPrompt")
+            : Reflect.get(inner, "systemPrompt");
+        if (typeof systemPrompt?.section !== "function" || !systemPrompt.context) {
             report("ERR_DSH_CONTEXT_UNAVAILABLE", "Unable to initialize DSH model context: the systemPrompt registry is unavailable");
             return cleanup;
         }
         try {
-            disposers.push(inner.systemPrompt.section({
+            disposers.push(systemPrompt.section({
                 name: DSH_PARALLEL_SECTION_NAME,
-                order: inner.systemPrompt.getSectionOrder("TOOL_SUBAGENT") + 1,
+                order: systemPrompt.getSectionOrder("TOOL_SUBAGENT") + 1,
                 text: (assembly) => {
                     const header = assembly.agent?.session.header;
                     return buildDshTopLevelInstructions(header?.origin === "subagent");
@@ -74,9 +77,9 @@ export function registerDshContext(ctx, board, health) {
             report("ERR_DSH_CONTEXT_REGISTRATION", `Unable to register DSH parallel instructions: ${errorMessage(error)}`);
         }
         try {
-            disposers.push(inner.systemPrompt.context({
+            disposers.push(systemPrompt.context({
                 name: DSH_JOB_BOARD_CONTEXT_NAME,
-                order: inner.systemPrompt.getContextOrder("SUBAGENT_DELEGATION") + 1,
+                order: systemPrompt.getContextOrder("SUBAGENT_DELEGATION") + 1,
                 required: true,
                 interpolate: false,
                 text: (assembly) => {

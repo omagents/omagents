@@ -6,9 +6,11 @@ import React from "react"
 import { JSDOM } from "jsdom"
 
 import type { HealthDto, JobDto } from "../src/host/remote-types.ts"
-import type {
-  JobBoardSnapshot,
-  JobBoardStore,
+import {
+  createJobBoardStore,
+  type JobBoardSnapshot,
+  type JobBoardStore,
+  type OmAgentsJobRemote,
 } from "../src/client/remote-store.ts"
 import { JobBoardPage } from "../src/client/components/JobBoardPage.tsx"
 import { JobTable } from "../src/client/components/JobTable.tsx"
@@ -156,7 +158,10 @@ test("Cancel requires confirmation, explains descendant and one-shot behavior, a
   const dialog = screen.getByRole("alertdialog", { name: /cancel research one/i })
   assert.equal(dialog.getAttribute("aria-modal"), "true")
   assert.match(dialog.textContent ?? "", /descendants continue unless cancelled separately/i)
-  assert.match(dialog.textContent ?? "", /external one-shot runs stop permanently and cannot be resumed/i)
+  assert.match(
+    dialog.textContent ?? "",
+    /external one-shot runs stop permanently and cannot be resumed/i
+  )
   assert.equal(onCancel.mock.callCount(), 0)
 
   const confirm = within(dialog).getByRole("button", { name: /confirm cancellation/i })
@@ -184,7 +189,7 @@ test("cancelling state disables repeated cancellation and exposes its status", (
       jobs={[job("one", { executionState: "cancelling", cancelRequestedAt: 2_000 })]}
       now={61_000}
       onCancel={onCancel}
-    />,
+    />
   )
   const button = screen.getByRole("button", { name: /cancelling research one/i })
   assert.equal((button as HTMLButtonElement).disabled, true)
@@ -213,7 +218,7 @@ test("StatusBadge and table copy cover every execution and notification state", 
         jobs={[job(notificationState, { notificationState })]}
         now={61_000}
         onCancel={() => {}}
-      />,
+      />
     )
     const row = screen.getByText(`Research ${notificationState}`).closest("tr")
     assert.ok(row)
@@ -226,7 +231,7 @@ test("StatusBadge and table copy cover every execution and notification state", 
       jobs={[job("none", { notificationState: undefined })]}
       now={61_000}
       onCancel={() => {}}
-    />,
+    />
   )
   assert.ok(screen.getByText("No notification"))
 })
@@ -261,6 +266,28 @@ test("details disclosure is keyboard accessible and viewing never acknowledges a
   assert.ok(screen.getByText("parent-session-one"))
   assert.equal(store.getSnapshot().jobs[0].notificationState, "pending")
   assert.equal(acknowledge.mock.callCount(), 0)
+})
+
+test("a real Remote store does not restart its watch across baseline renders", async (t) => {
+  const remote = {
+    watchJobs: mock.fn(async function* () {
+      yield { revision: 0, jobs: [] }
+      await new Promise(() => {})
+    }),
+    listJobs: mock.fn(async () => ({ ok: true, value: [] })),
+    getHealth: mock.fn(async () => ({ ok: true, value: healthy })),
+    cancelJob: mock.fn(),
+  } as unknown as OmAgentsJobRemote
+  const store = createJobBoardStore(remote)
+  t.after(() => store.dispose())
+  const view = render(<JobBoardPage store={store} />)
+  t.after(() => view.unmount())
+
+  await act(async () => {
+    await Promise.resolve()
+  })
+  assert.ok(screen.getByText("No background jobs yet."))
+  assert.equal(remote.watchJobs.mock.callCount(), 1)
 })
 
 test("all, running, attention, and finished filters are accessible and filter the whole set", () => {

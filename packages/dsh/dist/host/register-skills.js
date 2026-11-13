@@ -32,7 +32,7 @@ export function registerDshSkills(ctx, health) {
         active = true;
         setDshCapabilityDiagnostics(health, "skills", []);
         try {
-            const registry = inner.skills;
+            const registry = typeof inner.get === "function" ? inner.get("skills") : inner.skills;
             if (!registry)
                 throw new Error("The DSH skill registry is unavailable");
             for (const definition of listSkillDefinitions({ host: "dsh" })) {

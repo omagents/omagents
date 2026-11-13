@@ -1,11 +1,6 @@
 import type { RemoteResult } from "@deepseek-ai/dsh-typert-protocol"
 
-import type {
-  HealthDto,
-  JobDto,
-  JobScope,
-  JobWatchFrame,
-} from "../host/remote-types.js"
+import type { HealthDto, JobDto, JobScope, JobWatchFrame } from "../host/remote-types.js"
 
 export interface OmAgentsJobRemote {
   listJobs(scope: JobScope): Promise<RemoteResult<JobDto[]>>
@@ -29,12 +24,7 @@ export interface JobBoardStoreOptions {
   reconnectDelayMs?: number
 }
 
-export type JobBoardConnectionStatus =
-  | "loading"
-  | "ready"
-  | "stale"
-  | "permission-denied"
-  | "error"
+export type JobBoardConnectionStatus = "loading" | "ready" | "stale" | "permission-denied" | "error"
 
 export interface JobBoardSnapshot {
   readonly jobs: readonly JobDto[]
@@ -97,10 +87,7 @@ function isPermissionDenied(error: unknown): boolean {
 
 function isTerminalExecutionState(state: JobDto["executionState"]): boolean {
   return (
-    state === "completed" ||
-    state === "failed" ||
-    state === "cancelled" ||
-    state === "interrupted"
+    state === "completed" || state === "failed" || state === "cancelled" || state === "interrupted"
   )
 }
 
@@ -145,7 +132,11 @@ class RemoteJobBoardStore implements JobBoardStore {
   subscribe(listener: () => void): () => void {
     if (this.disposed) return () => {}
     this.listeners.add(listener)
-    if (!this.running) this.start()
+    if (!this.running) {
+      queueMicrotask(() => {
+        if (!this.disposed && !this.running && this.listeners.size > 0) this.start()
+      })
+    }
     let subscribed = true
     return () => {
       if (!subscribed) return
@@ -327,7 +318,11 @@ class RemoteJobBoardStore implements JobBoardStore {
         }
       }
     } catch (error) {
-      if (this.watch !== watch || this.generation !== generation || watch.controller.signal.aborted) {
+      if (
+        this.watch !== watch ||
+        this.generation !== generation ||
+        watch.controller.signal.aborted
+      ) {
         return
       }
       this.watch = undefined
@@ -351,11 +346,7 @@ class RemoteJobBoardStore implements JobBoardStore {
   private async loadHealth(generation: number, watchMutation: number): Promise<void> {
     try {
       const result = await this.remote.getHealth()
-      if (
-        this.disposed ||
-        this.generation !== generation ||
-        this.watchMutation !== watchMutation
-      ) {
+      if (this.disposed || this.generation !== generation || this.watchMutation !== watchMutation) {
         return
       }
       if (result.ok) {

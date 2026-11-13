@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react"
+import React, { useCallback, useMemo, useState } from "react"
 import { useSyncExternalStore } from "react"
 
 import type { JobBoardStore, JobBoardSnapshot } from "../remote-store.js"
@@ -41,7 +41,11 @@ function degradedDiagnostics(health: HealthDto | undefined) {
 
 function ConnectionNotice({ snapshot }: { snapshot: JobBoardSnapshot }) {
   if (snapshot.status === "loading") {
-    return <p role="status" className={styles.notice}>Loading background jobs…</p>
+    return (
+      <p role="status" className={styles.notice}>
+        Loading background jobs…
+      </p>
+    )
   }
   if (snapshot.status === "stale") {
     return (
@@ -70,11 +74,9 @@ function ConnectionNotice({ snapshot }: { snapshot: JobBoardSnapshot }) {
 }
 
 export function JobBoardPage({ store }: JobBoardPageProps) {
-  const snapshot = useSyncExternalStore(
-    (listener) => store.subscribe(listener),
-    () => store.getSnapshot(),
-    () => store.getSnapshot()
-  )
+  const subscribe = useCallback((listener: () => void) => store.subscribe(listener), [store])
+  const getSnapshot = useCallback(() => store.getSnapshot(), [store])
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [filter, setFilter] = useState<JobFilter>("all")
   const jobs = useMemo(
     () => snapshot.jobs.filter((job) => matchesFilter(job, filter)),
@@ -93,7 +95,9 @@ export function JobBoardPage({ store }: JobBoardPageProps) {
   return (
     <section className={styles.page} aria-labelledby="omagents-job-board-title">
       <header className={styles.header}>
-        <h1 id="omagents-job-board-title" className={styles.title}>OmAgents Job Board</h1>
+        <h1 id="omagents-job-board-title" className={styles.title}>
+          OmAgents Job Board
+        </h1>
         <div className={styles.actions}>
           <button type="button" className={styles.button} onClick={() => void store.refresh()}>
             Refresh
@@ -114,7 +118,11 @@ export function JobBoardPage({ store }: JobBoardPageProps) {
         </div>
       )}
       {diagnostics.length > 0 && (
-        <section role="status" className={styles.degraded} aria-label="Degraded OmAgents capabilities">
+        <section
+          role="status"
+          className={styles.degraded}
+          aria-label="Degraded OmAgents capabilities"
+        >
           <strong>Some OmAgents capabilities are degraded.</strong>
           <ul>
             {diagnostics.map((diagnostic, index) => (

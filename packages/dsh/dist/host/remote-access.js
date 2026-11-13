@@ -1,5 +1,5 @@
 import { SessionId } from "@deepseek-ai/dsh-session";
-import { principalOf, RemoteError, } from "@deepseek-ai/dsh-typert-protocol";
+import { principalOf, RemoteError } from "@deepseek-ai/dsh-typert-protocol";
 /**
  * Adapt DSH's real remote-access rules to Job Board parent-session scopes.
  * Unscoped reads are admitted here and filtered per job by the Remote service.
@@ -10,7 +10,7 @@ export function authorizeRemoteScope(ctx, scope) {
     // principalOf returns undefined for both the owner and trusted in-process calls.
     if (principalOf(ctx.invocation) === undefined)
         return true;
-    const remoteAccess = ctx.remoteAccess;
+    const remoteAccess = ctx.get("remoteAccess");
     if (!remoteAccess)
         return false;
     return remoteAccess.allows({ kind: "session", id: SessionId(scope.parentSessionId) });

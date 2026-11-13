@@ -78,7 +78,11 @@ export function registerDshContext(
     activeCleanup = cleanup
     if (health) setDshCapabilityDiagnostics(health, "context", [])
 
-    if (typeof inner.systemPrompt?.section !== "function" || !inner.systemPrompt.context) {
+    const systemPrompt =
+      typeof inner.get === "function"
+        ? inner.get("systemPrompt")
+        : Reflect.get(inner, "systemPrompt")
+    if (typeof systemPrompt?.section !== "function" || !systemPrompt.context) {
       report(
         "ERR_DSH_CONTEXT_UNAVAILABLE",
         "Unable to initialize DSH model context: the systemPrompt registry is unavailable"
@@ -88,9 +92,9 @@ export function registerDshContext(
 
     try {
       disposers.push(
-        inner.systemPrompt.section({
+        systemPrompt.section({
           name: DSH_PARALLEL_SECTION_NAME,
-          order: inner.systemPrompt.getSectionOrder("TOOL_SUBAGENT") + 1,
+          order: systemPrompt.getSectionOrder("TOOL_SUBAGENT") + 1,
           text: (assembly: AssembleContext) => {
             const header = (
               assembly as AssembleContext & {
@@ -111,9 +115,9 @@ export function registerDshContext(
 
     try {
       disposers.push(
-        inner.systemPrompt.context({
+        systemPrompt.context({
           name: DSH_JOB_BOARD_CONTEXT_NAME,
-          order: inner.systemPrompt.getContextOrder("SUBAGENT_DELEGATION") + 1,
+          order: systemPrompt.getContextOrder("SUBAGENT_DELEGATION") + 1,
           required: true,
           interpolate: false,
           text: (assembly: AssembleContext) => {

@@ -39,6 +39,7 @@ async function materializeClient() {
     },
     console,
     AbortController,
+    queueMicrotask,
     setInterval: () => 1,
     clearInterval: () => {},
     setTimeout: () => 2,
@@ -55,10 +56,7 @@ test("the bare root Loader row declares the Web Client and built public exports"
   const pkg = await manifest()
   assert.deepEqual(pkg.dsh.client, {
     platform: "web",
-    inject: [
-      "@deepseek-ai/dsh-api-remotes",
-      "@deepseek-ai/dsh-client-ui-renderer",
-    ],
+    inject: ["@deepseek-ai/dsh-api-remotes", "@deepseek-ai/dsh-client-ui-renderer"],
   })
   assert.deepEqual(pkg.exports["./client"], {
     types: "./dist/client/index.d.ts",
@@ -89,18 +87,25 @@ test("Client source uses only native slots and plugin-owned controls/styles", as
   for (const path of files) {
     if (!/\.(?:ts|tsx)$/.test(path)) continue
     const source = await readFile(path, "utf8")
-    assert.doesNotMatch(source, /document\.body|createRoot\s*\(|<iframe|dsh-client-ui-primitives/, path)
+    assert.doesNotMatch(
+      source,
+      /document\.body|createRoot\s*\(|<iframe|dsh-client-ui-primitives/,
+      path
+    )
   }
 
   const css = await readFile(resolve(sourceDir, "job-board.module.css"), "utf8")
   assert.doesNotMatch(css, /#[\da-f]{3,8}\b/i)
   const colors = css.matchAll(
-    /(?:^|[;{])\s*(color|background(?:-color)?|border(?:-[\w-]+)?|outline(?:-color)?|fill|stroke)\s*:\s*([^;}]+)/gim,
+    /(?:^|[;{])\s*(color|background(?:-color)?|border(?:-[\w-]+)?|outline(?:-color)?|fill|stroke)\s*:\s*([^;}]+)/gim
   )
   let colorCount = 0
   for (const match of colors) {
     // Borders and outlines may include a width/style before their one color.
-    if (!/(?:color|background|fill|stroke)/i.test(match[1]) && !/\b(?:solid|dashed)\b/.test(match[2])) {
+    if (
+      !/(?:color|background|fill|stroke)/i.test(match[1]) &&
+      !/\b(?:solid|dashed)\b/.test(match[2])
+    ) {
       continue
     }
     colorCount += 1
@@ -133,10 +138,14 @@ test("built Client is DSH lazy CJS with external React and no source build requi
   assert.equal(Object.hasOwn(client, "client"), false)
 })
 
+test("Client accesses its mounted namespace through derived Cordis injection", async () => {
+  const source = await readFile(resolve(packageDir, "src/client/index.ts"), "utf8")
+  assert.match(source, /ctx\.inject\(\["remote\.omagents"\]/)
+  assert.doesNotMatch(source, /createJobBoardStore\(ctx\.remote\.omagents\)/)
+})
+
 test("built Host Typert metadata passes the actual Loader validator", async () => {
-  const { TYPERT } = await import(
-    pathToFileURL(resolve(packageDir, "dist/host/typert.js")).href
-  )
+  const { TYPERT } = await import(pathToFileURL(resolve(packageDir, "dist/host/typert.js")).href)
   const contribution = validateTypertManifest("@omagents/omagents-dsh", TYPERT)
   assert.equal(contribution.face, "host")
   assert.deepEqual(
@@ -146,7 +155,7 @@ test("built Host Typert metadata passes the actual Loader validator", async () =
       "@omagents/omagents-dsh#omagents/cancelJob",
       "@omagents/omagents-dsh#omagents/getHealth",
       "@omagents/omagents-dsh#omagents/watchJobs",
-    ],
+    ]
   )
   const watch = contribution.invocations.find((invocation) => invocation.method === "watchJobs")
   assert.equal(watch.mode, "stream")
@@ -178,6 +187,36 @@ test("root-row disposal unregisters both slots, closes the store, and unmounts R
   }
 
   let unmounted = 0
+  const remoteJobs = {
+    async listJobs() {
+      return { ok: true, value: [] }
+    },
+    async getHealth() {
+      return { ok: false, error: { code: "gateway/internal", message: "not started" } }
+    },
+    async cancelJob(id) {
+      return { ok: false, error: { code: "omagents/job-not-found", message: id } }
+    },
+    watchJobs(_scope, signal) {
+      const watch = { signal, returned: 0, pending: undefined }
+      watches.push(watch)
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            next: () =>
+              new Promise((resolve) => {
+                watch.pending = resolve
+              }),
+            return: async () => {
+              watch.returned += 1
+              watch.pending?.({ done: true })
+              return { done: true }
+            },
+          }
+        },
+      }
+    },
+  }
   const remote = {
     async $mount(contribution) {
       assert.ok(contribution.methods["omagents/watchJobs"])
@@ -186,39 +225,13 @@ test("root-row disposal unregisters both slots, closes the store, and unmounts R
         unmounted += 1
       }
     },
-    omagents: {
-      async listJobs() {
-        return { ok: true, value: [] }
-      },
-      async getHealth() {
-        return { ok: false, error: { code: "gateway/internal", message: "not started" } }
-      },
-      async cancelJob(id) {
-        return { ok: false, error: { code: "omagents/job-not-found", message: id } }
-      },
-      watchJobs(_scope, signal) {
-        const watch = { signal, returned: 0, pending: undefined }
-        watches.push(watch)
-        return {
-          [Symbol.asyncIterator]() {
-            return {
-              next: () => new Promise((resolve) => {
-                watch.pending = resolve
-              }),
-              return: async () => {
-                watch.returned += 1
-                watch.pending?.({ done: true })
-                return { done: true }
-              },
-            }
-          },
-        }
-      },
-    },
+    // The derived remote.omagents injection authorizes this namespace read.
+    omagents: remoteJobs,
   }
 
   new TestSlots(root)
   root.provide("remote", remote)
+  root.provide("remote.omagents", remoteJobs)
   await root.plugin(client)
   assert.equal(registrations.length, 2)
   const sidebar = registrations.find((entry) => entry.options.name === "sidebar.panellist")
@@ -232,7 +245,8 @@ test("root-row disposal unregisters both slots, closes the store, and unmounts R
 
   const { store } = main.options.inject()
   store.subscribe(() => {})
-  assert.equal(watches.length, 1, "a mounted panel starts one Remote watch")
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(watches.length, 1, "a mounted panel starts one Remote watch after subscribing")
 
   await root.fiber.dispose()
   assert.ok(registrations.every((entry) => !entry.active))
@@ -263,7 +277,7 @@ test("packed package contains built Host, Typert, Client, declarations, and no T
   for (const path of paths) {
     assert.ok(
       path === "package.json" || path === "cordis.patch.yml" || path.startsWith("dist/"),
-      `unexpected publish path: ${path}`,
+      `unexpected publish path: ${path}`
     )
     assert.doesNotMatch(path, /(^|\/)(?:src|test|tests)(?:\/|$)|tsconfig|tsdown|\.tsx$/)
   }

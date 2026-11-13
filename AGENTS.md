@@ -76,6 +76,12 @@ omagents/
 │       ├── test/               # Real Loader, React Client, and package-surface tests
 │       ├── tsdown.client.config.ts # External-package lazy-CJS Client build
 │       └── cordis.patch.yml    # Bare package-root Host/Client Loader row
+├── scripts/                    # Four-tarball, offline clean-room, and real-browser verification
+│   ├── pack-all.js             # Aligned pack output and process-tree watchdog support
+│   ├── packed-harness.js       # Locked offline cache and isolated Host/DSH installs
+│   ├── test-packed-installs.js # Real Core/OpenCode/Codex/DSH packed probes
+│   ├── prepare-browser-clean-room.js # Reuse or rebuild before the browser watchdog
+│   └── test-browser.js         # Playwright launcher with bounded process-tree cleanup
 ├── package.json                # Private npm-workspaces root
 ├── package-lock.json
 ├── CHANGELOG.md
@@ -263,8 +269,10 @@ Research pauses emit host-neutral `{ action: "dispatch_subagent", description, p
 - **Syntax check:** `node --check packages/opencode/src/index.js`
 - **DSH typecheck:** `npm run typecheck --workspace @omagents/omagents-dsh`
 - **Python check:** `python3 -m py_compile packages/core/skills/deep-research/scripts/*.py`
-- **Unit tests:** `node --test packages/codex/test/*.test.js tests/*.test.js packages/core/test/*.test.js` (standalone Codex installation, plugin structure, Core state/assets, skills frontmatter and host rendering, loop engine, deep-research storage/legacy/pipeline integration). Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
-- **DSH tests:** `npm run build --workspace @omagents/omagents-dsh && npm test --workspace @omagents/omagents-dsh` (real Loader smoke, delayed capability activation/reactivation and composed teardown, 33 native skills and wrong-host scans, automatic Superpowers bootstrap/native catalog/React-to-brainstorming acceptance routing, two concurrent structured research lanes, gap-loop resume, three-critic completion/cancellation, local stdio/Streamable HTTP MCP handshakes, repeat-safe async disposal, isolated nonblocking Python setup, native subagent lifecycle/cancellation/recovery, canonical status and cancellation tools/direct `/ps`, authorized Remote calls and structured errors, empty/racing/coalesced/reconnecting watch streams and abort/disposal cleanup, required compaction-safe Board context and failure health, Client baseline/reconnect/elapsed stores, accessible React filters/details/cancellation and all UI states, actual Typert validation, root-fiber slot disposal, lazy-CJS artifacts, theme tokens, exports, compatibility, and publish contents).
+- **Unit tests:** `npm test` first runs root/Core tests (`tests/*.test.js` and `packages/core/test/*.test.js`), then `npm test --workspaces --if-present` exactly once (Codex installation and all DSH suites). Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
+- **DSH tests:** `npm run build --workspace @omagents/omagents-dsh && npm test --workspace @omagents/omagents-dsh` (real Loader smoke, already-available and delayed capability activation/reactivation, 33 native skills and wrong-host scans, automatic Superpowers bootstrap/native catalog/React-to-brainstorming acceptance routing, two concurrent structured research lanes, gap-loop resume, three-critic completion/cancellation, local stdio/Streamable HTTP MCP handshakes, repeat-safe async disposal, isolated nonblocking Python setup, native subagent lifecycle/cancellation/recovery, canonical status and cancellation tools/direct `/ps`, authorized Remote calls and structured errors, empty/racing/coalesced/reconnecting watch streams and abort/disposal cleanup, required compaction-safe Board context and failure health, Client baseline/reconnect/elapsed stores, accessible React filters/details/cancellation and all UI states, actual Typert validation, root-fiber slot disposal, lazy-CJS artifacts, theme tokens, exports, compatibility, and publish contents).
+- **Packed verification:** `npm run pack:all` creates four aligned tarballs under ignored `.omagents/release-artifacts/tarballs/`. `npm run test:packed` seeds a lockfile-derived cache under `.omagents/release-artifacts/offline-npm-cache/`, then uses `npm ci --offline --ignore-scripts` into OS-temporary homes outside repository module resolution. It checks Core/Superpowers assets, OpenCode V1/V2, no-arg CLIs, Windows paths, real DSH Loader, and the served built Client.
+- **Browser verification:** `npm run test:browser` first runs `scripts/prepare-browser-clean-room.js` with a separate 900-second process-tree bound, reusing a valid packed-first install or rebuilding stale/missing pack state. It then installs Playwright Chromium under `.omagents/playwright-browsers/` and runs `packages/dsh/test/browser-job-board.spec.ts` against that prepared profile with an independent 120-second watchdog covering the runner, Chromium, tsx/esbuild, and local MCP children. It checks startup/sidebar/main panel, Host `/ps`/`parallel_status`/Web agreement, completion, local/external cancellation, restart/reconnect, themes, research/hyperplan workflows, and non-owner Gateway authorization with no external model credentials. `OMAGENTS_PLAYWRIGHT_EXECUTABLE` may select an existing browser; `OMAGENTS_BROWSER_PREPARE_TIMEOUT_MS`, `OMAGENTS_BROWSER_TEST_TIMEOUT_MS`, and `OMAGENTS_BROWSER_STARTUP_TIMEOUT_MS` bound the respective phases.
 - **Local testing:** Point OpenCode config to local clone:
   ```json
   { "plugin": ["omagents@git+file:///path/to/omagents"] }
@@ -272,7 +280,7 @@ Research pauses emit host-neutral `{ action: "dispatch_subagent", description, p
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Syntax check JS + Python and run Node/Python tests on push/PR to main. Node 24; Jinja2 is installed only into `.omagents/ci-venv` for deep-research integration tests.
+- **CI** (`ci.yml`): Node 24 unit/package checks run on Linux, macOS, and Windows, including real offline tarball installs. A second three-OS job runs the packed DSH Web composition with Playwright, deterministic native events, and local MCP fixtures only. Jinja2 is installed only into `.omagents/ci-venv` for deep-research integration tests.
 - **Publish** (`publish.yml`): OIDC trusted publishing on `v*` tag push. No npm token needed.
 
 ## Publishing

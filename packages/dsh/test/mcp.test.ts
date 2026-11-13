@@ -7,11 +7,7 @@ import { fileURLToPath } from "node:url"
 import { Context } from "@deepseek-ai/cordis"
 
 import { createHealthRecords } from "../dist/host/health.js"
-import {
-  createDshMcpManager,
-  registerDshMcp,
-  toDshMcpConfig,
-} from "../dist/host/register-mcp.js"
+import { createDshMcpManager, registerDshMcp, toDshMcpConfig } from "../dist/host/register-mcp.js"
 
 const fixture = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures", "stdio-mcp-server.mjs")
 
@@ -160,8 +156,14 @@ test("canonical MCP entries use DSH transports and never override existing names
     manager.registrations.map((entry) => entry.name),
     ["agentmemory", "codegraph", "websearch", "github"]
   )
-  assert.equal(manager.registrations.some((entry) => entry.name === "context7"), false)
-  assert.equal(manager.registrations.some((entry) => entry.name === "grep_app"), false)
+  assert.equal(
+    manager.registrations.some((entry) => entry.name === "context7"),
+    false
+  )
+  assert.equal(
+    manager.registrations.some((entry) => entry.name === "grep_app"),
+    false
+  )
 
   const stdio = manager.registrations.find((entry) => entry.name === "agentmemory").config
   assert.equal(stdio.transport, "stdio")
@@ -179,6 +181,34 @@ test("canonical MCP entries use DSH transports and never override existing names
   await dispose()
   assert.ok(manager.registrations.every((entry) => entry.disposed))
   assert.equal(health.mcp.status, "ready")
+})
+
+test("already available tools and an absent manager use safe lookup without external processes", async (t) => {
+  const root = new Context()
+  root.provide("loader", {
+    entries: () =>
+      ["agentmemory", "codegraph", "context7", "websearch", "grep_app"].map((serverName) => ({
+        options: { name: "@deepseek-ai/dsh-mcp-client", config: { serverName } },
+      })),
+  })
+  root.provide("tools", {})
+  t.after(() => root.fiber.dispose())
+  const health = healthyRecords()
+  const registrations = []
+  let dispose = () => Promise.resolve()
+
+  await root.plugin({
+    name: "mcp-available-probe",
+    inject: ["loader"],
+    apply(ctx) {
+      dispose = registerDshMcp(ctx, {}, health)
+    },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(registrations, [])
+  assert.equal(health.mcp.status, "ready", health.mcp.diagnostics[0]?.message)
+  await dispose()
 })
 
 test("MCP registration failures are independent and visible in health", async () => {
@@ -301,7 +331,9 @@ test("aggregate MCP disposal caches delayed cleanup across concurrent and repeat
   const ctx = {
     mcpManager: manager,
     get(name) {
-      return name === "tools" ? {} : undefined
+      if (name === "tools") return {}
+      if (name === "mcpManager") return manager
+      return undefined
     },
   }
   const dispose = registerDshMcp(ctx, {}, health)

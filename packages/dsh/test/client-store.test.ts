@@ -55,9 +55,7 @@ function deferred<T>() {
 
 function watchChannel() {
   type Event =
-    | { kind: "value"; value: JobWatchFrame }
-    | { kind: "error"; error: unknown }
-    | { kind: "end" }
+    { kind: "value"; value: JobWatchFrame } | { kind: "error"; error: unknown } | { kind: "end" }
   const events: Event[] = []
   let waiter:
     | {
@@ -216,6 +214,25 @@ function start(remote: OmAgentsJobRemote, timer = scheduler()) {
   return { store, snapshots, timer, unsubscribe }
 }
 
+test("subscribe defers watch startup and notifications until after the subscription turn", async (t) => {
+  const remote = remoteFixture()
+  const store = createJobBoardStore(remote)
+  let notifications = 0
+  const unsubscribe = store.subscribe(() => {
+    notifications += 1
+  })
+  t.after(() => {
+    unsubscribe()
+    store.dispose()
+  })
+
+  assert.equal(notifications, 0, "useSyncExternalStore must finish subscribing before publication")
+  assert.equal(remote.watchJobs.mock.callCount(), 0)
+  await flush()
+  assert.equal(remote.watchJobs.mock.callCount(), 1)
+  assert.ok(notifications > 0)
+})
+
 test("watch baselines and whole-set frames replace jobs without reads or acknowledgement", async () => {
   const remote = remoteFixture()
   const { store, timer, unsubscribe } = start(remote)
@@ -226,7 +243,7 @@ test("watch baselines and whole-set frames replace jobs without reads or acknowl
   await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
   assert.deepEqual(
     store.getSnapshot().jobs.map((item) => item.id),
-    ["one", "two"],
+    ["one", "two"]
   )
   assert.equal(store.getSnapshot().revision, 4)
 
@@ -234,7 +251,7 @@ test("watch baselines and whole-set frames replace jobs without reads or acknowl
   await eventually(() => assert.equal(store.getSnapshot().revision, 5))
   assert.deepEqual(
     store.getSnapshot().jobs.map((item) => item.id),
-    ["three"],
+    ["three"]
   )
   assert.equal(remote.listJobs.mock.callCount(), 0)
   assert.equal(remote.acknowledgeInjected.mock.callCount(), 0)
@@ -263,7 +280,10 @@ test("a failed stream is stale, reconnects to a fresh baseline, and closes the r
 
   remote.channels[0].fail(new Error("carrier lost"))
   await eventually(() => assert.equal(store.getSnapshot().status, "stale"))
-  assert.deepEqual(store.getSnapshot().jobs.map((item) => item.id), ["before"])
+  assert.deepEqual(
+    store.getSnapshot().jobs.map((item) => item.id),
+    ["before"]
+  )
   assert.equal(timer.pendingReconnect, true)
 
   timer.reconnect()
@@ -271,7 +291,10 @@ test("a failed stream is stale, reconnects to a fresh baseline, and closes the r
   remote.channels[1].push(frame(2, [job("after")]))
   await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
   assert.equal(store.getSnapshot().revision, 2)
-  assert.deepEqual(store.getSnapshot().jobs.map((item) => item.id), ["after"])
+  assert.deepEqual(
+    store.getSnapshot().jobs.map((item) => item.id),
+    ["after"]
+  )
 
   await store.reconnect()
   await eventually(() => assert.equal(remote.channels.length, 3))
@@ -317,7 +340,10 @@ test("manual refresh alone calls listJobs and gets degraded health", async () =>
   await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
 
   await store.refresh()
-  assert.deepEqual(store.getSnapshot().jobs.map((item) => item.id), ["refreshed"])
+  assert.deepEqual(
+    store.getSnapshot().jobs.map((item) => item.id),
+    ["refreshed"]
+  )
   assert.equal(store.getSnapshot().health?.persistence.status, "degraded")
   assert.equal(remote.listJobs.mock.callCount(), 1)
   assert.equal(remote.acknowledgeInjected.mock.callCount(), 0)
@@ -413,11 +439,9 @@ test("a stale cancellation response cannot resurrect a terminal job from a newer
         updatedAt: 3_000,
         revision: 3,
       }),
-    ]),
+    ])
   )
-  await eventually(() =>
-    assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
-  )
+  await eventually(() => assert.equal(store.getSnapshot().jobs[0].executionState, "completed"))
   const updatedAt = store.getSnapshot().lastUpdatedAt
 
   cancellation.resolve({
@@ -450,7 +474,7 @@ test("an older cancellation DTO is ignored even without a watch mutation", async
         terminalAt: 3_000,
         revision: 3,
       }),
-    ]),
+    ])
   )
   await eventually(() => assert.equal(store.getSnapshot().status, "ready"))
 
@@ -485,11 +509,9 @@ test("a stale manual refresh cannot overwrite a newer whole-set watch frame", as
         terminalAt: 3_000,
         revision: 3,
       }),
-    ]),
+    ])
   )
-  await eventually(() =>
-    assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
-  )
+  await eventually(() => assert.equal(store.getSnapshot().jobs[0].executionState, "completed"))
   const updatedAt = store.getSnapshot().lastUpdatedAt
   listed.resolve({ ok: true, value: [job("one", { revision: 1 })] })
   health.resolve({ ok: true, value: readyHealth })
@@ -522,11 +544,9 @@ test("a stale refresh health denial cannot replace a newer valid watch frame", a
         terminalAt: 3_000,
         revision: 3,
       }),
-    ]),
+    ])
   )
-  await eventually(() =>
-    assert.equal(store.getSnapshot().jobs[0].executionState, "completed")
-  )
+  await eventually(() => assert.equal(store.getSnapshot().jobs[0].executionState, "completed"))
   listed.resolve({ ok: true, value: [job("one", { revision: 1 })] })
   health.resolve({
     ok: false,

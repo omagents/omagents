@@ -15,11 +15,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function cancellationResult(
-  board: DshJobBoard,
-  job: DshJobRecord | undefined,
-  message: string
-) {
+function cancellationResult(board: DshJobBoard, job: DshJobRecord | undefined, message: string) {
   return {
     revision: board.revision,
     found: job !== undefined,
@@ -63,7 +59,8 @@ export function registerDshTools(
     if (health) setDshCapabilityDiagnostics(health, "tools", [])
 
     try {
-      if (typeof inner.tools?.register !== "function") {
+      const registry = typeof inner.get === "function" ? inner.get("tools") : inner.tools
+      if (typeof registry?.register !== "function") {
         throw new Error("The DSH tool registry is unavailable")
       }
       const definition = defineTool({
@@ -142,7 +139,7 @@ export function registerDshTools(
           return buildParallelStatus(board, args.session_id)
         },
       })
-      disposers.push(inner.tools.register(definition))
+      disposers.push(registry.register(definition))
       const cancellation = defineTool({
         name: "cancel_task",
         description:
@@ -209,7 +206,7 @@ export function registerDshTools(
           }
         },
       })
-      disposers.push(inner.tools.register(cancellation))
+      disposers.push(registry.register(cancellation))
     } catch (error) {
       report(
         "ERR_DSH_TOOL_REGISTRATION",

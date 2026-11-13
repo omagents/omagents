@@ -27,10 +27,7 @@ function isPermissionDenied(error) {
         Reflect.get(error, "code") === "remote-access/denied");
 }
 function isTerminalExecutionState(state) {
-    return (state === "completed" ||
-        state === "failed" ||
-        state === "cancelled" ||
-        state === "interrupted");
+    return (state === "completed" || state === "failed" || state === "cancelled" || state === "interrupted");
 }
 class RemoteJobBoardStore {
     remote;
@@ -71,8 +68,12 @@ class RemoteJobBoardStore {
         if (this.disposed)
             return () => { };
         this.listeners.add(listener);
-        if (!this.running)
-            this.start();
+        if (!this.running) {
+            queueMicrotask(() => {
+                if (!this.disposed && !this.running && this.listeners.size > 0)
+                    this.start();
+            });
+        }
         let subscribed = true;
         return () => {
             if (!subscribed)
@@ -264,7 +265,9 @@ class RemoteJobBoardStore {
             }
         }
         catch (error) {
-            if (this.watch !== watch || this.generation !== generation || watch.controller.signal.aborted) {
+            if (this.watch !== watch ||
+                this.generation !== generation ||
+                watch.controller.signal.aborted) {
                 return;
             }
             this.watch = undefined;
@@ -286,9 +289,7 @@ class RemoteJobBoardStore {
     async loadHealth(generation, watchMutation) {
         try {
             const result = await this.remote.getHealth();
-            if (this.disposed ||
-                this.generation !== generation ||
-                this.watchMutation !== watchMutation) {
+            if (this.disposed || this.generation !== generation || this.watchMutation !== watchMutation) {
                 return;
             }
             if (result.ok) {

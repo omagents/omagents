@@ -396,7 +396,9 @@ function ConnectionNotice({ snapshot }) {
 	return null;
 }
 function JobBoardPage({ store }) {
-	const snapshot = (0, react.useSyncExternalStore)((listener) => store.subscribe(listener), () => store.getSnapshot(), () => store.getSnapshot());
+	const subscribe = (0, react.useCallback)((listener) => store.subscribe(listener), [store]);
+	const getSnapshot = (0, react.useCallback)(() => store.getSnapshot(), [store]);
+	const snapshot = (0, react.useSyncExternalStore)(subscribe, getSnapshot, getSnapshot);
 	const [filter, setFilter] = (0, react.useState)("all");
 	const jobs = (0, react.useMemo)(() => snapshot.jobs.filter((job) => matchesFilter(job, filter)), [snapshot.jobs, filter]);
 	const diagnostics = degradedDiagnostics(snapshot.health);
@@ -554,7 +556,9 @@ var RemoteJobBoardStore = class {
 	subscribe(listener) {
 		if (this.disposed) return () => {};
 		this.listeners.add(listener);
-		if (!this.running) this.start();
+		if (!this.running) queueMicrotask(() => {
+			if (!this.disposed && !this.running && this.listeners.size > 0) this.start();
+		});
 		let subscribed = true;
 		return () => {
 			if (!subscribed) return;
@@ -1114,29 +1118,35 @@ function JobBoardIcon({ size = 20 }) {
 /** Mount the Host Remote and attach the native panel to the package-root fiber. */
 async function apply(ctx) {
 	const unmount = await ctx.remote.$mount(TYPERT_REMOTE);
-	const store = createJobBoardStore(ctx.remote.omagents);
+	let store;
 	const disposers = [];
-	try {
-		disposers.push(ctx.slots.inject("main", () => ctx.slots.register({
+	const ui = ctx.inject(["remote.omagents"], (inner) => {
+		store = createJobBoardStore(inner.remote.omagents);
+		disposers.push(inner.slots.inject("main", () => inner.slots.register({
 			name: "main",
 			key: PANEL_ID,
 			inject: () => ({ store })
 		}, JobBoardPage)));
-		disposers.push(ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({
+		disposers.push(inner.slots.inject("sidebar.panellist", () => inner.slots.register({
 			name: "sidebar.panellist",
 			id: PANEL_ID,
 			order: 20,
 			label: "OmAgents"
 		}, JobBoardIcon)));
+	});
+	try {
+		await ui;
 	} catch (error) {
 		for (const dispose of disposers.reverse()) dispose();
-		store.dispose();
+		store?.dispose();
+		await ui.dispose();
 		await unmount();
 		throw error;
 	}
 	return async () => {
 		for (const dispose of disposers.reverse()) dispose();
-		store.dispose();
+		store?.dispose();
+		await ui.dispose();
 		await unmount();
 	};
 }

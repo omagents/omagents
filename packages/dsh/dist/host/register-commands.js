@@ -36,10 +36,11 @@ export function registerDshCommands(ctx, board, health) {
         if (health)
             setDshCapabilityDiagnostics(health, "commands", []);
         try {
-            if (typeof inner.commands?.register !== "function") {
+            const registry = typeof inner.get === "function" ? inner.get("commands") : inner.commands;
+            if (typeof registry?.register !== "function") {
                 throw new Error("The DSH command registry is unavailable");
             }
-            disposers.push(inner.commands.register({
+            disposers.push(registry.register({
                 name: "ps",
                 description: "Show tracked subagent jobs for the current session",
                 recordInput: false,
@@ -64,9 +65,7 @@ export function registerDshCommands(ctx, board, health) {
         return cleanup;
     };
     try {
-        if (typeof ctx.inject === "function" &&
-            typeof ctx.get === "function" &&
-            !ctx.get("commands")) {
+        if (typeof ctx.inject === "function" && typeof ctx.get === "function" && !ctx.get("commands")) {
             capabilityFiber = ctx.inject(["commands"], activate);
         }
         else {

@@ -45,7 +45,8 @@ export function registerDshTools(ctx, board, tracker, health) {
         if (health)
             setDshCapabilityDiagnostics(health, "tools", []);
         try {
-            if (typeof inner.tools?.register !== "function") {
+            const registry = typeof inner.get === "function" ? inner.get("tools") : inner.tools;
+            if (typeof registry?.register !== "function") {
                 throw new Error("The DSH tool registry is unavailable");
             }
             const definition = defineTool({
@@ -123,7 +124,7 @@ export function registerDshTools(ctx, board, tracker, health) {
                     return buildParallelStatus(board, args.session_id);
                 },
             });
-            disposers.push(inner.tools.register(definition));
+            disposers.push(registry.register(definition));
             const cancellation = defineTool({
                 name: "cancel_task",
                 description: "Request cancellation of a running native DSH subagent by Job Board ID or alias. Acceptance changes the job to cancelling; only the native subagent settlement marks it cancelled. Local interruption stops the current turn while descendants continue; external one-shot runs terminate without resume. Repeated, unknown, and terminal requests are idempotent.",
@@ -170,7 +171,7 @@ export function registerDshTools(ctx, board, tracker, health) {
                     }
                 },
             });
-            disposers.push(inner.tools.register(cancellation));
+            disposers.push(registry.register(cancellation));
         }
         catch (error) {
             report("ERR_DSH_TOOL_REGISTRATION", `Unable to register DSH status/cancellation tools: ${errorMessage(error)}`);

@@ -2,10 +2,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 
 import type { Context } from "@deepseek-ai/cordis"
-import {
-  CORE_PYTHON_PACKAGES,
-  ensureBaseEnvironment,
-} from "@omagents/core"
+import { CORE_PYTHON_PACKAGES, ensureBaseEnvironment } from "@omagents/core"
 
 import {
   appendDshCapabilityDiagnostic,
@@ -33,7 +30,7 @@ export function provisionDshPython(ctx: Context, health: DshHealth): void {
   ctx.effect(() => {
     let active = true
     setDshCapabilityDiagnostics(health, "python", [])
-    const provisionBase = ctx.omagentsPython?.ensureBaseEnvironment ?? ensureBaseEnvironment
+    const provisionBase = ctx.get("omagentsPython")?.ensureBaseEnvironment ?? ensureBaseEnvironment
     const venvPath = join(homedir(), ".venvs", "omagents")
     const env = { ...process.env }
 

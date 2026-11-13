@@ -140,8 +140,9 @@ export function registerDshMcp(ctx, env, health) {
         activeCleanup = cleanup;
         setDshCapabilityDiagnostics(health, "mcp", []);
         try {
-            const manager = inner.mcpManager ?? createDshMcpManager(inner);
-            if (!inner.mcpManager)
+            const currentManager = typeof inner.get === "function" ? inner.get("mcpManager") : inner.mcpManager;
+            const manager = currentManager ?? createDshMcpManager(inner);
+            if (!currentManager && typeof inner.provide === "function")
                 inner.provide("mcpManager", manager);
             for (const [name, definition] of Object.entries(resolveMcpServers({ env }))) {
                 try {

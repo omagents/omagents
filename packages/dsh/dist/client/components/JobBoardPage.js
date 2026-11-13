@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useSyncExternalStore } from "react";
 import { styles } from "../classes.js";
 import { JobTable } from "./JobTable.js";
@@ -28,7 +28,7 @@ function degradedDiagnostics(health) {
 }
 function ConnectionNotice({ snapshot }) {
     if (snapshot.status === "loading") {
-        return _jsx("p", { role: "status", className: styles.notice, children: "Loading background jobs\u2026" });
+        return (_jsx("p", { role: "status", className: styles.notice, children: "Loading background jobs\u2026" }));
     }
     if (snapshot.status === "stale") {
         return (_jsx("p", { role: "status", className: styles.stale, children: "Disconnected. Showing the last known jobs while reconnecting." }));
@@ -42,7 +42,9 @@ function ConnectionNotice({ snapshot }) {
     return null;
 }
 export function JobBoardPage({ store }) {
-    const snapshot = useSyncExternalStore((listener) => store.subscribe(listener), () => store.getSnapshot(), () => store.getSnapshot());
+    const subscribe = useCallback((listener) => store.subscribe(listener), [store]);
+    const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
+    const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
     const [filter, setFilter] = useState("all");
     const jobs = useMemo(() => snapshot.jobs.filter((job) => matchesFilter(job, filter)), [snapshot.jobs, filter]);
     const diagnostics = degradedDiagnostics(snapshot.health);
