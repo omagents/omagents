@@ -641,6 +641,73 @@ test("a completion notice backfills a result after lifecycle settlement", async 
   }
 })
 
+test("setup overlapping final close waits before reopening the storage identity", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { JobBoard } = await import(path.join(ROOT, "packages", "core", "src", "index.js"))
+  const originalOpen = JobBoard.open
+  const originalClose = JobBoard.prototype.close
+  let openCount = 0
+  let releaseClose
+  let notifyCloseStarted
+  const closeStarted = new Promise((resolve) => {
+    notifyCloseStarted = resolve
+  })
+
+  t.mock.method(JobBoard, "open", async function (...args) {
+    openCount += 1
+    return originalOpen.apply(this, args)
+  })
+  t.mock.method(JobBoard.prototype, "close", async function (...args) {
+    if (releaseClose === undefined) {
+      notifyCloseStarted()
+      await new Promise((resolve) => {
+        releaseClose = resolve
+      })
+    }
+    return originalClose.apply(this, args)
+  })
+
+  const first = makeV2Context(filePath)
+  const firstCleanup = await setupParallelV2(first.ctx)
+  await launchV2(first.captured, { child: "v2-close-race-first" })
+  const second = makeV2Context(filePath)
+  let firstCleanupPromise
+  let secondSetupPromise
+  let secondCleanup
+  try {
+    firstCleanupPromise = firstCleanup()
+    await closeStarted
+
+    let secondSettled = false
+    secondSetupPromise = setupParallelV2(second.ctx).then((cleanup) => {
+      secondSettled = true
+      secondCleanup = cleanup
+      return cleanup
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(openCount, 1, "no second Board opens while the final close is held")
+    assert.equal(secondSettled, false, "setup waits for close settlement")
+
+    releaseClose()
+    secondCleanup = await secondSetupPromise
+    assert.equal(openCount, 2, "a fresh Board opens only after close settles")
+    await launchV2(second.captured, { child: "v2-close-race-second" })
+    assert.ok(jobByHostId(await statusV2(second.captured), "v2-close-race-second"))
+  } finally {
+    releaseClose?.()
+    await firstCleanupPromise
+    if (secondSetupPromise) secondCleanup = await secondSetupPromise
+    await secondCleanup?.()
+  }
+
+  const persisted = readStore(filePath)
+  assert.deepEqual(persisted.jobs.map((job) => job.hostTaskId).sort(), [
+    "v2-close-race-first",
+    "v2-close-race-second",
+  ])
+})
+
 test("corrupt stores are preserved and exposed through host diagnostics", async (t) => {
   const filePath = useTemporaryStorage(t)
   fs.mkdirSync(path.dirname(filePath), { recursive: true })

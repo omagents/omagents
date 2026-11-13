@@ -210,8 +210,7 @@ function getBoardEntry(ctx) {
   return entry
 }
 
-function createBoardRuntime(ctx, query) {
-  const entry = getBoardEntry(ctx)
+function acquireBoardRuntime(entry, ctx, query) {
   entry.references += 1
   entry.tuiStatePath ??= ctx?.omagents?.tuiStatePath || getTuiStatePath()
   entry.runtimePromise ??= entry.promise
@@ -236,21 +235,56 @@ function createBoardRuntime(ctx, query) {
   return { entry, ready: entry.runtimePromise, tuiStatePath: entry.tuiStatePath }
 }
 
+function createBoardRuntime(ctx, query) {
+  const entry = getBoardEntry(ctx)
+  if (!entry.closingPromise) return acquireBoardRuntime(entry, ctx, query)
+
+  const runtime = { entry, tuiStatePath: entry.tuiStatePath }
+  runtime.ready = (async () => {
+    try {
+      await entry.closingPromise
+    } catch {
+      // The original cleanup observes the close failure; reopening is still safe
+      // once the closing promise has settled and detached the old store.
+    }
+    const reopened = acquireBoardRuntime(getBoardEntry(ctx), ctx, query)
+    runtime.entry = reopened.entry
+    runtime.tuiStatePath = reopened.tuiStatePath
+    return reopened.ready
+  })()
+  return runtime
+}
+
 async function releaseBoardRuntime(runtime) {
   const { entry } = runtime
-  const { board } = await runtime.ready
   entry.references = Math.max(0, entry.references - 1)
   if (entry.references > 0) {
+    const { board } = await runtime.ready
     await board.flush()
     return
   }
 
-  if (entry.owned && boardEntriesByPath.get(entry.filePath) === entry) {
-    boardEntriesByPath.delete(entry.filePath)
+  if (!entry.owned) {
+    const { board } = await runtime.ready
+    entry.unsubscribe?.()
+    await board.flush()
+    return
   }
-  entry.unsubscribe?.()
-  if (entry.owned) await board.close()
-  else await board.flush()
+
+  // Keep the closing entry installed until every write and close has settled.
+  // Concurrent setup waits here, then opens the next Board from the quiescent store.
+  entry.closingPromise = (async () => {
+    const { board } = await runtime.ready
+    entry.unsubscribe?.()
+    try {
+      await board.close()
+    } finally {
+      if (boardEntriesByPath.get(entry.filePath) === entry) {
+        boardEntriesByPath.delete(entry.filePath)
+      }
+    }
+  })()
+  await entry.closingPromise
 }
 
 function findJob(board, idOrAlias) {
