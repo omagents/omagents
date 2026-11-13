@@ -1,7 +1,8 @@
+#!/usr/bin/env node
 /**
- * OmAgents OpenCode setup.
+ * OmAgents OpenCode installer.
  *
- * Run via: npx @omagents/omagents opencode
+ * Run via: npx @omagents/omagents
  *
  * Adds "@omagents/omagents" to the plugin array in opencode.json.
  * Checks both global (~/.config/opencode/opencode.json) and project-level configs.
@@ -10,6 +11,8 @@
 import fs from "fs"
 import path from "path"
 import os from "os"
+
+const USAGE = "Usage: npx @omagents/omagents [options]"
 
 function findOpencodeConfig() {
   const candidates = [
@@ -23,8 +26,8 @@ function findOpencodeConfig() {
     if (fs.existsSync(candidate)) return candidate
   }
 
-  // Default to global config path (will be created if needed)
-  return path.join(os.homedir(), ".config", "opencode", "opencode.json")
+  // Default to a project-level config when no existing config is found.
+  return path.join(process.cwd(), "opencode.json")
 }
 
 export async function setupOpencode() {
@@ -88,3 +91,40 @@ export async function setupOpencode() {
   console.log(`[omagents] Added "${pkgName}" to ${configPath}`)
   console.log("[omagents] Restart OpenCode to activate.")
 }
+
+function printHelp() {
+  console.log(`${USAGE}
+
+Install OmAgents for OpenCode without a positional host argument.
+
+Options:
+  --help     Show this help message
+  --version  Show the package version`)
+}
+
+async function main(args) {
+  if (args.length === 0) {
+    await setupOpencode()
+    return
+  }
+
+  if (args.length === 1 && args[0] === "--help") {
+    printHelp()
+    return
+  }
+
+  if (args.length === 1 && args[0] === "--version") {
+    const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"))
+    console.log(pkg.version)
+    return
+  }
+
+  console.error(`[omagents] Unknown or unexpected arguments: ${args.join(" ")}`)
+  console.error(USAGE)
+  process.exitCode = 1
+}
+
+main(process.argv.slice(2)).catch((err) => {
+  console.error("[omagents]", err.message)
+  process.exitCode = 1
+})

@@ -6,7 +6,7 @@ import path from "path"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
 const SKILLS_DIR = path.join(ROOT, "skills")
-const PLUGINS_DIR = path.join(ROOT, ".opencode", "plugins")
+const PLUGINS_DIR = path.join(ROOT, "packages", "opencode", "src")
 
 /**
  * Minimal fake of the V2 plugin context (@opencode/plugin promise API).
@@ -367,11 +367,12 @@ function makeInstalledCopy(t) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-installed-"))
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
   const pkgDir = path.join(tmp, "node_modules", "@omagents", "omagents")
-  fs.mkdirSync(path.join(pkgDir, ".opencode", "plugins"), { recursive: true })
+  const moduleDir = path.join(pkgDir, "packages", "opencode", "src")
+  fs.mkdirSync(moduleDir, { recursive: true })
   fs.mkdirSync(path.join(pkgDir, "mcp-servers"), { recursive: true })
   fs.mkdirSync(path.join(pkgDir, "hooks"), { recursive: true })
   for (const f of ["index.js", "parallel.js"]) {
-    fs.copyFileSync(path.join(PLUGINS_DIR, f), path.join(pkgDir, ".opencode", "plugins", f))
+    fs.copyFileSync(path.join(PLUGINS_DIR, f), path.join(moduleDir, f))
   }
   fs.copyFileSync(
     path.join(ROOT, "hooks", "python-env.js"),
@@ -381,7 +382,7 @@ function makeInstalledCopy(t) {
     path.join(ROOT, "mcp-servers", "base.json"),
     path.join(pkgDir, "mcp-servers", "base.json")
   )
-  return path.join(pkgDir, ".opencode", "plugins", "index.js")
+  return path.join(moduleDir, "index.js")
 }
 
 /** Create a fake OmAgents source checkout (package.json + project plugins). */

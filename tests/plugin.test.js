@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
 const SKILLS_DIR = path.join(ROOT, "skills")
-const PLUGINS_DIR = path.join(ROOT, ".opencode", "plugins")
+const PLUGINS_DIR = path.join(ROOT, "packages", "opencode", "src")
 
 test("plugin entry point exists", () => {
   assert.ok(fs.existsSync(path.join(PLUGINS_DIR, "index.js")))
@@ -99,7 +99,7 @@ test("index.js contains conditional github/grep_app fallback logic", () => {
 
 function getRegisteredMcps(env) {
   const script = `
-    import mod from "./.opencode/plugins/index.js";
+    import mod from "./packages/opencode/src/index.js";
     const p = await mod.server({});
     const config = { skills: { paths: [] }, mcp: {} };
     await p.config(config);
