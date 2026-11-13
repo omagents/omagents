@@ -1,0 +1,304 @@
+.omagents-job-board {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 24px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.omagents-job-board *,
+.omagents-job-board *::before,
+.omagents-job-board *::after {
+  box-sizing: inherit;
+}
+
+.omagents-job-board__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.omagents-job-board__title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.omagents-job-board__actions,
+.omagents-job-board__filters,
+.omagents-job-board__dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.omagents-job-board__filters {
+  margin: 16px 0 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.omagents-job-board__button,
+.omagents-job-board__filter,
+.omagents-job-board__task {
+  min-height: 32px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-1);
+  font: inherit;
+  cursor: pointer;
+}
+
+.omagents-job-board__filter--active {
+  border-color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.omagents-job-board__button--danger {
+  border-color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.omagents-job-board__button--primary {
+  border-color: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  background: var(--dsw-alias-button-primary-fill);
+}
+
+.omagents-job-board__button:hover:not(:disabled),
+.omagents-job-board__filter:hover:not(:disabled),
+.omagents-job-board__task:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.omagents-job-board__button:focus-visible,
+.omagents-job-board__filter:focus-visible,
+.omagents-job-board__task:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+
+.omagents-job-board__button:disabled {
+  cursor: not-allowed;
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.omagents-job-board__task {
+  min-height: 28px;
+  border-color: var(--dsw-alias-border-l1);
+  padding: 3px 7px;
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+}
+
+.omagents-job-board__notice,
+.omagents-job-board__error,
+.omagents-job-board__stale,
+.omagents-job-board__degraded,
+.omagents-job-board__empty {
+  margin: 12px 0;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.omagents-job-board__error {
+  border-color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.omagents-job-board__stale,
+.omagents-job-board__degraded {
+  border-color: var(--dsw-alias-state-warn-primary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.omagents-job-board__error p,
+.omagents-job-board__degraded ul {
+  margin: 6px 0 0;
+}
+
+.omagents-job-board__table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.omagents-job-board__table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--dsw-alias-label-primary);
+}
+
+.omagents-job-board__table th,
+.omagents-job-board__table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  text-align: left;
+  vertical-align: top;
+}
+
+.omagents-job-board__table th {
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.omagents-job-board__table tbody tr:last-child > td {
+  border-bottom-color: var(--dsw-alias-border-l1);
+}
+
+.omagents-job-board__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.omagents-job-board__badge--running {
+  border-color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.omagents-job-board__badge--cancelling,
+.omagents-job-board__badge--interrupted {
+  border-color: var(--dsw-alias-state-warn-primary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.omagents-job-board__badge--completed {
+  border-color: var(--dsw-alias-state-success-primary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.omagents-job-board__badge--failed {
+  border-color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.omagents-job-board__badge--cancelled {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.omagents-job-board__details {
+  padding: 8px 4px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.omagents-job-board__details h3 {
+  margin: 14px 0 6px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+}
+
+.omagents-job-board__details pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.omagents-job-board__details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.omagents-job-board__details-grid dt {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.omagents-job-board__details-grid dd {
+  margin: 2px 0 0;
+}
+
+.omagents-job-board__detail-value {
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.omagents-job-board__dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.omagents-job-board__dialog {
+  width: min(520px, 100%);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  padding: 20px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.omagents-job-board__dialog h2 {
+  margin: 0 0 10px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 18px;
+}
+
+.omagents-job-board__dialog p {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.omagents-job-board__dialog-actions {
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.omagents-job-board__icon {
+  display: block;
+  color: var(--dsw-alias-label-secondary);
+  fill: var(--dsw-alias-label-secondary);
+}
+
+.omagents-job-board__muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@media (max-width: 760px) {
+  .omagents-job-board {
+    padding: 14px;
+  }
+
+  .omagents-job-board__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

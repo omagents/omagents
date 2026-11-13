@@ -12,6 +12,9 @@ const files = [
   "context.test.ts",
   "remote-service.test.ts",
   "watch-stream.test.ts",
+  "client-store.test.ts",
+  "client-components.test.tsx",
+  "client-package.test.js",
   "package-surface.test.js",
   "npm-launcher.test.js",
 ]
@@ -26,7 +29,12 @@ if (selected.length === 0) {
 } else {
   const child = spawn(
     process.execPath,
-    ["--test", ...selected.map((file) => fileURLToPath(new URL(file, import.meta.url)))],
+    [
+      "--import",
+      "tsx",
+      "--test",
+      ...selected.map((file) => fileURLToPath(new URL(file, import.meta.url))),
+    ],
     { stdio: "inherit" }
   )
   child.on("error", (error) => {

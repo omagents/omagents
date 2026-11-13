@@ -27,8 +27,10 @@ test("package identity, built ESM entry, and exact Core dependency are aligned",
   assert.equal(manifest.dependencies["@omagents/core"], "0.13.1")
   assert.equal(manifest.dependencies["@omagents/omagents"], undefined)
   assert.equal(manifest.dependencies["@omagents/omagents-codex"], undefined)
-  assert.equal(manifest.exports["./client"], undefined)
-  assert.equal(manifest.dsh.client, undefined)
+  assert.equal(manifest.exports["./client"].default, "./dist/client.js")
+  assert.equal(manifest.exports["./client"].types, "./dist/client/index.d.ts")
+  assert.equal(manifest.exports["./typert"].default, "./dist/host/typert.js")
+  assert.equal(manifest.dsh.client.platform, "web")
 })
 
 test("Host module has only named plugin exports and no default or Client export", async () => {
@@ -106,8 +108,19 @@ test("publish dry-run contains built runtime artifacts but no source or test too
     "dist/host/remote-access.d.ts",
     "dist/host/remote-types.js",
     "dist/host/remote-types.d.ts",
+    "dist/host/typert.js",
+    "dist/host/typert.d.ts",
     "dist/host/prompt.js",
     "dist/host/prompt.d.ts",
+    "dist/client.js",
+    "dist/client.js.map",
+    "dist/client/index.d.ts",
+    "dist/client/remote-store.d.ts",
+    "dist/client/components/JobBoardPage.d.ts",
+    "dist/client/components/JobTable.d.ts",
+    "dist/client/components/JobDetails.d.ts",
+    "dist/client/components/CancelDialog.d.ts",
+    "dist/client/components/StatusBadge.d.ts",
     "package.json",
   ]) {
     assert.ok(paths.includes(required), `${required} must be published`)
