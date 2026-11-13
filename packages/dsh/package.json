@@ -1,0 +1,62 @@
+{
+  "name": "@omagents/omagents-dsh",
+  "version": "0.13.1",
+  "description": "DeepSeek Harness host integration for OmAgents",
+  "type": "module",
+  "main": "./dist/host/index.js",
+  "types": "./dist/host/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/host/index.d.ts",
+      "default": "./dist/host/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node test/run.js",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.1 <0.2.3-0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "omagents"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omagents/omagents"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-home-paths": "0.2.2-rc.1",
+    "@omagents/core": "0.13.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/cordis-plugin-loader": "1.1.0",
+    "@deepseek-ai/dsh": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-app-boot": "0.2.2-rc.1",
+    "@types/js-yaml": "4.0.9",
+    "@types/node": "24.10.1",
+    "js-yaml": "4.3.2",
+    "node-addon-require-builtin": "0.1.9",
+    "typescript": "5.9.3"
+  }
+}
