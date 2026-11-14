@@ -8,365 +8,150 @@
 
 [English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-에이전트 skill, MCP server, 병렬 실행, 그리고 superpowers를 하나의 설치로 묶어주는 OpenCode 및 Codex CLI plugin입니다.
-
----
-
-## 이 README 건너뛰기
-
-에이전트에게 다음을 붙여넣으세요:
-
-```
-Read this and install omagents: https://raw.githubusercontent.com/omagents/omagents/main/README.md
-```
+OmAgents는 **OpenCode**, **Codex**, **DeepSeek Harness (DSH)**를 위한 멀티 호스트 에이전트 툴킷입니다. 18개 OmAgents skills, 15개 Superpowers skills, MCP servers, 네이티브 백그라운드 에이전트 통합, Deep Research, Python 도구를 제공하며, 공유 Core 패키지가 상태와 호스트 독립 동작을 일관되게 유지합니다.
 
 ---
 
 ## 설치
 
-### TL;DR
-
-| 원하는 것 | 실행할 작업 | 결과 |
-| :--- | :--- | :--- |
-| **안정 버전** (npm) | `opencode.json` plugin 배열에 `"@omagents/omagents"` 추가 | npm에서 plugin 자동 설치, superpowers 포함 |
-| **버전 고정** | `"@omagents/omagents@^0.1.0"` 추가 | 동일하지만 버전 범위로 고정 |
-| **최신 개발 버전** (git) | `"@omagents/omagents@git+https://github.com/omagents/omagents.git"` 추가 | main branch의 최신 소스 |
-
-### 사용자용 가이드
-
-**사전 요구 사항:**
-- [OpenCode](https://opencode.ai)가 설치되어 실행 중이어야 함 — **OpenCode 1.x와 2.x 모두** 지원 (플러그인이 V1/V2 듀얼 엔트리 포인트 제공)
-- [Python 3.11+](https://www.python.org/downloads/)이 설치되어 PATH에 등록되어 있어야 함 (deep-research, markitdown-converter, playwright-web-scraping 및 loop engine에 필요)
-
-1. OpenCode 설정 파일을 엽니다:
+사용하는 호스트에 맞는 패키지를 선택하세요. 설치 프로그램에는 호스트 위치 인자가 없습니다.
 
 ```bash
-open -e ~/.config/opencode/opencode.json
+# OpenCode
+npx @omagents/omagents
+
+# Codex
+npx @omagents/omagents-codex
+
+# DeepSeek Harness
+dsh plugin --profile web add @omagents/omagents-dsh
 ```
 
-2. `plugin` 배열에 `@omagents/omagents`를 추가합니다:
+설치 후 호스트를 다시 시작하세요. `@omagents/core`는 의존성으로 자동 설치되므로 **plugin으로 별도 설치하지 마세요**. 현재 릴리스 후보는 네 패키지 모두 **0.13.1**로 정렬되어 있습니다.
 
-```json
-{
-  "plugin": [
-    "@omagents/omagents"
-  ]
-}
-```
+Python 기반 skills를 사용하려면 PATH에서 Python 3.11+를 사용할 수 있어야 합니다. DSH에는 Node.js 24.9 이상과 패키지에 명시된 테스트 완료 호환 범위의 DSH 버전이 필요합니다.
 
-3. OpenCode를 재시작합니다.
-
-완료되었습니다. 세션 시작 시 OmAgents가 자동으로 다음을 수행합니다:
-- **superpowers** 설치 (번들 포함, 별도 설치 불필요)
-- 모든 **skill** 등록 (OmAgents + Superpowers)
-- 모든 **MCP server** 등록 (agentmemory, codegraph, context7, websearch, github/grep_app)
-- **병렬 실행** 활성화 (`/ps` 및 `cancel_task`를 통한 background agent)
-- 영구적인 **Python base venv** `~/.venvs/omagents`를 재사용하거나 생성 (`jinja2`처럼 누락된 core package만 설치)
-- **Python 사전 요구 사항** 확인 (Python이 없는 경우 설치 안내와 함께 경고)
-
-### LLM Agent용 가이드
-
-AI agent로서 사용자의 OmAgents 설치를 돕고 있다면, 다음 단계를 따르세요:
+### 선택적 API Keys
 
 ```bash
-# 1. 사용자의 현재 OpenCode 설정 읽기
-cat ~/.config/opencode/opencode.json
-
-# 2. plugin 배열에 "@omagents/omagents" 추가
-#    jq가 있으면 사용, 없으면 수동으로 편집
-
-# 3. 편집 후 설정이 유효한 JSON인지 확인
-
-# 4. 사용자에게 OpenCode 재시작 안내
-```
-
-plugin이 나머지는 모두 자동으로 처리합니다 - 수동 MCP 설정, skill 설치, venv 설정이 필요 없습니다.
-
-### 선택 사항: API Key
-
-각 key가 MCP 등록에 미치는 영향 (시작 시 판정):
-
-```bash
-# ~/.zshrc 또는 ~/.bashrc
 export EXA_API_KEY="your-exa-key"
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-- **`EXA_API_KEY`**: 호스팅된 `websearch` MCP의 `x-api-key` 헤더로 인증하여 더 높은 한도를 사용합니다. 키가 없어도 같은 `mcp.exa.ai/mcp` 엔드포인트를 익명으로 사용합니다.
-- **`CONTEXT7_API_KEY`**: 선택 사항 — `context7`은 항상 `@upstash/context7-mcp`로 로컬 실행되며, key 설정 시 rate limit이 완화됩니다.
-- **`GITHUB_TOKEN`**: 전체 GitHub Copilot MCP(issues, PRs, repos, code search)가 활성화됩니다. 설정하지 않으면 OmAgents는 공개 code search만 지원하는 Vercel의 `mcp.grep.app`으로 대체됩니다.
+- **`EXA_API_KEY`**: 호스팅된 Exa `websearch` MCP를 `x-api-key`로 인증합니다. 설정하지 않아도 같은 엔드포인트를 익명으로 사용할 수 있습니다.
+- **`CONTEXT7_API_KEY`**: 로컬 `@upstash/context7-mcp` server의 rate limit을 완화하는 선택적 자격 증명입니다.
+- **`GITHUB_TOKEN`**: GitHub Copilot MCP를 활성화합니다. 설정하지 않으면 OmAgents가 `mcp.grep.app`으로 공개 코드를 검색합니다.
 
-### 다른 Plugin과 결합
+## 지원 매트릭스
 
-OmAgents의 hook 병합 메커니즘은 추가 plugin과의 충돌을 방지합니다:
+| 호스트 또는 역할 | 패키지 | 설치 | Skills | 백그라운드 실행 및 복구 | 관리 화면 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **OpenCode 1.x 및 OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**: OmAgents 18 + Superpowers 15 | V1은 `task(background: true)`, V2는 네이티브 `subagent(..., background: true)` 사용. 영구 Core Job Board, 완료 전달 및 복구. | `/ps`, `parallel_status`, `cancel_task`, 부모 컨텍스트 결과 및 OpenCode TUI 상태 |
+| **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **33**: OmAgents 18 + Superpowers 15 | Codex 네이티브 subagents. OpenCode 병렬 엔진과 DSH Web Job Board는 설치되지 않습니다. | Codex 네이티브 인터페이스와 skills |
+| **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **33**: OmAgents 18 + Superpowers 15 | 네이티브 비동기 `subagent` 생명주기, 영구 `job-board.json`, 취소, 복구, `/ps`, `parallel_status`, `cancel_task` | 권한이 부여된 Remote `watchJobs` 스트림과 네이티브 React Web Job Board |
+| **공유 라이브러리(호스트 plugin 아님)** | `@omagents/core` | 자동 의존성이며 사용자가 별도 설치하지 않음 | 공유 skill 정의와 Superpowers 자산 | 호스트 독립 실행 상태, 영속성, MCP 해석, research 자산 및 Python 환경 | 독립 UI 없음 |
 
-```json
-{
-  "plugin": [
-    "@omagents/omagents",
-    "@devcxl/opencode-spec"
-  ]
-}
-```
-
-### Codex CLI
-
-**사전 요구 사항:** [Python 3.11+](https://www.python.org/downloads/)이 설치되어 PATH에 포함되어 있어야 합니다.
-
-```bash
-npx @omagents/omagents codex
-```
-
-이 명령은 OmAgents 플러그인을 `~/.codex/plugins/cache/omagents/omagents/local/`에 설치하고 `~/.codex/config.toml`에서 활성화합니다. 세션 시작 시 플러그인이 번들된 skills, MCP servers를 자동으로 검색하고 `SessionStart` hooks로 Python venv를 설정합니다.
-
-OpenCode 전용 병렬 실행 엔진은 사용할 수 없습니다. Codex의 네이티브 subagent 도구를 사용하세요.
-
----
+모든 호스트 패키지는 동일 버전의 Core에만 의존하며 다른 호스트 패키지에는 의존하지 않습니다.
 
 ## 주요 기능
 
-| | 기능 | 설명 |
-| :---: | :--- | :--- |
-| 🔁 | **Loop Engineering**(루프 엔지니어링) | 반복적 skill을 위한 durable task queue. context clear 후에도 유지, retry logic, 통합 요약. 8개 skill에서 사용 |
-| 🧠 | **Superpowers** (15 skill) | 구현 전 brainstorming, TDD, 체계적 debugging, plan 작성, code review, git worktree |
-| 🔍 | **Deep Research** | 다중 소스 반복 연구, items × fields 매트릭스, gap detection loop, Jinja2 보고서 |
-| ⚡ | **Parallel Execution**(병렬 실행) | `task(background: true)`를 통한 background task 분배, 지속성 + session 격리를 갖춘 Job Board, `/ps` 명령어 |
-| 📚 | **내장 MCP** | agentmemory, codegraph, context7, websearch, github/grep_app - 모두 자동 등록 |
-| 🐍 | **Python Tooling** | 영구 base는 `~/.venvs/omagents`, project overlay는 필요 시 `.omagents/venv` 사용. core/skill 의존성은 누락된 경우에만 설치 |
-| 📄 | **MarkItDown** | PDF, DOCX, XLSX, PPTX, HTML을 Markdown으로 변환 |
-| 📊 | **OfficeCLI** | officecli로 .docx/.xlsx/.pptx 생성/분석/교정/편집 |
-| 🌐 | **Web Scraping** | Playwright 기반 페이지 가져오기 및 스크래핑 |
-| 🔗 | **GitHub** | `GITHUB_TOKEN` 설정 시 전체 GitHub API; 토큰 없으면 `mcp.grep.app`으로 대체 |
-| 🏗️ | **Refactor** | loop engine 검증을 통한 체계적 코드 리팩토링 |
-| 🛡️ | **Hyperplan** | 3개 병렬 critic을 활용한 대립적 plan 검토 (보안, 아키텍처, edge case) |
-| 🔧 | **Code Intelligence** | LSP guide + AST-grep을 통한 구조적 code search 및 rewrite |
-
----
+| 기능 | 제공 내용 |
+| :--- | :--- |
+| **Loop Engineering** | 반복 skills를 위한 영구 작업 큐, 재시도, 검증 및 재개 가능한 상태 |
+| **Superpowers** | Brainstorming, TDD, 체계적 debugging, plan, code review, worktree 및 검증 |
+| **Deep Research** | 다중 소스 items × fields research, gap detection, 영구 evidence 및 Jinja2 보고서 |
+| **Parallel Execution** | OpenCode와 DSH에서 공유 Core 실행 모델을 사용하는 호스트 네이티브 백그라운드 에이전트 |
+| **DSH Web Job Board** | 네이티브 React 필터, 세부 정보, 알림 상태, 확인 기반 취소, 재연결 및 health 표시 |
+| **내장 MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app |
+| **Python Tooling** | 영구 agent base와 온디맨드 project overlay를 제공하며 기존 project `.venv`를 수정하지 않음 |
+| **문서 및 Web 도구** | MarkItDown 변환, OfficeCLI 문서, Playwright scraping |
+| **Code Intelligence** | LSP 안내와 grep fallback이 있는 AST 인식 검색/재작성 |
+| **Hyperplan 및 Refactor** | 세 critic의 adversarial plan review와 검증된 반복 refactoring |
 
 ## Python 환경
 
-`~/.venvs/omagents`는 agent 도구를 위한 영구 base입니다. 프로젝트 의존성은 필요할 때 생성되는 `<project-root>/.omagents/venv`를 사용하며, 기존 프로젝트 `.venv`는 마이그레이션하거나 수정하지 않습니다. base와 프로젝트의 Python `majorMinor`는 일치해야 합니다. `jinja2`만 미리 provision되고 다른 도구는 on-demand로 설치됩니다.
+영구 agent base에서는 `jinja2`만 자동으로 provision됩니다. MarkItDown과 Playwright 같은 선택적 Python 도구는 해당 skill이 필요로 할 때 **온디맨드로 설치**되며 자동 설정에 포함되지 않습니다. 프로젝트 의존성은 온디맨드 overlay를 사용하며 기존 프로젝트 `.venv`를 수정할 필요가 없습니다.
 
-```bash
-node <omagents-root>/hooks/project-venv.js ensure --root <project-root>
-node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
-node <omagents-root>/hooks/project-venv.js run --root <project-root> -- script.py
-```
+환경 선택, 크로스 플랫폼 경로 및 CLI 지침은 `agents-python-tools` skill을 참조하세요. 이 저장소의 프로젝트 명령은 `packages/core/hooks/project-venv.js`에 구현되어 있습니다. base와 프로젝트 환경 모두 자동 삭제되지 않습니다.
 
-`pip` 명령은 `OMAGENTS_PROJECT_ONLY=1`을 설정하여 base 패키지가 프로젝트 의존성을 이미 충족했다고 잘못 판단하는 것을 방지합니다. `run`은 base overlay를 다시 활성화하며 프로젝트 패키지가 우선합니다. project overlay에서 pip를 직접 실행하지 마세요.
+## Loop Engineering 및 Deep Research
 
----
+Loop 기반 skills는 한 번에 한 항목을 처리하고 상태를 `.omagents/loops/<skill>/tasks.json`에 저장합니다. 실패한 작업은 blocked가 되기 전에 최대 세 번 재시도합니다. 컨텍스트가 지워진 후에도 상태가 유지되므로 워크플로를 처음부터 다시 시작하지 않고 재개할 수 있습니다.
 
-## Loop Engineering
+Deep Research에서 `--workspace <dir>`는 공개 결과물에만 사용합니다. plan, raw findings, checkpoint, 파생 artifact, provenance 및 run별 queue는 `.omagents/deep-research/<run-id>/`에 저장됩니다. 이러한 상태를 포함하는 workspace에서는 새 run이 거부됩니다. legacy workspace는 자동 마이그레이션 없이 계속 읽고 재개할 수 있습니다. Jinja2 템플릿은 `packages/core/skills/deep-research/templates/`에 있으며 루트 수준 `templates/` 디렉터리는 없습니다.
 
-OmAgents는 AI agent skill을 위한 **loop engineering**(루프 엔지니어링)을 개척했습니다. "모든 것을 스캔하고 수정하라"는 일회성 prompt 대신, loop 기반 skill은 검증과 함께 한 번에 하나씩 항목을 처리하는 durable task queue를 사용합니다.
+## Skills 및 MCP Servers
 
-### 작동 방식
+18개 OmAgents skills는 다음과 같습니다.
 
-```
-Phase 1: Build Task Queue          Phase 2: Execute Loop           Phase 3: Report
-┌─────────────────────┐    ┌──────────────────────────┐    ┌─────────────────┐
-│ Scan codebase       │    │ loop_engine.py next      │    │ loop_engine.py  │
-│ Build task list     │───>│   -> get next task       │───>│   summary       │
-│ loop_engine.py init │    │   -> execute + verify    │    │ Show results    │
-└─────────────────────┘    │   -> complete or fail    │    └─────────────────┘
-                           │   -> repeat until null   │
-                           └──────────────────────────┘
-```
+`deep-research`, `parallel-execution`, `agents-python-tools`, `markitdown-converter`, `officecli`, `playwright-web-scraping`, `init-deep`, `doctor`, `remove-ai-slops`, `remove-deadcode`, `github-triage`, `tech-debt-audit`, `lsp-guide`, `ast-grep`, `work-with-pr`, `pre-publish-review`, `hyperplan`, `refactor`.
 
-**상태가 유지됩니다** — `.omagents/loops/<skill>/tasks.json`에 저장됩니다. 작업 중간에 agent의 context가 clear되어도, 정확히 중단한 지점에서 재개할 수 있습니다.
+Superpowers는 15개 프로세스 skills를 추가로 제공합니다. Core는 `opencode-v1`, `opencode-v2`, `codex`, `dsh`용으로 공유 skills를 렌더링하며, 제어 흐름이 다른 경우 완전한 호스트별 override를 사용합니다. DSH는 OpenCode `background` 인자 없이 네이티브 `subagent` 의미를 사용합니다.
 
-Deep Research에서 `--workspace <dir>`는 보고서, 선택적 사용자 문서, 공개 `README.md` 인덱스만 포함하는 결과물 전용 디렉터리입니다. 각 run의 plan, raw findings, checkpoint, 파생 artifact, provenance는 `.omagents/deep-research/<run-id>/`에 저장되며 loop queue도 run ID별로 격리됩니다. workspace가 프로젝트의 internal storage를 포함하는 경우(예: 프로젝트 루트 자체) 새 run은 쓰기 전에 실패하고 독립된 하위 workspace를 요구합니다. 기존 legacy workspace는 자동 마이그레이션 없이 그대로 읽고 재개할 수 있습니다.
+| MCP | 유형 | 동작 |
+| :--- | :--- | :--- |
+| `agentmemory` | 로컬 | Session memory 및 audit |
+| `codegraph` | 로컬 | 코드베이스 symbol graph 및 탐색 |
+| `context7` | 로컬 | `@upstash/context7-mcp`를 통한 문서 검색 |
+| `websearch` | 원격 | 호스팅된 Exa MCP, 익명 또는 `EXA_API_KEY` 인증 |
+| `github` / `grep_app` | 원격 | token이 있으면 GitHub Copilot MCP, 없으면 `mcp.grep.app` 공개 코드 검색 |
 
-**Retry logic:** 실패한 task는 blocked 상태로 표시되기 전에 최대 3번 재시도됩니다.
+사용자 정의 MCP 설정은 내장 등록보다 우선합니다.
 
-**Compaction safe:** `experimental.session.compacting` hook이 loop engine 상태를 compaction prompt에 주입하므로, agent는 context clear 후 재개 방법을 알고 있습니다.
+## DSH Job Board 동작
 
-### Loop Engineering을 사용하는 Skill
+DSH 패키지는 skills만 제공하는 plugin이 아니라 완전한 Host와 Web Client를 설치합니다. Web Job Board는 revision이 있는 Remote whole-set frames를 사용하고 재연결 후 새 baseline에서 시작하며 실행 중인 job을 polling하지 않습니다. all/running/attention/finished 필터, 결과 및 오류 세부 정보, 알림 상태, 취소 확인, stale/permission/degraded 보기와 DSH 테마 통합을 제공합니다.
 
-| Skill | 반복 대상 | 검증 |
-|-------|----------|------|
-| `deep-research` | 연구 task -> gap detection -> 새로운 task | 결과 검증 + coverage matrix |
-| `remove-ai-slops` | 소스 파일 (task당 1개) | Lint / test 통과 |
-| `remove-deadcode` | Dead code 후보 (task당 1개) | 제거 후 test 통과 |
-| `github-triage` | 열린 issues (task당 1개) | label 성공적으로 적용됨 |
-| `tech-debt-audit` | 감사 카테고리 (task당 1개) | 결과 수집 완료 |
-| `pre-publish-review` | Release checklist 항목 (task당 1개) | 각 check 통과 |
-| `hyperplan` | 3개 병렬 critic (순차가 아닌 추적 방식) | Critic이 결과 생성 |
-| `refactor` | 리팩토링 대상 (task당 1개 파일) | 리팩토링 후 test 통과 |
+취소 요청이 수락되었다는 것은 종료가 확인되었다는 뜻이 아닙니다. 로컬 중단은 자식 에이전트의 **현재 turn**만 중지하며 **descendants는 별도로 취소하지 않는 한 계속 실행**됩니다. **External one-shot** 실행은 영구적으로 중지되며 **재개할 수 없습니다**. UI에서 세부 정보를 보아도 모델 알림이 acknowledge되지 않습니다.
 
-### Loop Engine API
-
-```bash
-loop_engine.py init <skill> '<tasks_json>'   # Initialize task queue
-loop_engine.py next <skill>                   # Get next pending task
-loop_engine.py complete <skill> <id> [result] # Mark task complete
-loop_engine.py fail <skill> <id> [error]      # Mark task failed (retries 3x)
-loop_engine.py status <skill>                 # Print stats
-loop_engine.py summary <skill>                # Full task list with icons
-loop_engine.py reset <skill>                  # Clear queue
-loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
-```
-
----
-
-## 포함된 내용
-
-### Skill
-
-| Skill | 출처 | Loop? | 설명 |
-|-------|------|-------|------|
-| `deep-research` | OmAgents | Yes | 다중 소스, items × fields, gap detection, Jinja2 보고서를 활용한 반복 연구 |
-| `parallel-execution` | OmAgents | - | Job Board 추적을 통한 background 병렬 task 분배 |
-| `agents-python-tools` | OmAgents | - | agent 도구는 `~/.venvs/omagents`로, 프로젝트 의존성은 `.omagents/venv`로 라우팅하고 안전한 base overlay 제공 |
-| `markitdown-converter` | OmAgents | - | 문서(PDF, DOCX, XLSX 등)를 Markdown으로 변환 |
-| `officecli` | OmAgents | - | officecli CLI로 Office 문서(.docx, .xlsx, .pptx) 생성/분석/교정/편집 |
-| `playwright-web-scraping` | OmAgents | - | Playwright를 활용한 web scraping 및 페이지 가져오기 |
-| `init-deep` | OmAgents | - | 계층적 AGENTS.md 파일 자동 생성 |
-| `doctor` | OmAgents | - | OmAgents 설치 및 설정 진단 |
-| `remove-ai-slops` | OmAgents | Yes | AI 생성 코드 산물 정리 (loop: 파일별) |
-| `remove-deadcode` | OmAgents | Yes | 참조되지 않은 코드 탐지 및 제거 (loop: 후보별) |
-| `github-triage` | OmAgents | Yes | GitHub issues 분류 및 카테고리화 (loop: issue별) |
-| `tech-debt-audit` | OmAgents | Yes | 코드베이스 기술 부채 감사 (loop: 카테고리별) |
-| `lsp-guide` | OmAgents | - | 에이전트가 올바른 code intelligence 도구(LSP, codegraph, grep, ast-grep)를 사용하도록 안내 |
-| `ast-grep` | OmAgents | Optional | grep 대체 기능을 갖춘 AST 기반 code search 및 rewrite |
-| `work-with-pr` | OmAgents | - | github MCP를 활용한 PR 수명 주기 관리 |
-| `pre-publish-review` | OmAgents | Yes | 게시 전 release gate checklist (loop: check별) |
-| `hyperplan` | OmAgents | Yes | 3개 병렬 critic을 활용한 대립적 plan 검토 (loop: critic 추적) |
-| `refactor` | OmAgents | Yes | 검증을 통한 체계적 코드 리팩토링 (loop: 파일별) |
-| `superpowers` (15 skill) | Superpowers | - | Brainstorming, TDD, debugging, planning, git worktree 등 |
-
-### MCP Server
-
-| MCP | 유형 | 비고 |
-|-----|------|------|
-| `agentmemory` | Local | Session memory 및 감사 |
-| `codegraph` | Local | 코드베이스 symbol graph 및 탐색 |
-| `context7` | Local | `@upstash/context7-mcp`를 통한 문서 검색 (선택적 `CONTEXT7_API_KEY`로 rate limit 완화) |
-| `websearch` | Remote | Exa 호스팅 MCP 사용; 기본은 익명, `EXA_API_KEY` 설정 시 `x-api-key`로 인증 |
-| `github` / `grep_app` | Remote | `GITHUB_TOKEN` 설정 시 GitHub Copilot MCP; 미설정 시 공개 code search용 `mcp.grep.app` |
-
-### 병렬 실행
-
-- OpenCode의 기본 `task(background: true)`를 통한 background task 분배
-- 자동 결과 주입을 포함한 Job Board 추적
-- **지속성**: Job Board가 재시작 후에도 유지됨 (`job-board.json`에 저장)
-- **Session 격리**: 각 session은 자신의 job만 표시 (session 간 누출 없음)
-- **Compaction safe**: context compaction 후에도 loop engine 및 Job Board 상태 보존
-- 실행 중인 task를 확인하는 `/ps` 명령어
-- background task를 취소하는 `cancel_task` 도구
-- 프로그래밍 방식의 상태 확인을 위한 `parallel_status` 도구
-
----
+재시작 후 DSH는 저장된 jobs를 호스트의 권위 있는 상태와 대조합니다. 결과가 없거나 읽을 수 없으면 `interrupted`가 되며 성공이 꾸며지지 않습니다. Remote 접근은 활성 DSH profile과 권한이 부여된 parent-session scope로 제한됩니다. UI, 취소, 복구, 권한 부여, 보안 및 문제 해결은 [DSH 패키지 가이드](packages/dsh/README.md)와 [Job Board 가이드](packages/dsh/docs/job-board.md)를 참조하세요.
 
 ## 아키텍처
 
-OmAgents는 계층화된 시스템으로 설계되었습니다:
-
-```
+```text
 ┌─────────────────────────────────────────────────┐
-│  User Choice Layer (not bundled, install separately)  │
-│  OpenSpec · gstack · custom workflows · none     │
+│ 사용자 선택 계층(미포함)                          │
+│ OpenSpec · gstack · custom workflows · none     │
 ├─────────────────────────────────────────────────┤
-│  Process Skills Layer (bundled: superpowers)      │
-│  Brainstorming · TDD · Debugging · Plans ·       │
-│  Code Review · Git Worktrees · Verification      │
+│ 프로세스 skills 계층(포함된 Superpowers)          │
 ├─────────────────────────────────────────────────┤
-│  Infrastructure Layer (bundled: OmAgents)         │
-│  MCP servers · Parallel execution ·              │
-│  Deep research · Python tooling · venv            │
+│ OmAgents 인프라 및 공유 Core                     │
+│ Skills · MCP · Job Board · research · Python    │
 ├─────────────────────────────────────────────────┤
-│  OpenCode runtime                                │
+│ OpenCode · Codex · DeepSeek Harness             │
 └─────────────────────────────────────────────────┘
 ```
 
-**OmAgents는 인프라 계층입니다.** 에이전트에 필요한 도구와 기능을 제공합니다: 외부 데이터를 위한 MCP server, background task를 위한 병렬 실행, 연구 workflow, 그리고 Python 환경 관리.
-
-**Superpowers는 프로세스 skill 계층입니다.** 재사용 가능한 개발 workflow를 제공합니다: 구현 전 brainstorming, test-driven development, 체계적 debugging, plan 작성 및 실행, code review, 그리고 git worktree 관리.
-
-**사용자 선택 계층은 번들에 포함되지 않습니다.** 개발 방법론은 선택 사항입니다 - spec-driven development(OpenSpec), 팀 기반 engineering workflow(gstack), 또는 아무 방법론도 사용하지 않을 수 있습니다. OmAgents는 중립을 유지하여 사용자가 프로젝트에 맞는 것을 선택할 수 있도록 합니다.
-
----
-
-## 제거
-
-1. OpenCode 설정에서 plugin을 제거합니다:
-
-```bash
-# jq 사용
-jq '.plugin = [.plugin[] | select(. != "@omagents/omagents")]' \
-    ~/.config/opencode/opencode.json > /tmp/oc.json && \
-    mv /tmp/oc.json ~/.config/opencode/opencode.json
-```
-
-2. Python venv를 제거합니다 (선택 사항):
-
-```bash
-rm -rf ~/.venvs/omagents
-```
-
-3. OpenCode를 재시작합니다.
-
----
+OmAgents는 인프라를 제공하며 개발 방법론을 강제하지 않습니다. Superpowers는 재사용 가능한 프로세스 skills를 제공합니다. OpenSpec과 gstack 같은 방법론은 계속해서 사용자가 별도로 선택할 수 있습니다.
 
 ## 개발
 
-프로젝트 구조:
-
-```
-omagents/
-├── index.js                  # 통합 엔트리 (OpenCode 플러그인 내보내기 + Codex CLI 설치기)
-├── .opencode/plugins/
-│   ├── index.js              # OpenCode 플러그인 (superpowers + omagents hooks 병합)
-│   └── parallel.js           # 병렬 실행 엔진
-├── .codex/plugins/
-│   └── setup.js              # Codex 설치기 (npx @omagents/omagents로 실행)
-├── hooks/
-│   ├── python-env.js         # 공유 base/프로젝트 Python 환경 모듈
-│   ├── project-venv.js       # 프로젝트 overlay CLI (ensure/python/pip/run)
-│   └── setup-venv.js         # Codex SessionStart base 설정 hook
-├── skills/                   # 번들된 skills (18 OmAgents + 15 Superpowers)
-│   ├── _shared/scripts/      # 공유 스크립트 (loop_engine.py)
-│   ├── deep-research/        # gap detection 연구 워크플로
-│   └── ...                   # 추가 skills
-├── mcp-servers/
-│   └── base.json             # MCP server 정의 (단일 소스)
-├── tests/                    # Node.js 내장 테스트 러너
-├── AGENTS.md                 # AI agent 컨텍스트 파일
-├── package.json              # superpowers 의존성 포함
-└── README.md
-```
-
-### 테스트
+이 저장소는 `packages/core`, `packages/opencode`, `packages/codex`, `packages/dsh`를 포함하는 비공개 npm-workspaces 루트입니다. 저장소의 `.opencode/plugins/index.js`는 개발 전용 re-export이며 제품 코드는 각 패키지에 있습니다. Deep Research 템플릿은 `packages/core/skills/deep-research/templates/`에 있습니다.
 
 ```bash
-# 모든 테스트 실행
+# 모든 루트 및 workspace 테스트
 npm test
 
-# 포맷 확인
-npm run format:check
+# DSH 빌드 및 테스트
+npm run build --workspace @omagents/omagents-dsh && npm test --workspace @omagents/omagents-dsh
 
-# 코드 포맷
-npm run format
+# 패킹된 artifact 및 브라우저 검증
+npm run pack:all
+npm run test:packed
+npm run test:browser
 ```
 
-### 게시
+모든 릴리스는 하나의 정렬된 버전을 사용하고 **네 패키지를 모두 함께 빌드, 테스트, 패킹 및 게시**해야 합니다. 순서는 다음으로 고정됩니다.
 
-OmAgents는 OIDC Trusted Publishing을 사용합니다 - npm token이 필요하지 않습니다.
+`@omagents/core → @omagents/omagents → @omagents/omagents-codex → @omagents/omagents-dsh`
 
-```bash
-# 버전 올리기
-npm version patch   # 0.1.0 -> 0.1.1
+모든 호스트가 Core에 의존하므로 Core를 먼저 게시합니다. 호스트를 순차적으로 게시하는 것은 로그와 실패 처리를 결정적으로 하기 위해서만이며 호스트 간 의존성은 없습니다. 검증 요구 사항과 현재 플랫폼/브라우저 확인 범위는 [CONTRIBUTING.md](CONTRIBUTING.md)를 참조하세요.
 
-# tag push (GitHub Actions 자동 게시 트리거)
-git push && git push --tags
-```
+## 제거
 
-[npmjs.com](https://www.npmjs.com/package/@omagents/omagents) -> Settings -> Trusted Publisher에서 Trusted Publisher를 설정하세요.
-
----
+선택한 호스트의 plugin 관리 기능으로 해당 OmAgents 패키지를 제거하거나 비활성화하세요. DSH에서는 패키지 루트를 가리키는 `@omagents/omagents-dsh` Loader 행을 비활성화하면 Host와 Web Client가 모두 비활성화됩니다. Core는 설치된 호스트의 의존성으로만 남습니다. Python 환경은 자동 삭제되지 않습니다.
 
 ## 라이선스
 
-MIT - [LICENSE](LICENSE) 참조.
+MIT — [LICENSE](LICENSE)를 참조하세요.

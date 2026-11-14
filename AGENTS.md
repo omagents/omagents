@@ -5,7 +5,7 @@
 
 ## What Is This Project?
 
-OmAgents is a multi-host agent toolkit with explicit OpenCode (`@omagents/omagents`), Codex (`@omagents/omagents-codex`), and DeepSeek Harness (`@omagents/omagents-dsh`) packages plus shared `@omagents/core` capabilities. OpenCode users install it by adding `@omagents/omagents` to their `opencode.json` plugin array.
+OmAgents is a multi-host agent toolkit with explicit OpenCode (`@omagents/omagents`), Codex (`@omagents/omagents-codex`), and DeepSeek Harness (`@omagents/omagents-dsh`) packages plus shared `@omagents/core` capabilities. Core is an automatic dependency, not a separate user install. The approved host installs are `npx @omagents/omagents`, `npx @omagents/omagents-codex`, and `dsh plugin --profile web add @omagents/omagents-dsh`; neither npm installer takes a host positional argument.
 
 ## Architecture (Layered)
 
@@ -147,7 +147,7 @@ Key variables:
 - DSH 0.2.2-rc.1 provides `@deepseek-ai/dsh-mcp-client` as a one-server-per-plugin API, not a built-in manager. `registerDshMcp()` therefore uses the OmAgents-owned `ctx.mcpManager` adapter to check Loader-owned user server names and mount each Core entry with `ctx.plugin(McpClient, config)`, mapping local servers to `stdio` and remote servers to `streamable-http` without overriding existing names. MCP activation similarly waits for delayed `tools`; per-registration and aggregate disposers each cache and return the exact same in-flight Promise across concurrent/repeated teardown. Tests perform real handshakes only against local stdio and Streamable HTTP fixtures.
 - `provisionDshPython()` starts Core base provisioning without blocking plugin setup, resolves the base beneath the current home directory, and automatically installs only `jinja2`; project overlays stay on demand through Core. Tests inject `ctx.omagentsPython` and isolate home/temp paths so they never create or delete the user's real `~/.venvs/omagents`.
 - `cordis.patch.yml` contains only the bare `@omagents/omagents-dsh` row. `dsh.bundle.patch` points to that file, and `engines.dsh` is bounded to the DSH 0.2.2 line (`>=0.2.2-rc.1 <0.2.3-0`) and exercised with DSH 0.2.2-rc.1. Do not broaden the range without exercising the added DSH versions.
-- Host and Client source are TypeScript/TSX. `npm run build --workspace @omagents/omagents-dsh` runs `tsc` for Host/Client declarations and `tsdown --config tsdown.client.config.ts` for the browser's `dist/client.js` lazy-CJS artifact and source map; `prepack` runs that complete build. The publish allowlist contains only `dist/` and `cordis.patch.yml`, never TypeScript/TSX source, tests, configs, or test tooling, and installed users never compile React.
+- Host and Client source are TypeScript/TSX. `npm run build --workspace @omagents/omagents-dsh` runs `tsc` for Host/Client declarations and `tsdown --config tsdown.client.config.ts` for the browser's `dist/client.js` lazy-CJS artifact and source map; `prepack` runs that complete build. The `files` publish allowlist contains only `dist/` and `cordis.patch.yml`; npm also includes the mandatory `README.md` and `package.json` metadata. Never publish TypeScript/TSX source, tests, configs, or test tooling, and installed users never compile React.
 - Run `npm install` after dependency changes, then `npm run build --workspace @omagents/omagents-dsh && npm test --workspace @omagents/omagents-dsh`. Host tests use the real `@deepseek-ai/cordis-plugin-loader` with an isolated `DSH_HOME`, a profile-local package-root installation, and no model API key; do not replace those Host smoke tests with a direct `apply()` call. Client suites exercise the built lazy-CJS factory with a real Cordis fiber, plus source-level store and accessible React component tests; capability suites also cover native skill discovery/disposal, local MCP handshakes, and nonblocking Python provisioning.
 
 ## Parallel Execution Engine (`packages/opencode/src/parallel.js`)
@@ -275,10 +275,8 @@ Research pauses emit host-neutral `{ action: "dispatch_subagent", description, p
 - **DSH tests:** `npm run build --workspace @omagents/omagents-dsh && npm test --workspace @omagents/omagents-dsh` (real Loader smoke, already-available and delayed capability activation/reactivation, 33 native skills and wrong-host scans, automatic Superpowers bootstrap/native catalog/React-to-brainstorming acceptance routing, two concurrent structured research lanes, gap-loop resume, three-critic completion/cancellation, local stdio/Streamable HTTP MCP handshakes, repeat-safe async disposal, isolated nonblocking Python setup, native subagent lifecycle/cancellation/recovery, canonical status and cancellation tools/direct `/ps`, authorized Remote calls and structured errors, empty/racing/coalesced/reconnecting watch streams and abort/disposal cleanup, required compaction-safe Board context and failure health, Client baseline/reconnect/elapsed stores, accessible React filters/details/cancellation and all UI states, actual Typert validation, root-fiber slot disposal, lazy-CJS artifacts, theme tokens, exports, compatibility, and publish contents).
 - **Packed verification:** `npm run pack:all` creates four aligned tarballs under ignored `.omagents/release-artifacts/tarballs/`, each manifest carrying content and lockfile fingerprints. `npm run test:packed` seeds a lockfile-derived cache under `.omagents/release-artifacts/offline-npm-cache/`, then uses `npm ci --offline --ignore-scripts` into OS-temporary homes outside repository module resolution. Source/dist/manifest or lockfile changes invalidate reuse and force repack/reinstall; unchanged packed-first state is reused. Probes have explicit process-tree timeouts and failure-path Loader/server disposal. It checks Core/Superpowers assets, OpenCode V1/V2, no-arg CLIs, Windows paths, real DSH Loader, and the served built Client.
 - **Browser verification:** `npm run test:browser` first runs `scripts/prepare-browser-clean-room.js` with a separate 900-second process-tree bound, reusing a valid packed-first install or rebuilding stale/missing pack state. Playwright installation is independently bounded with `OMAGENTS_BROWSER_INSTALL_TIMEOUT_MS` (defaulting to the preparation bound). The browser spec runs against that prepared profile with an independent 120-second watchdog covering the runner, Chromium, tsx/esbuild, and local MCP children. It checks startup/sidebar/main panel, Host `/ps`/`parallel_status`/Web agreement, completion, local/external cancellation, Loader restart/reconnect, themes, and non-owner Gateway authorization with no external model credentials. Research/hyperplan recovery resumes the original local hostTaskIds/run IDs and run-scoped queue tasks without creating replacement jobs; external one-shots remain interrupted. `OMAGENTS_PLAYWRIGHT_EXECUTABLE` may select an existing browser; `OMAGENTS_BROWSER_PREPARE_TIMEOUT_MS`, `OMAGENTS_BROWSER_TEST_TIMEOUT_MS`, and `OMAGENTS_BROWSER_STARTUP_TIMEOUT_MS` bound the respective phases.
-- **Local testing:** Point OpenCode config to local clone:
-  ```json
-  { "plugin": ["omagents@git+file:///path/to/omagents"] }
-  ```
+- **Local testing:** Run OpenCode in this repository to auto-discover the development-only `.opencode/plugins/index.js` re-export; do not install the private workspace root as a plugin. Use `npm run pack:all`, `npm run test:packed`, and `npm run test:browser` to exercise isolated host installations from real tarballs.
+- **Current verification scope:** Release-candidate verification has run locally on macOS arm64 with the `chromium_headless_shell-1228` override. Linux, Windows, and the default pinned Chromium still require first CI confirmation; never describe those runs as already passed.
 
 ## CI/CD
 
@@ -287,24 +285,15 @@ Research pauses emit host-neutral `{ action: "dispatch_subagent", description, p
 
 ## Publishing
 
-Follow these steps **in order** to publish a new release:
+All four package manifests and every host's exact `@omagents/core` dependency must remain aligned. Every release must **build, test, pack, and publish all four packages together**, even when only one host changed. Inspect all tarballs and install them in isolated environments before publishing.
 
-1. **Bump version** in `package.json` (e.g. `"version": "0.4.2"`).
-2. **Update CHANGELOG.md** — add a new `## [x.y.z] - YYYY-MM-DD` section at the top with the changes.
-3. **Commit and tag**:
-   ```bash
-   git add package.json CHANGELOG.md
-   git commit -m "release: vX.Y.Z"
-   git tag vX.Y.Z
-   ```
-4. **Push and create GitHub release**:
-   ```bash
-   git push && git push --tags
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <(awk 'f&&/^## \[/{exit} /^## \[X\.Y\.Z\]/{f=1} f' CHANGELOG.md) --verify-tag
-   ```
-   The release notes are extracted from the corresponding CHANGELOG.md section for this version (replace `X.Y.Z` with the actual version numbers, escaping `.` as needed).
+Publish in this exact order:
 
-The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub release must be created manually (it is NOT automated in the workflow).
+`@omagents/core → @omagents/omagents → @omagents/omagents-codex → @omagents/omagents-dsh`
+
+Confirm that the exact Core version is available in npm before publishing any host. The three hosts are sequential only for deterministic logs and failure handling; none depends on another host. DSH Host and Client artifacts must be built before packing, and its declared compatibility range must match tested DSH versions.
+
+Use the aligned release automation and final gate when implementing a release; do not invent a version or publish packages independently from this guidance. Actual versioning, Git mutation, tagging, pushing, npm publishing, GitHub releases, and community announcements each require explicit user authorization. npm publication uses OIDC Trusted Publishing for all four package names, without a placeholder npm authentication token.
 
 ## Dependencies
 

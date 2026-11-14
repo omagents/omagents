@@ -8,364 +8,149 @@
 
 [English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-一个 OpenCode 和 Codex CLI 插件，将 agent skills、MCP servers、parallel execution 和 superpowers 整合为一次安装。
-
----
-
-## 跳过此 README
-
-将以下内容粘贴给你的 agent：
-
-```
-Read this and install omagents: https://raw.githubusercontent.com/omagents/omagents/main/README.md
-```
+OmAgents 是面向 **OpenCode**、**Codex** 和 **DeepSeek Harness (DSH)** 的多宿主 agent 工具包。它打包了 18 个 OmAgents skills、15 个 Superpowers skills、MCP servers、原生后台 agent 集成、深度研究和 Python 工具链；共享的 Core 包负责统一状态及宿主无关行为。
 
 ---
 
 ## 安装
 
-### TL;DR
-
-| 需求 | 操作 | 结果 |
-| :--- | :--- | :--- |
-| **稳定版**（npm） | 将 `"@omagents/omagents"` 添加到 `opencode.json` 的 plugin 数组 | 从 npm 自动安装 plugin，superpowers 已打包 |
-| **锁定版本** | 添加 `"@omagents/omagents@^0.1.0"` | 同上，但锁定到特定版本范围 |
-| **最新开发版**（git） | 添加 `"@omagents/omagents@git+https://github.com/omagents/omagents.git"` | 从 main 分支获取最新源码 |
-
-### 面向人类用户
-
-**前提条件：**
-- 已安装并运行 [OpenCode](https://opencode.ai) —— 同时支持 **OpenCode 1.x 和 2.x**（插件内置 V1/V2 双入口）
-- 已安装 [Python 3.11+](https://www.python.org/downloads/) 并在 PATH 中可用（deep-research、markitdown-converter、playwright-web-scraping 和 loop engine 需要）
-
-1. 打开你的 OpenCode 配置文件：
+请选择与你的宿主对应的软件包。安装器不接受宿主位置参数。
 
 ```bash
-open -e ~/.config/opencode/opencode.json
+# OpenCode
+npx @omagents/omagents
+
+# Codex
+npx @omagents/omagents-codex
+
+# DeepSeek Harness
+dsh plugin --profile web add @omagents/omagents-dsh
 ```
 
-2. 将 `@omagents/omagents` 添加到 `plugin` 数组中：
+安装后重启宿主。`@omagents/core` 会作为依赖自动安装；**不要将它作为 plugin 单独安装**。当前发布候选版本将四个软件包统一为 **0.13.1**。
 
-```json
-{
-  "plugin": [
-    "@omagents/omagents"
-  ]
-}
-```
+Python 驱动的 skills 要求 PATH 中可使用 Python 3.11+。DSH 要求 Node.js 24.9 或更高版本，并要求 DSH 版本位于软件包声明的已测试兼容范围内。
 
-3. 重启 OpenCode。
-
-就是这样。会话开始时，OmAgents 会自动：
-- 安装 **superpowers**（已打包，无需单独安装）
-- 注册所有 **skills**（OmAgents + Superpowers）
-- 注册所有 **MCP servers**（agentmemory、codegraph、context7、websearch、github/grep_app）
-- 启用 **parallel execution**（后台 agent，支持 `/ps` 和 `cancel_task`）
-- 复用或创建持久的 **Python base venv** `~/.venvs/omagents`（仅安装缺失的核心包，例如 `jinja2`）
-- 检查 **Python 前置条件**（如果缺少 Python，会给出安装提示）
-
-### 面向 LLM Agent
-
-如果你是帮助用户安装 OmAgents 的 AI agent，请按以下步骤操作：
+### 可选 API Keys
 
 ```bash
-# 1. 读取用户当前的 OpenCode 配置
-cat ~/.config/opencode/opencode.json
-
-# 2. 将 "@omagents/omagents" 添加到 plugin 数组中
-#    如有 jq 可使用 jq，否则手动编辑
-
-# 3. 编辑后验证配置是否为有效 JSON
-
-# 4. 告知用户重启 OpenCode
-```
-
-plugin 会自动处理其余所有事项——无需手动配置 MCP、无需安装 skill、无需设置 venv。
-
-### 可选：API Keys
-
-各 key 对 MCP 注册的影响（启动时判定）：
-
-```bash
-# ~/.zshrc 或 ~/.bashrc
 export EXA_API_KEY="your-exa-key"
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-- **`EXA_API_KEY`**：通过 `x-api-key` Header 为托管的 `websearch` MCP 提供鉴权和更高限额。未设置时，同一个 `mcp.exa.ai/mcp` 端点以匿名方式使用。
-- **`CONTEXT7_API_KEY`**：可选——`context7` 始终通过 `@upstash/context7-mcp` 本地运行，设置此 key 可提高速率限制。
-- **`GITHUB_TOKEN`**：启用完整的 GitHub Copilot MCP（issues、PRs、repos、code search）。未设置时，OmAgents 会回退到 Vercel 的 `mcp.grep.app`，仅支持公开代码搜索。
+- **`EXA_API_KEY`**：通过 `x-api-key` 为托管的 Exa `websearch` MCP 鉴权；未设置时，同一端点可匿名使用。
+- **`CONTEXT7_API_KEY`**：本地 `@upstash/context7-mcp` server 的可选速率限制凭据。
+- **`GITHUB_TOKEN`**：启用 GitHub Copilot MCP。未设置时，OmAgents 使用 `mcp.grep.app` 搜索公开代码。
 
-### 与其他 Plugin 组合使用
+## 支持矩阵
 
-OmAgents 的 hook 合并机制确保不会与其他 plugin 产生冲突：
+| 宿主或角色 | 软件包 | 安装 | Skills | 后台执行与恢复 | 管理界面 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **OpenCode 1.x 和 OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**：18 个 OmAgents + 15 个 Superpowers | V1 使用 `task(background: true)`；V2 使用原生 `subagent(..., background: true)`。持久化 Core Job Board、结果投递和恢复。 | `/ps`、`parallel_status`、`cancel_task`、父上下文结果和 OpenCode TUI 状态 |
+| **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **33**：18 个 OmAgents + 15 个 Superpowers | Codex 原生 subagents。不安装 OpenCode 并行引擎或 DSH Web Job Board。 | Codex 原生界面和 skills |
+| **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **33**：18 个 OmAgents + 15 个 Superpowers | 原生异步 `subagent` 生命周期、持久化 `job-board.json`、取消、恢复、`/ps`、`parallel_status` 和 `cancel_task` | 经授权的 Remote `watchJobs` 流和原生 React Web Job Board |
+| **共享库，不是宿主 plugin** | `@omagents/core` | 作为依赖自动安装，无需用户单独安装 | 共享 skill 定义和 Superpowers 资源 | 宿主无关的执行状态、持久化、MCP 解析、研究资源和 Python 环境 | 无独立 UI |
 
-```json
-{
-  "plugin": [
-    "@omagents/omagents",
-    "@devcxl/opencode-spec"
-  ]
-}
-```
-
-### Codex CLI
-
-**前置条件：** 已安装 [Python 3.11+](https://www.python.org/downloads/) 并在 PATH 中。
-
-```bash
-npx @omagents/omagents codex
-```
-
-这会将 OmAgents 插件安装到 `~/.codex/plugins/cache/omagents/omagents/local/` 并在 `~/.codex/config.toml` 中启用。会话开始时，插件会自动发现打包的 skills、MCP servers，并通过 `SessionStart` hooks 设置 Python venv。
-
-OpenCode 独有的并行执行引擎不可用；请使用 Codex 原生的 subagent 工具进行并行调度。
-
----
+所有宿主软件包只依赖相同版本的 Core，互不依赖。
 
 ## 核心特性
 
-| | 功能 | 作用 |
-| :---: | :--- | :--- |
-| 🔁 | **Loop Engineering（循环工程）** | 为迭代式 skills 提供持久化任务队列。支持上下文清除后恢复、重试逻辑、统一摘要。被 8 个 skills 使用 |
-| 🧠 | **Superpowers**（15 个 skills） | 实现前先进行 brainstorming、TDD、systematic debugging、plan 编写、code review、git worktrees |
-| 🔍 | **Deep Research** | 多来源迭代研究，支持 items × fields 矩阵、gap detection loop、Jinja2 报告 |
-| ⚡ | **Parallel Execution** | 通过 `task(background: true)` 进行后台任务分发，Job Board 支持持久化和 session 隔离，`/ps` 命令 |
-| 📚 | **内置 MCPs** | agentmemory、codegraph、context7、websearch、github/grep_app —— 全部自动注册 |
-| 🐍 | **Python 工具链** | 持久 base 位于 `~/.venvs/omagents`，项目 overlay 按需位于 `.omagents/venv`；核心包和 skill 依赖仅在缺失时安装 |
-| 📄 | **MarkItDown** | 将 PDF、DOCX、XLSX、PPTX、HTML 转换为 Markdown |
-| 📊 | **OfficeCLI** | 通过 officecli 创建、分析、校对和修改 .docx/.xlsx/.pptx |
-| 🌐 | **Web Scraping** | 基于 Playwright 的页面抓取和数据采集 |
-| 🔗 | **GitHub** | 设置 `GITHUB_TOKEN` 后可使用完整 GitHub API；未设置时回退到 `mcp.grep.app` |
-| 🏗️ | **Refactor** | 通过 loop engine 验证进行系统性代码重构 |
-| 🛡️ | **Hyperplan** | 对抗式 plan 审查，3 个并行 critics（安全、架构、边界情况） |
-| 🔧 | **Code Intelligence** | LSP guide + AST-grep，用于结构化代码搜索和重写 |
-
----
+| 功能 | 提供的能力 |
+| :--- | :--- |
+| **Loop Engineering** | 为迭代 skills 提供持久任务队列、重试、验证和可恢复状态 |
+| **Superpowers** | Brainstorming、TDD、系统化调试、计划、代码审查、worktrees 和验证 |
+| **Deep Research** | 多来源 items × fields 研究、缺口检测、持久证据和 Jinja2 报告 |
+| **Parallel Execution** | 在 OpenCode 和 DSH 上通过共享 Core 执行模型使用宿主原生后台 agents |
+| **DSH Web Job Board** | 原生 React 筛选、详情、通知状态、确认取消、重连和健康状态显示 |
+| **内置 MCPs** | agentmemory、codegraph、context7、websearch 和 github/grep_app |
+| **Python 工具链** | 持久 agent base 和按需项目 overlay，不修改已有项目 `.venv` |
+| **文档与 Web 工具** | MarkItDown 转换、OfficeCLI 文档和 Playwright 抓取 |
+| **Code Intelligence** | LSP 指引和带 grep 回退的 AST 感知搜索/重写 |
+| **Hyperplan 与 Refactor** | 三 critic 对抗式计划审查和经过验证的迭代重构 |
 
 ## Python 环境
 
-`~/.venvs/omagents` 是 agent 工具的持久 base。项目依赖使用按需创建的 `<project-root>/.omagents/venv`，不会迁移或修改已有项目 `.venv`。base 与项目的 Python `majorMinor` 必须一致。只有 `jinja2` 会预先配置，其他工具均按需安装。
+持久 agent base 只会自动配置 `jinja2`。MarkItDown、Playwright 等可选 Python 工具仅在对应 skill 需要时**按需安装**，不属于自动设置内容。项目依赖使用按需 overlay，绝不会要求修改已有项目 `.venv`。
 
-```bash
-node <omagents-root>/hooks/project-venv.js ensure --root <project-root>
-node <omagents-root>/hooks/project-venv.js pip --root <project-root> -- install -r requirements.txt
-node <omagents-root>/hooks/project-venv.js run --root <project-root> -- script.py
-```
+环境选择、跨平台路径和 CLI 用法请参阅 `agents-python-tools` skill。本仓库的项目命令由 `packages/core/hooks/project-venv.js` 实现。base 和项目环境都不会被自动删除。
 
-`pip` 命令会设置 `OMAGENTS_PROJECT_ONLY=1`，避免 base 中已有的包被误认为项目依赖。`run` 会重新启用 base overlay，并让项目包优先。不要在项目 overlay 中直接运行 pip。
+## Loop Engineering 与 Deep Research
 
----
+基于 loop 的 skills 每次处理一个条目，并将状态持久化到 `.omagents/loops/<skill>/tasks.json`。失败任务最多重试三次，随后标记为 blocked。状态在上下文清除后仍然保留，因此工作流可以恢复而不是重新开始。
 
-## Loop Engineering（循环工程）
+Deep Research 的 `--workspace <dir>` 只用于公开交付物。计划、原始发现、检查点、派生产物、provenance 和 run 级队列保存在 `.omagents/deep-research/<run-id>/`。如果 workspace 会包含这些内部状态，新运行会被拒绝；旧布局 workspace 仍可读取和恢复，不会自动迁移。Jinja2 模板位于 `packages/core/skills/deep-research/templates/`，不存在根级 `templates/` 目录。
 
-OmAgents 率先将 **loop engineering（循环工程）** 应用于 AI agent skills。与一次性提示（如"扫描所有内容并修复"）不同，基于 loop 的 skills 使用持久化任务队列，逐项处理并附带验证。
+## Skills 与 MCP Servers
 
-### 工作原理
+18 个 OmAgents skills 为：
 
-```
-Phase 1: Build Task Queue          Phase 2: Execute Loop           Phase 3: Report
-┌─────────────────────┐    ┌──────────────────────────┐    ┌─────────────────┐
-│ Scan codebase       │    │ loop_engine.py next      │    │ loop_engine.py  │
-│ Build task list     │───>│   -> get next task       │───>│   summary       │
-│ loop_engine.py init │    │   -> execute + verify    │    │ Show results    │
-└─────────────────────┘    │   -> complete or fail    │    └─────────────────┘
-                           │   -> repeat until null   │
-                           └──────────────────────────┘
-```
+`deep-research`、`parallel-execution`、`agents-python-tools`、`markitdown-converter`、`officecli`、`playwright-web-scraping`、`init-deep`、`doctor`、`remove-ai-slops`、`remove-deadcode`、`github-triage`、`tech-debt-audit`、`lsp-guide`、`ast-grep`、`work-with-pr`、`pre-publish-review`、`hyperplan` 和 `refactor`。
 
-**状态持久化**于 `.omagents/loops/<skill>/tasks.json` —— 如果 agent 的上下文在任务执行中途被清除，它可以从中断处精确恢复。
+Superpowers 另外提供 15 个流程 skills。Core 为 `opencode-v1`、`opencode-v2`、`codex` 和 `dsh` 渲染共享 skills；控制流程不同时使用完整的宿主专用覆盖版本。DSH 使用原生 `subagent` 语义，不带 OpenCode 的 `background` 参数。
 
-对于 Deep Research，`--workspace <dir>` 是仅存放交付物的目录，包含报告、可选自定义文档和公开的 `README.md` 索引。每次运行的计划、原始发现、检查点、派生产物和 provenance 均保存在 `.omagents/deep-research/<run-id>/`，任务队列也按 run ID 隔离。如果 workspace 会包含这些内部存储（例如项目根目录本身），新运行会在写入前失败并要求选择独立的子工作区。既有旧布局工作区仍可读取和恢复，不会自动迁移。
+| MCP | 类型 | 行为 |
+| :--- | :--- | :--- |
+| `agentmemory` | 本地 | Session 记忆和审计 |
+| `codegraph` | 本地 | 代码库符号图和探索 |
+| `context7` | 本地 | 通过 `@upstash/context7-mcp` 搜索文档 |
+| `websearch` | 远程 | 托管 Exa MCP，匿名或通过 `EXA_API_KEY` 鉴权 |
+| `github` / `grep_app` | 远程 | 有 token 时使用 GitHub Copilot MCP；否则通过 `mcp.grep.app` 搜索公开代码 |
 
-**重试逻辑：** 失败的任务最多重试 3 次，之后标记为 blocked。
+用户定义的 MCP 配置优先于内置注册。
 
-**压缩安全：** `experimental.session.compacting` hook 会将 loop engine 状态注入压缩提示中，确保 agent 在上下文清除后知道如何恢复。
+## DSH Job Board 行为
 
-### 使用 Loop Engineering 的 Skills
+DSH 软件包安装完整的 Host 和 Web Client，而不是仅有 skills 的 plugin。Web Job Board 使用带 revision 的 Remote 全量集合帧，在重连后以新的 baseline 开始，并且不会轮询运行中的任务。它提供全部/运行中/需注意/已完成筛选、结果和错误详情、通知状态、取消确认、stale/permission/degraded 视图以及 DSH 主题集成。
 
-| Skill | 循环处理对象 | 验证方式 |
-|-------|-------------------|--------------|
-| `deep-research` | 研究任务 -> gap detection -> 新任务 | 发现验证 + 覆盖矩阵 |
-| `remove-ai-slops` | 源文件（每次一个） | Lint / 测试通过 |
-| `remove-deadcode` | 死代码候选项（每次一个） | 移除后测试通过 |
-| `github-triage` | 待处理 issues（每次一个） | 标签成功应用 |
-| `tech-debt-audit` | 审计类别（每次一个） | 收集到发现结果 |
-| `pre-publish-review` | 发布检查清单项（每次一个） | 每项检查通过 |
-| `hyperplan` | 3 个并行 critics（跟踪式，非顺序式） | Critic 产出发现结果 |
-| `refactor` | 重构目标（每次一个文件） | 重构后测试通过 |
+取消请求被接受并不代表已确认终止。本地中断会停止子 agent 的**当前轮次**，其**后代会继续运行**，除非分别取消。**External one-shot** 运行会永久停止，且**无法恢复**。在 UI 中查看详情绝不会确认模型通知。
 
-### Loop Engine API
-
-```bash
-loop_engine.py init <skill> '<tasks_json>'   # Initialize task queue
-loop_engine.py next <skill>                   # Get next pending task
-loop_engine.py complete <skill> <id> [result] # Mark task complete
-loop_engine.py fail <skill> <id> [error]      # Mark task failed (retries 3x)
-loop_engine.py status <skill>                 # Print stats
-loop_engine.py summary <skill>                # Full task list with icons
-loop_engine.py reset <skill>                  # Clear queue
-loop_engine.py add <skill> '<task_json>'      # Add task to existing queue
-```
-
----
-
-## 包含内容
-
-### Skills
-
-| Skill | 来源 | Loop？ | 描述 |
-|-------|--------|-------|-------------|
-| `deep-research` | OmAgents | 是 | 多来源、迭代式研究，支持 items × fields、gap detection、Jinja2 报告 |
-| `parallel-execution` | OmAgents | - | 通过 Job Board 跟踪的后台并行任务分发 |
-| `agents-python-tools` | OmAgents | - | 将 agent 工具路由到 `~/.venvs/omagents`，项目依赖路由到 `.omagents/venv`，并提供安全的 base overlay |
-| `markitdown-converter` | OmAgents | - | 将文档（PDF、DOCX、XLSX 等）转换为 Markdown |
-| `officecli` | OmAgents | - | 使用 officecli 创建、分析、校对和修改 Office 文档（.docx、.xlsx、.pptx）|
-| `playwright-web-scraping` | OmAgents | - | 使用 Playwright 进行 web scraping 和页面抓取 |
-| `init-deep` | OmAgents | - | 自动生成层级化 AGENTS.md 文件 |
-| `doctor` | OmAgents | - | 诊断 OmAgents 安装和配置 |
-| `remove-ai-slops` | OmAgents | 是 | 清理 AI 生成的代码产物（loop：逐文件） |
-| `remove-deadcode` | OmAgents | 是 | 查找并移除未引用的代码（loop：逐个候选项） |
-| `github-triage` | OmAgents | 是 | 分拣和分类 GitHub issues（loop：逐个 issue） |
-| `tech-debt-audit` | OmAgents | 是 | 审计代码库的技术债务（loop：逐个类别） |
-| `lsp-guide` | OmAgents | - | 指导 agent 使用正确的代码智能工具（LSP、codegraph、grep、ast-grep） |
-| `ast-grep` | OmAgents | 可选 | AST 感知的代码搜索和重写，支持 grep 回退 |
-| `work-with-pr` | OmAgents | - | 使用 github MCP 管理 PR 生命周期 |
-| `pre-publish-review` | OmAgents | 是 | 发布前检查清单（loop：逐项检查） |
-| `hyperplan` | OmAgents | 是 | 对抗式 plan 审查，3 个并行 critics（loop：critic 跟踪） |
-| `refactor` | OmAgents | 是 | 带验证的系统性代码重构（loop：逐文件） |
-| `superpowers`（15 个 skills） | Superpowers | - | Brainstorming、TDD、debugging、planning、git worktrees 等 |
-
-### MCP Servers
-
-| MCP | 类型 | 说明 |
-|-----|------|-------|
-| `agentmemory` | Local | Session 记忆和审计 |
-| `codegraph` | Local | 代码库符号图和探索 |
-| `context7` | Local | 通过 `@upstash/context7-mcp` 进行文档搜索（可选 `CONTEXT7_API_KEY` 提高速率限制） |
-| `websearch` | Remote | 使用 Exa 托管 MCP；默认匿名，设置 `EXA_API_KEY` 时通过 `x-api-key` 鉴权 |
-| `github` / `grep_app` | Remote | 设置 `GITHUB_TOKEN` 时使用 GitHub Copilot MCP；否则使用 `mcp.grep.app` 进行公开代码搜索 |
-
-### Parallel Execution
-
-- 通过 OpenCode 原生 `task(background: true)` 进行后台任务分发
-- Job Board 跟踪，自动注入结果
-- **持久化**：Job Board 在重启后保留（保存到 `job-board.json`）
-- **Session 隔离**：每个 session 只看到自己的任务（无跨 session 泄露）
-- **压缩安全**：loop engine 和 Job Board 状态在上下文压缩后保留
-- `/ps` 命令查看运行中的任务
-- `cancel_task` 工具取消后台任务
-- `parallel_status` 工具进行程序化状态检查
-
----
+重启后，DSH 会根据宿主权威状态核对持久化任务。缺失或不可读的结果会变为 `interrupted`，绝不会伪造成功。Remote 访问受活动 DSH profile 和已授权 parent-session scope 限制。有关 UI、取消、恢复、授权、安全和故障排除的详情，请参阅 [DSH 软件包指南](packages/dsh/README.md)和 [Job Board 指南](packages/dsh/docs/job-board.md)。
 
 ## 架构
 
-OmAgents 采用分层设计：
-
-```
+```text
 ┌─────────────────────────────────────────────────┐
-│  User Choice Layer (not bundled, install separately)  │
-│  OpenSpec · gstack · custom workflows · none     │
+│ 用户选择层（不打包）                             │
+│ OpenSpec · gstack · custom workflows · none     │
 ├─────────────────────────────────────────────────┤
-│  Process Skills Layer (bundled: superpowers)      │
-│  Brainstorming · TDD · Debugging · Plans ·       │
-│  Code Review · Git Worktrees · Verification      │
+│ 流程 skills 层（打包的 Superpowers）              │
 ├─────────────────────────────────────────────────┤
-│  Infrastructure Layer (bundled: OmAgents)         │
-│  MCP servers · Parallel execution ·              │
-│  Deep research · Python tooling · venv            │
+│ OmAgents 基础设施与共享 Core                     │
+│ Skills · MCP · Job Board · research · Python    │
 ├─────────────────────────────────────────────────┤
-│  OpenCode runtime                                │
+│ OpenCode · Codex · DeepSeek Harness             │
 └─────────────────────────────────────────────────┘
 ```
 
-**OmAgents 是基础设施层。** 它提供 agent 所需的工具和能力：用于外部数据的 MCP servers、用于后台任务的 parallel execution、研究工作流和 Python 环境管理。
-
-**Superpowers 是流程技能层。** 它提供可复用的开发工作流：实现前的 brainstorming、test-driven development、systematic debugging、plan 编写和执行、code review 以及 git worktree 管理。
-
-**用户选择层不打包。** 开发方法论是一种选择——spec 驱动开发（OpenSpec）、团队工程工作流（gstack），或者完全不使用方法论。OmAgents 保持中立，让用户选择适合自己项目的方式。
-
----
-
-## 卸载
-
-1. 从 OpenCode 配置中移除 plugin：
-
-```bash
-# Using jq
-jq '.plugin = [.plugin[] | select(. != "@omagents/omagents")]' \
-    ~/.config/opencode/opencode.json > /tmp/oc.json && \
-    mv /tmp/oc.json ~/.config/opencode/opencode.json
-```
-
-2. 移除 Python venv（可选）：
-
-```bash
-rm -rf ~/.venvs/omagents
-```
-
-3. 重启 OpenCode。
-
----
+OmAgents 提供基础设施，不强制指定开发方法论。Superpowers 提供可复用流程 skills。OpenSpec、gstack 等方法论仍是用户的独立选择。
 
 ## 开发
 
-项目结构：
-
-```
-omagents/
-├── index.js                  # 统一入口（OpenCode 插件导出 + Codex CLI 安装器）
-├── .opencode/plugins/
-│   ├── index.js              # OpenCode 插件（合并 superpowers + omagents hooks）
-│   └── parallel.js           # 并行执行引擎
-├── .codex/plugins/
-│   └── setup.js              # Codex 安装器（通过 npx @omagents/omagents 执行）
-├── hooks/
-│   ├── python-env.js         # 共享 base/项目 Python 环境模块
-│   ├── project-venv.js       # 项目 overlay CLI（ensure/python/pip/run）
-│   └── setup-venv.js         # Codex SessionStart base 设置 hook
-├── skills/                   # 打包的 skills（18 OmAgents + 15 Superpowers）
-│   ├── _shared/scripts/      # 共享脚本（loop_engine.py）
-│   ├── deep-research/        # 带有 gap detection 的研究工作流
-│   └── ...                   # 更多 skills
-├── mcp-servers/
-│   └── base.json             # MCP server 定义（单一数据源）
-├── tests/                    # Node.js 内置测试运行器
-├── AGENTS.md                 # AI agent 上下文文件
-├── package.json              # 包含 superpowers 依赖
-└── README.md
-```
-
-### 测试
+本仓库是私有 npm-workspaces 根，包含 `packages/core`、`packages/opencode`、`packages/codex` 和 `packages/dsh`。仓库中的 `.opencode/plugins/index.js` 仅是开发用 re-export；产品代码位于各软件包中。Deep Research 模板保留在 `packages/core/skills/deep-research/templates/`。
 
 ```bash
-# Run all tests
+# 所有根测试和 workspace 测试
 npm test
 
-# Check formatting
-npm run format:check
+# 构建并测试 DSH
+npm run build --workspace @omagents/omagents-dsh && npm test --workspace @omagents/omagents-dsh
 
-# Format code
-npm run format
+# 打包产物与浏览器验证
+npm run pack:all
+npm run test:packed
+npm run test:browser
 ```
 
-### 发布
+每个版本都必须使用统一版本号，并**一起构建、测试、打包和发布全部四个软件包**，顺序固定为：
 
-OmAgents 使用 OIDC Trusted Publishing —— 无需 npm token。
+`@omagents/core → @omagents/omagents → @omagents/omagents-codex → @omagents/omagents-dsh`
 
-```bash
-# Bump version
-npm version patch   # 0.1.0 -> 0.1.1
+Core 首先发布，因为所有宿主都依赖它。三个宿主顺序发布只是为了确定日志和失败处理顺序；它们之间不存在依赖关系。验证要求和当前平台/浏览器确认范围请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-# Push tag (triggers GitHub Actions auto-publish)
-git push && git push --tags
-```
+## 卸载
 
-在 [npmjs.com](https://www.npmjs.com/package/@omagents/omagents) -> Settings -> Trusted Publisher 配置 Trusted Publisher。
-
----
+使用所选宿主的 plugin 管理功能移除或禁用对应的 OmAgents 软件包。对于 DSH，禁用指向软件包根目录的 `@omagents/omagents-dsh` Loader 行会同时禁用 Host 和 Web Client。Core 仅作为已安装宿主的依赖保留。Python 环境不会自动删除。
 
 ## 许可证
 

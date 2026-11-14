@@ -276,7 +276,10 @@ test("packed package contains built Host, Typert, Client, declarations, and no T
   }
   for (const path of paths) {
     assert.ok(
-      path === "package.json" || path === "cordis.patch.yml" || path.startsWith("dist/"),
+      path === "package.json" ||
+        path === "README.md" ||
+        path === "cordis.patch.yml" ||
+        path.startsWith("dist/"),
       `unexpected publish path: ${path}`
     )
     assert.doesNotMatch(path, /(^|\/)(?:src|test|tests)(?:\/|$)|tsconfig|tsdown|\.tsx$/)
