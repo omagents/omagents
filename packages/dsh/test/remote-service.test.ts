@@ -21,13 +21,19 @@ function launch(overrides = {}) {
   }
 }
 
-function setup(t, { authorizeScope, cancel } = {}) {
+function setup(t, { authorizeScope, cancel, query } = {}) {
   const root = new Context()
   t.after(() => root.fiber.dispose())
   let nextId = 0
   const board = new JobBoard({ idGenerator: () => `remote-job-${++nextId}` })
   const cancellations = []
+  const queries = []
   const tracker = {
+    async query(job) {
+      queries.push(job.id)
+      if (query) return query(job)
+      return { kind: "active" }
+    },
     async cancel(job) {
       cancellations.push(job.id)
       if (cancel) return cancel(job)
@@ -43,7 +49,7 @@ function setup(t, { authorizeScope, cancel } = {}) {
       authorizeScope ??
       ((_ctx, scope) => scope.parentSessionId === undefined || scope.parentSessionId === "parent-1"),
   })
-  return { root, board, remote, tracker, health, cancellations }
+  return { root, board, remote, tracker, health, cancellations, queries }
 }
 
 function assertRemoteError(error, code, details = {}) {
@@ -73,7 +79,7 @@ test("Remote metadata exposes unary methods and a stream without a Client surfac
 })
 
 test("listJobs filters unscoped reads and returns only an authorized explicit scope", async (t) => {
-  const { remote, board } = await setup(t)
+  const { remote, board, queries } = await setup(t)
   const own = board.registerLaunch(launch())
   const other = board.registerLaunch(
     launch({ hostTaskId: "child-2", parentSessionId: "parent-2", description: "Secret other session" })
@@ -83,15 +89,37 @@ test("listJobs filters unscoped reads and returns only an authorized explicit sc
   const allVisible = await remote.listJobs({})
   assert.deepEqual(allVisible.map((job) => job.id), [own.id])
   assert.equal(JSON.stringify(allVisible).includes(other.description), false)
+  assert.deepEqual(
+    queries,
+    [own.id],
+    "unscoped refresh must not query another parent's native state"
+  )
   const scoped = await remote.listJobs({ parentSessionId: "parent-1" })
   assert.deepEqual(scoped, allVisible)
   assert.notStrictEqual(scoped[0], own)
+  assert.deepEqual(queries, [own.id, own.id], "an explicit scope must exclude every other parent")
   assert.equal(board.revision, revision)
   assert.equal(own.notificationState, undefined)
 })
 
+test("listJobs reconciles authorized active jobs before returning their current state", async (t) => {
+  const { remote, board, queries } = await setup(t, {
+    query: async () => ({ kind: "terminal", state: "completed", resultSummary: "manual refresh" }),
+  })
+  const own = board.registerLaunch(launch())
+  const other = board.registerLaunch(
+    launch({ hostTaskId: "child-2", parentSessionId: "parent-2", description: "Secret other session" })
+  )
+
+  const jobs = await remote.listJobs({ parentSessionId: "parent-1" })
+  assert.deepEqual(queries, [own.id])
+  assert.equal(jobs[0].executionState, "completed")
+  assert.equal(jobs[0].resultSummary, "manual refresh")
+  assert.equal(other.executionState, "running", "another parent's job must not be reconciled")
+})
+
 test("unauthorized list/watch scopes fail with structured Remote errors before exposing jobs", async (t) => {
-  const { remote, board } = await setup(t)
+  const { remote, board, queries } = await setup(t)
   board.registerLaunch(
     launch({ hostTaskId: "child-2", parentSessionId: "parent-2", description: "Secret other session" })
   )
@@ -111,6 +139,7 @@ test("unauthorized list/watch scopes fail with structured Remote errors before e
       reason: "session-scope-unauthorized",
     })
   )
+  assert.deepEqual(queries, [], "denied callers must not trigger native Session or Agent queries")
 })
 
 test("cancelJob authorizes the actual job owner and never interrupts another session", async (t) => {

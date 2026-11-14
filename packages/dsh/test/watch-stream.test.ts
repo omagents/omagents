@@ -33,10 +33,11 @@ async function within(promise, label) {
   }
 }
 
-function setup(t, { onSubscribe } = {}) {
+function setup(t, { onSubscribe, query } = {}) {
   const root = new Context()
   let nextId = 0
   const board = new JobBoard({ idGenerator: () => `watch-job-${++nextId}` })
+  const queries = []
   let activeSubscriptions = 0
   const subscribe = board.subscribe.bind(board)
   board.subscribe = (listener) => {
@@ -55,7 +56,16 @@ function setup(t, { onSubscribe } = {}) {
   }
   const remote = new OmAgentsRemote(root, {
     board,
-    tracker: { async cancel(job) { board.requestCancellation(job.id) } },
+    tracker: {
+      async query(job) {
+        queries.push(job.id)
+        if (query) return query(job)
+        return { kind: "active" }
+      },
+      async cancel(job) {
+        board.requestCancellation(job.id)
+      },
+    },
     health: createHealthRecords(() => []),
     authorizeScope: () => true,
   })
@@ -64,6 +74,7 @@ function setup(t, { onSubscribe } = {}) {
     root,
     board,
     remote,
+    queries,
     activeSubscriptions: () => activeSubscriptions,
   }
 }
@@ -82,6 +93,110 @@ test("watchJobs yields an empty baseline and abort resolves a pending iteration 
   assert.deepEqual(await within(pending, "abort"), { done: true, value: undefined })
   assert.equal(activeSubscriptions(), 0)
   assert.deepEqual(await stream.next(), { done: true, value: undefined })
+})
+
+test("watchJobs return during initial reconciliation closes without yielding a baseline", async (t) => {
+  let releaseQuery
+  const gate = new Promise((resolve) => {
+    releaseQuery = resolve
+  })
+  const { remote, board, activeSubscriptions } = setup(t, {
+    query: async () => {
+      await gate
+      return { kind: "active" }
+    },
+  })
+  board.registerLaunch(launch())
+  const stream = remote.watchJobs({}, new AbortController().signal)[Symbol.asyncIterator]()
+  const pending = stream.next()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  const returned = stream.return()
+  assert.equal(activeSubscriptions(), 0, "return() must detach during native reconciliation")
+  releaseQuery()
+  assert.deepEqual(await within(Promise.all([pending, returned]), "return during reconciliation"), [
+    { done: true, value: undefined },
+    { done: true, value: undefined },
+  ])
+})
+
+test("watchJobs return during failed initial reconciliation closes without surfacing a late native error", async (t) => {
+  let rejectQuery
+  const gate = new Promise((_, reject) => {
+    rejectQuery = reject
+  })
+  const { remote, board, activeSubscriptions } = setup(t, {
+    query: async () => gate,
+  })
+  board.registerLaunch(launch())
+  const stream = remote.watchJobs({}, new AbortController().signal)[Symbol.asyncIterator]()
+  const pending = stream.next()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  const returned = stream.return()
+  assert.equal(
+    activeSubscriptions(),
+    0,
+    "return() must detach before native reconciliation settles"
+  )
+  rejectQuery(new Error("late native query failure"))
+  assert.deepEqual(await within(Promise.all([pending, returned]), "return after native failure"), [
+    { done: true, value: undefined },
+    { done: true, value: undefined },
+  ])
+})
+
+test("watchJobs abort during initial reconciliation closes without yielding a baseline", async (t) => {
+  let releaseQuery
+  const gate = new Promise((resolve) => {
+    releaseQuery = resolve
+  })
+  const { remote, board, activeSubscriptions } = setup(t, {
+    query: async () => {
+      await gate
+      return { kind: "active" }
+    },
+  })
+  board.registerLaunch(launch())
+  const controller = new AbortController()
+  const stream = remote.watchJobs({}, controller.signal)[Symbol.asyncIterator]()
+  const pending = stream.next()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  controller.abort()
+  assert.equal(activeSubscriptions(), 0, "abort must detach during native reconciliation")
+  releaseQuery()
+  assert.deepEqual(await within(pending, "abort during reconciliation"), {
+    done: true,
+    value: undefined,
+  })
+})
+
+test("watchJobs throw during initial reconciliation detaches before rejecting", async (t) => {
+  let releaseQuery
+  const gate = new Promise((resolve) => {
+    releaseQuery = resolve
+  })
+  const { remote, board, activeSubscriptions } = setup(t, {
+    query: async () => {
+      await gate
+      return { kind: "active" }
+    },
+  })
+  board.registerLaunch(launch())
+  const stream = remote.watchJobs({}, new AbortController().signal)[Symbol.asyncIterator]()
+  const pending = stream.next()
+  await new Promise((resolve) => setImmediate(resolve))
+  const failure = new Error("consumer failed during reconciliation")
+
+  const thrown = assert.rejects(stream.throw(failure), (error) => error === failure)
+  assert.equal(activeSubscriptions(), 0, "throw() must detach during native reconciliation")
+  releaseQuery()
+  assert.deepEqual(await within(pending, "pending next after initial throw"), {
+    done: true,
+    value: undefined,
+  })
+  await within(thrown, "throw during reconciliation")
 })
 
 test("watchJobs return during an idle pending next closes immediately and detaches synchronously", async (t) => {
@@ -169,6 +284,46 @@ test("watchJobs yields a baseline and does not lose a change during subscription
   assert.equal(activeSubscriptions(), 0)
 })
 
+test("watchJobs reconciles initial and reconnect baselines without polling later frames", async (t) => {
+  let nativeResult = 0
+  let activeSubscriptions = () => 0
+  const setupResult = setup(t, {
+    query: async () => {
+      assert.equal(activeSubscriptions(), 1, "the Core listener must attach before reconciliation")
+      nativeResult += 1
+      return { kind: "terminal", state: "completed", resultSummary: `native-${nativeResult}` }
+    },
+  })
+  const { remote, board, queries } = setupResult
+  activeSubscriptions = setupResult.activeSubscriptions
+  const firstJob = board.registerLaunch(launch())
+  const first = remote.watchJobs({}, new AbortController().signal)[Symbol.asyncIterator]()
+
+  const baseline = await within(first.next(), "reconciled initial baseline")
+  assert.equal(baseline.value.jobs[0].executionState, "completed")
+  assert.equal(baseline.value.jobs[0].resultSummary, "native-1")
+  assert.deepEqual(queries, [firstJob.id])
+
+  const pending = first.next()
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.deepEqual(queries, [firstJob.id], "an open watch must not periodically query native state")
+  board.markInjected([firstJob.id])
+  const injected = await within(pending, "Core-driven post-baseline frame")
+  assert.equal(injected.value.jobs[0].notificationState, "injected")
+  assert.deepEqual(queries, [firstJob.id], "subsequent watch frames must not reconcile again")
+  await first.return()
+
+  const secondJob = board.registerLaunch(
+    launch({ hostTaskId: "child-2", description: "Reconnect" })
+  )
+  const second = remote.watchJobs({}, new AbortController().signal)[Symbol.asyncIterator]()
+  const reconnectBaseline = await within(second.next(), "reconciled reconnect baseline")
+  assert.deepEqual(queries, [firstJob.id, secondJob.id], "terminal jobs are not queried again")
+  assert.equal(reconnectBaseline.value.jobs[1].executionState, "completed")
+  assert.equal(reconnectBaseline.value.jobs[1].resultSummary, "native-2")
+  await second.return()
+})
+
 test("watchJobs coalesces bursts into the latest whole-set frame", async (t) => {
   const { remote, board } = setup(t)
   const job = board.registerLaunch(launch())
@@ -221,7 +376,7 @@ test("watchJobs reconnect starts with a fresh baseline and independent listener 
 })
 
 test("watchJobs filters every frame to its authorized parent session", async (t) => {
-  const { remote, board } = setup(t)
+  const { remote, board, queries } = setup(t)
   const own = board.registerLaunch(launch())
   board.registerLaunch(
     launch({ hostTaskId: "child-2", parentSessionId: "parent-2", description: "Secret other session" })
@@ -233,11 +388,13 @@ test("watchJobs filters every frame to its authorized parent session", async (t)
   )[Symbol.asyncIterator]()
   const baseline = await stream.next()
   assert.deepEqual(baseline.value.jobs.map((job) => job.id), [own.id])
+  assert.deepEqual(queries, [own.id], "a scoped baseline must not query another parent")
 
   board.markTerminal(own.id, { state: "completed", resultSummary: "own result" })
   const changed = await within(stream.next(), "scoped update")
   assert.equal(JSON.stringify(changed).includes("Secret other session"), false)
   assert.deepEqual(changed.value.jobs.map((job) => job.id), [own.id])
+  assert.deepEqual(queries, [own.id], "Core-driven frames must not issue more native queries")
   controller.abort()
   await stream.next()
 })

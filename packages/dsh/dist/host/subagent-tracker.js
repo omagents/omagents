@@ -69,6 +69,15 @@ export function createSubagentTracker(ctx, board) {
             return { kind: "active" };
         const run = runByJob.get(job.id);
         const terminal = run ? ends.get(run.info.runId) : undefined;
+        const agents = ctx.get("agents");
+        const liveAgent = agents?.get(SessionId(job.hostTaskId));
+        if (!terminal &&
+            !liveAgent &&
+            (!agents || typeof ctx.get("sessionQuery")?.readSession !== "function")) {
+            // Remote reads may arrive before recovery capabilities activate. A cold
+            // native query is not safe until both live-Agent and Session lookup exist.
+            return { kind: "active" };
+        }
         const outcome = await queryDshSubagent(ctx, job, {
             ...(run ? { run } : {}),
             ...(terminal ? { terminal } : {}),

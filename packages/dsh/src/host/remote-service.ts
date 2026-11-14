@@ -133,6 +133,7 @@ export class OmAgentsRemote extends TypertRemoteService {
   async listJobs(scope: JobScope): Promise<JobDto[]> {
     const normalized = normalizeScope(scope)
     this.assertAuthorized(normalized, "omagents/listJobs", "session-scope-unauthorized")
+    await this.reconcile(normalized)
     return this.readJobs(normalized)
   }
 
@@ -200,8 +201,9 @@ export class OmAgentsRemote extends TypertRemoteService {
     if (lifetime.aborted) return
 
     const queue = new LatestFrameQueue()
-    // Subscribe before taking the baseline. The pending slot retains any commit
-    // racing the baseline, while discardThrough suppresses only stale duplicates.
+    let closed = false
+    // Subscribe before reconciliation and the baseline. The pending slot retains
+    // any commit racing the baseline, while discardThrough suppresses stale duplicates.
     const unsubscribe = this.board.subscribe(() => {
       try {
         queue.push(this.frame(normalized))
@@ -210,6 +212,7 @@ export class OmAgentsRemote extends TypertRemoteService {
       }
     })
     const close = () => {
+      closed = true
       queue.close()
       // An AsyncGenerator suspended at yield has no pending finally transition;
       // closure itself must still release the Core listener immediately.
@@ -218,11 +221,19 @@ export class OmAgentsRemote extends TypertRemoteService {
     registerClose(close)
     lifetime.addEventListener("abort", close, { once: true })
     try {
+      try {
+        await this.reconcile(normalized)
+      } catch (error) {
+        // A consumer that already closed must not receive a late native failure.
+        if (lifetime.aborted || closed) return
+        throw error
+      }
+      if (lifetime.aborted || closed) return
       const baseline = this.frame(normalized)
       queue.discardThrough(baseline.revision)
-      if (lifetime.aborted) return
+      if (lifetime.aborted || closed) return
       yield baseline
-      while (!lifetime.aborted) {
+      while (!lifetime.aborted && !closed) {
         const frame = await queue.take()
         if (!frame) return
         yield frame
@@ -231,6 +242,23 @@ export class OmAgentsRemote extends TypertRemoteService {
       lifetime.removeEventListener("abort", close)
       close()
     }
+  }
+
+  private async reconcile(scope: JobScope): Promise<void> {
+    await this.board.reconcile({
+      query: async (job) => {
+        if (
+          scope.parentSessionId !== undefined &&
+          job.parentSessionId !== scope.parentSessionId
+        ) {
+          return { kind: "active" as const }
+        }
+        if (!this.authorizeScope(this.ctx, { parentSessionId: job.parentSessionId })) {
+          return { kind: "active" as const }
+        }
+        return this.tracker.query(job)
+      },
+    })
   }
 
   private assertAuthorized(

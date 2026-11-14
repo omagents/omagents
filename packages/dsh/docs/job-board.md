@@ -28,8 +28,8 @@ Execution state and notification state are deliberately separate:
 
 `watchJobs` is a Remote stream of revisioned whole-set frames:
 
-1. The Host attaches its Core listener synchronously before reading the baseline so a racing commit is retained.
-2. Each new stream yields a complete baseline, followed by complete authorized-set replacements after Core changes.
+1. The Host attaches its Core listener synchronously before reconciliation and the baseline so a racing commit is retained.
+2. Each new stream reconciles authorized active jobs, yields a complete baseline, and then emits complete authorized-set replacements after Core changes without further native polling.
 3. The browser replaces its ephemeral view from each fresh baseline and ignores stale post-baseline revisions.
 4. On reconnect, a new stream starts with a new baseline. The last authorized set may remain visible only with a clear stale/disconnected notice.
 5. Elapsed time ticks locally. Explicit **Refresh** uses `listJobs`; there is no periodic running-job poll.
@@ -61,7 +61,7 @@ $DSH_HOME/profiles/<active-profile>/omagents/job-board.json
 
 Writes are serialized and use atomic replacement. Running, cancelling, and outcome-pending jobs are not discarded by terminal-history retention. Persistence failure or corrupt state is surfaced through degraded health rather than silently reported as healthy.
 
-At startup, explicit refresh, reconnection, and authoritative lifecycle events, reconciliation uses native live-Agent and Session information:
+Recovery triggers are startup after live-Agent and Session-query capabilities activate, manual refresh through `listJobs`, every new `watchJobs` stream (including reconnection), and authoritative lifecycle events. Startup reconciliation waits for those query capabilities; Remote refreshes and initial/reconnect baselines reconcile only authorized active jobs, while lifecycle events apply their native outcomes directly. Cold Remote queries also defer until the query capabilities are available. There is no periodic running-job poll:
 
 | Persisted situation | Reconciled result |
 | :--- | :--- |

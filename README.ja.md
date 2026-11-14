@@ -105,7 +105,7 @@ DSHパッケージは、skillsだけのpluginではなく、完全なHostとWeb 
 
 キャンセル要求の受理は、終了の確認ではありません。ローカル中断は子agentの**現在のturn**だけを停止し、その**descendantsは個別にキャンセルしない限り実行を継続**します。**External one-shot**の実行は完全に停止し、**再開できません**。UIで詳細を表示しても、モデル通知がacknowledgeされることはありません。
 
-再起動後、DSHは永続化されたjobsをホストの権威ある状態と照合します。結果が見つからない、または読み取れない場合は`interrupted`になり、成功が偽装されることはありません。Remoteアクセスは、アクティブなDSH profileと認可されたparent-session scopeによって制限されます。UI、キャンセル、復旧、認可、セキュリティ、トラブルシューティングについては、[DSHパッケージガイド](packages/dsh/README.md)と[Job Boardガイド](packages/dsh/docs/job-board.md)を参照してください。
+再起動後、DSHは永続化されたjobsをホストの権威ある状態と照合します。**権威的に観測可能なアクティブな実行がない場合にのみ**、結果が見つからない、または読み取れないjobは`interrupted`になり、成功が偽装されることはありません。観測済みの**active external**実行は、**cold session-not-found**（コールド開始時のSession欠落）でもアクティブなまま維持され、中断と誤分類されません。Remoteアクセスは、アクティブなDSH profileと認可されたparent-session scopeによって制限されます。UI、キャンセル、復旧、認可、セキュリティ、トラブルシューティングについては、[DSHパッケージガイド](packages/dsh/README.md)と[Job Boardガイド](packages/dsh/docs/job-board.md)を参照してください。
 
 ## アーキテクチャ
 

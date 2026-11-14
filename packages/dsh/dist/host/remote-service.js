@@ -150,6 +150,7 @@ let OmAgentsRemote = (() => {
         async listJobs(scope) {
             const normalized = normalizeScope(scope);
             this.assertAuthorized(normalized, "omagents/listJobs", "session-scope-unauthorized");
+            await this.reconcile(normalized);
             return this.readJobs(normalized);
         }
         async cancelJob(jobId) {
@@ -204,8 +205,9 @@ let OmAgentsRemote = (() => {
             if (lifetime.aborted)
                 return;
             const queue = new LatestFrameQueue();
-            // Subscribe before taking the baseline. The pending slot retains any commit
-            // racing the baseline, while discardThrough suppresses only stale duplicates.
+            let closed = false;
+            // Subscribe before reconciliation and the baseline. The pending slot retains
+            // any commit racing the baseline, while discardThrough suppresses stale duplicates.
             const unsubscribe = this.board.subscribe(() => {
                 try {
                     queue.push(this.frame(normalized));
@@ -215,6 +217,7 @@ let OmAgentsRemote = (() => {
                 }
             });
             const close = () => {
+                closed = true;
                 queue.close();
                 // An AsyncGenerator suspended at yield has no pending finally transition;
                 // closure itself must still release the Core listener immediately.
@@ -223,12 +226,23 @@ let OmAgentsRemote = (() => {
             registerClose(close);
             lifetime.addEventListener("abort", close, { once: true });
             try {
+                try {
+                    await this.reconcile(normalized);
+                }
+                catch (error) {
+                    // A consumer that already closed must not receive a late native failure.
+                    if (lifetime.aborted || closed)
+                        return;
+                    throw error;
+                }
+                if (lifetime.aborted || closed)
+                    return;
                 const baseline = this.frame(normalized);
                 queue.discardThrough(baseline.revision);
-                if (lifetime.aborted)
+                if (lifetime.aborted || closed)
                     return;
                 yield baseline;
-                while (!lifetime.aborted) {
+                while (!lifetime.aborted && !closed) {
                     const frame = await queue.take();
                     if (!frame)
                         return;
@@ -239,6 +253,20 @@ let OmAgentsRemote = (() => {
                 lifetime.removeEventListener("abort", close);
                 close();
             }
+        }
+        async reconcile(scope) {
+            await this.board.reconcile({
+                query: async (job) => {
+                    if (scope.parentSessionId !== undefined &&
+                        job.parentSessionId !== scope.parentSessionId) {
+                        return { kind: "active" };
+                    }
+                    if (!this.authorizeScope(this.ctx, { parentSessionId: job.parentSessionId })) {
+                        return { kind: "active" };
+                    }
+                    return this.tracker.query(job);
+                },
+            });
         }
         assertAuthorized(scope, action, reason) {
             if (!this.authorizeScope(this.ctx, scope))

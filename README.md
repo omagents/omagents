@@ -105,7 +105,7 @@ The DSH package installs a complete Host and Web Client, not a skills-only plugi
 
 Cancellation acceptance is not confirmed termination. Local interruption stops the child's **current turn**, and its **descendants continue** unless cancelled separately. **External one-shot** runs stop permanently and **cannot resume**. Viewing details in the UI never acknowledges a model notification.
 
-On restart, DSH reconciles persisted jobs against authoritative host state. Missing or unreadable outcomes become `interrupted`, never fabricated successes. Remote access is limited by the active DSH profile and authorized parent-session scope. See the [DSH package guide](packages/dsh/README.md) and [Job Board guide](packages/dsh/docs/job-board.md) for UI, cancellation, recovery, authorization, security, and troubleshooting details.
+On restart, DSH reconciles persisted jobs against authoritative host state. Missing or unreadable outcomes become `interrupted` only when **no active run is authoritatively observable**, never fabricated successes. An observed **active external** run remains active on a **cold session-not-found** instead of being misclassified as interrupted. Remote access is limited by the active DSH profile and authorized parent-session scope. See the [DSH package guide](packages/dsh/README.md) and [Job Board guide](packages/dsh/docs/job-board.md) for UI, cancellation, recovery, authorization, security, and troubleshooting details.
 
 ## Architecture
 

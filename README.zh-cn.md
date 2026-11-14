@@ -105,7 +105,7 @@ DSH 软件包安装完整的 Host 和 Web Client，而不是仅有 skills 的 pl
 
 取消请求被接受并不代表已确认终止。本地中断会停止子 agent 的**当前轮次**，其**后代会继续运行**，除非分别取消。**External one-shot** 运行会永久停止，且**无法恢复**。在 UI 中查看详情绝不会确认模型通知。
 
-重启后，DSH 会根据宿主权威状态核对持久化任务。缺失或不可读的结果会变为 `interrupted`，绝不会伪造成功。Remote 访问受活动 DSH profile 和已授权 parent-session scope 限制。有关 UI、取消、恢复、授权、安全和故障排除的详情，请参阅 [DSH 软件包指南](packages/dsh/README.md)和 [Job Board 指南](packages/dsh/docs/job-board.md)。
+重启后，DSH 会根据宿主权威状态核对持久化任务。只有在**没有可权威观测到的活动运行**时，缺失或不可读的结果才会变为 `interrupted`，绝不会伪造成功。已观测到的 **active external** 运行遇到 **cold session-not-found**（冷启动会话缺失）时仍保持活动状态，不会被误判为中断。Remote 访问受活动 DSH profile 和已授权 parent-session scope 限制。有关 UI、取消、恢复、授权、安全和故障排除的详情，请参阅 [DSH 软件包指南](packages/dsh/README.md)和 [Job Board 指南](packages/dsh/docs/job-board.md)。
 
 ## 架构
 

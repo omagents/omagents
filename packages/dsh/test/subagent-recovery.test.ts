@@ -218,6 +218,11 @@ test("startup recovery waits for delayed sessionQuery before classifying a resto
   await new Promise((resolve) => setImmediate(resolve))
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(restored.executionState, "running", "missing query services must not be sticky missing evidence")
+  assert.deepEqual(
+    await tracker.query(restored),
+    { kind: "active" },
+    "Remote-triggered queries must defer until live-Agent and Session-query capabilities are available"
+  )
 
   const session = sessionWithTurn("delayed-query-child", { kind: "completed" })
   root.provide("sessionQuery", {

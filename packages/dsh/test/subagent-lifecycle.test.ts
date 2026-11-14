@@ -316,6 +316,14 @@ test("external one-shot cancellation settles only on subagent/end and cannot be 
   emitEnd(root, owner, start, "aborted")
   assert.equal(job.executionState, "cancelled")
 
+  root.provide("agents", { get() {} })
+  root.provide("sessionQuery", {
+    async readSession(id) {
+      const error = new Error(`session "${id}" not found`)
+      error.code = "SESSION_QUERY_SESSION_NOT_FOUND"
+      throw error
+    },
+  })
   const missing = board.registerLaunch({
     host: "dsh",
     hostTaskId: "external-missing",
@@ -325,7 +333,7 @@ test("external one-shot cancellation settles only on subagent/end and cannot be 
   })
   assert.deepEqual(await tracker.query(missing), {
     kind: "missing",
-    reason: 'No live Agent or readable outcome exists for external subagent "external-missing"',
+    reason: 'session "external-missing" not found',
   })
 })
 

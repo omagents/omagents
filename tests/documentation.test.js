@@ -36,17 +36,28 @@ function readJson(relativePath) {
   return JSON.parse(read(relativePath))
 }
 
+function commandLinePattern(command) {
+  const escaped = command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`^${escaped}$`, "m")
+}
+
 test("every README language has exactly the approved host installation surface", () => {
   for (const file of READMES) {
     const text = read(file)
     for (const command of INSTALL_COMMANDS) {
-      assert.ok(text.includes(command), `${file} must contain: ${command}`)
+      assert.match(text, commandLinePattern(command), `${file} must contain: ${command}`)
     }
     assert.doesNotMatch(text, /npx\s+@omagents\/omagents\s+codex\b/, file)
     assert.doesNotMatch(text, /npx\s+@omagents\/omagents\s+opencode\b/, file)
     assert.ok(text.includes("@omagents/core"), `${file} must identify the shared Core package`)
     assert.ok(text.includes("0.13.1"), `${file} must identify the aligned release candidate`)
   }
+})
+
+test("installation command anchors cannot confuse OpenCode and Codex package names", () => {
+  const openCodeCommand = commandLinePattern(INSTALL_COMMANDS[0])
+  assert.match("npx @omagents/omagents", openCodeCommand)
+  assert.doesNotMatch("npx @omagents/omagents-codex", openCodeCommand)
 })
 
 test("every README language has a complete host and shared-Core support matrix", () => {
@@ -164,6 +175,28 @@ test("DSH documentation covers installation, native UI, cancellation, recovery, 
     assert.ok(jobBoard.includes(heading), `Job Board guide omits ${heading}`)
   }
   const combined = `${readme}\n${jobBoard}`
+  const recoveryTriggers =
+    "Recovery triggers are startup after live-Agent and Session-query capabilities activate, manual refresh through `listJobs`, every new `watchJobs` stream (including reconnection), and authoritative lifecycle events. Startup reconciliation waits for those query capabilities; Remote refreshes and initial/reconnect baselines reconcile only authorized active jobs, while lifecycle events apply their native outcomes directly. Cold Remote queries also defer until the query capabilities are available. There is no periodic running-job poll:"
+  for (const [file, text] of [
+    ["packages/dsh/README.md", readme],
+    ["packages/dsh/docs/job-board.md", jobBoard],
+  ]) {
+    assert.ok(text.includes(recoveryTriggers), `${file} has stale or incomplete recovery triggers`)
+    assert.match(
+      text,
+      /observed active external run/i,
+      `${file} omits the observed-active exception`
+    )
+    assert.match(
+      text,
+      /cold[^\n]*(?:session-not-found|missing Session read)/i,
+      `${file} omits the cold-miss exception`
+    )
+  }
+  assert.ok(
+    readme.includes("no active run is authoritatively observable"),
+    "DSH README must qualify missing/unreadable interrupted recovery"
+  )
   for (const required of [
     "dsh plugin --profile web add @omagents/omagents-dsh",
     "33 skills",
@@ -183,6 +216,25 @@ test("DSH documentation covers installation, native UI, cancellation, recovery, 
     "/ps",
   ]) {
     assert.ok(combined.includes(required), `DSH documentation omits ${required}`)
+  }
+})
+
+test("root READMEs qualify interrupted recovery with the observed-active cold-miss exception", () => {
+  const qualifiers = new Map([
+    ["README.md", "no active run is authoritatively observable"],
+    ["README.zh-cn.md", "没有可权威观测到的活动运行"],
+    ["README.ja.md", "権威的に観測可能なアクティブな実行がない場合にのみ"],
+    ["README.ko.md", "권위 있게 관찰 가능한 활성 실행이 없을 때만"],
+  ])
+  for (const file of READMES) {
+    const text = read(file)
+    assert.ok(
+      text.includes(qualifiers.get(file)),
+      `${file} omits the no-authoritative-active-run qualifier`
+    )
+    assert.ok(text.includes("active external"), `${file} omits the observed active external run`)
+    assert.ok(text.includes("cold session-not-found"), `${file} omits the cold-miss exception`)
+    assert.ok(text.includes("interrupted"), `${file} omits interrupted recovery`)
   }
 })
 

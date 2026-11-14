@@ -59,11 +59,12 @@ The Board persists beneath the active DSH profile at:
 $DSH_HOME/profiles/<active-profile>/omagents/job-board.json
 ```
 
-At startup, manual refresh, reconnection, and authoritative lifecycle events, DSH reconciles persisted work against live Agents or readable Session outcomes:
+Recovery triggers are startup after live-Agent and Session-query capabilities activate, manual refresh through `listJobs`, every new `watchJobs` stream (including reconnection), and authoritative lifecycle events. Startup reconciliation waits for those query capabilities; Remote refreshes and initial/reconnect baselines reconcile only authorized active jobs, while lifecycle events apply their native outcomes directly. Cold Remote queries also defer until the query capabilities are available. There is no periodic running-job poll:
 
 - Still-active work remains `running` or `cancelling`.
 - Readable completed outcomes become the appropriate terminal state.
-- Missing or unreadable outcomes become `interrupted` with an explicit reason, never successful completion.
+- Missing or unreadable outcomes become `interrupted` with an explicit reason only when no active run is authoritatively observable, never successful completion.
+- An observed active external run remains active on a cold session-not-found instead of being misclassified as `interrupted`.
 - Terminal jobs with pending parent outcomes remain eligible for delivery after restart.
 
 Repeated events do not duplicate parent notifications. Persistence and other capability failures appear as degraded health instead of being hidden behind an overall success claim.

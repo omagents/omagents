@@ -105,7 +105,7 @@ DSH 패키지는 skills만 제공하는 plugin이 아니라 완전한 Host와 We
 
 취소 요청이 수락되었다는 것은 종료가 확인되었다는 뜻이 아닙니다. 로컬 중단은 자식 에이전트의 **현재 turn**만 중지하며 **descendants는 별도로 취소하지 않는 한 계속 실행**됩니다. **External one-shot** 실행은 영구적으로 중지되며 **재개할 수 없습니다**. UI에서 세부 정보를 보아도 모델 알림이 acknowledge되지 않습니다.
 
-재시작 후 DSH는 저장된 jobs를 호스트의 권위 있는 상태와 대조합니다. 결과가 없거나 읽을 수 없으면 `interrupted`가 되며 성공이 꾸며지지 않습니다. Remote 접근은 활성 DSH profile과 권한이 부여된 parent-session scope로 제한됩니다. UI, 취소, 복구, 권한 부여, 보안 및 문제 해결은 [DSH 패키지 가이드](packages/dsh/README.md)와 [Job Board 가이드](packages/dsh/docs/job-board.md)를 참조하세요.
+재시작 후 DSH는 저장된 jobs를 호스트의 권위 있는 상태와 대조합니다. **권위 있게 관찰 가능한 활성 실행이 없을 때만** 결과가 없거나 읽을 수 없는 job이 `interrupted`가 되며 성공이 꾸며지지 않습니다. 관찰된 **active external** 실행은 **cold session-not-found**(콜드 시작 시 Session 누락)에서도 활성 상태로 유지되며 중단으로 잘못 분류되지 않습니다. Remote 접근은 활성 DSH profile과 권한이 부여된 parent-session scope로 제한됩니다. UI, 취소, 복구, 권한 부여, 보안 및 문제 해결은 [DSH 패키지 가이드](packages/dsh/README.md)와 [Job Board 가이드](packages/dsh/docs/job-board.md)를 참조하세요.
 
 ## 아키텍처
 
