@@ -113,6 +113,28 @@ test("CI compiles Python directories without shell-specific wildcard expansion",
   assert.doesNotMatch(workflow, /python -m py_compile[^\n]*\*\.py/)
 })
 
+test("browser CI provisions and passes an isolated interpreter on every OS", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ci.yml"), "utf8")
+  const browserJob = workflow.split("  browser:")[1]
+  assert.ok(browserJob, "the browser job must exist")
+  assert.match(browserJob, /actions\/setup-python@v6/)
+  assert.match(browserJob, /python -m venv \.omagents\/ci-venv/)
+  assert.match(
+    browserJob,
+    /python-bin: \$\{\{ github\.workspace \}\}\/\.omagents\/ci-venv\/bin\/python/
+  )
+  assert.match(
+    browserJob,
+    /python-bin: \$\{\{ github\.workspace \}\}\/\.omagents\/ci-venv\/Scripts\/python\.exe/
+  )
+  assert.match(browserJob, /OMAGENTS_TEST_PYTHON: \$\{\{ matrix\.python-bin \}\}/)
+  const browserSpec = fs.readFileSync(
+    path.join(ROOT, "packages", "dsh", "test", "browser-job-board.spec.ts"),
+    "utf8"
+  )
+  assert.doesNotMatch(browserSpec, /process\.env\.OMAGENTS_TEST_PYTHON \|\| "python3"/)
+})
+
 test("packed Python and CLI path rules remain Windows-safe", () => {
   const windowsVenv = "C:\\Users\\release\\.venvs\\omagents"
   assert.equal(

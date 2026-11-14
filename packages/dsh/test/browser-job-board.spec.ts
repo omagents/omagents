@@ -11,6 +11,7 @@ import { chromium } from "playwright"
 
 import { ARTIFACT_ROOT, ROOT } from "../../../scripts/pack-all.js"
 import { ensureCleanRoom } from "../../../scripts/packed-harness.js"
+import { resolvePythonCommand } from "../../../scripts/python-command.js"
 
 const PARENT = "browser-parent"
 const OTHER_PARENT = "other-parent"
@@ -207,7 +208,7 @@ const LOOP_ENGINE = path.join(
 )
 
 function runLoop(summary, skill, args) {
-  const result = spawnSync(process.env.OMAGENTS_TEST_PYTHON || "python3", [LOOP_ENGINE, ...args], {
+  const result = spawnSync(resolvePythonCommand(), [LOOP_ENGINE, ...args], {
     cwd: summary.cleanRoot,
     encoding: "utf8",
     timeout: 30_000,

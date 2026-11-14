@@ -78,6 +78,7 @@ omagents/
 │       └── cordis.patch.yml    # Bare package-root Host/Client Loader row
 ├── scripts/                    # Four-tarball, offline clean-room, and real-browser verification
 │   ├── pack-all.js             # Aligned pack output and process-tree watchdog support
+│   ├── python-command.js       # OMAGENTS_TEST_PYTHON precedence and Windows/Unix fallback
 │   ├── packed-harness.js       # Locked offline cache and isolated Host/DSH installs
 │   ├── test-packed-installs.js # Real Core/OpenCode/Codex/DSH packed probes
 │   ├── prepare-browser-clean-room.js # Reuse or rebuild before the browser watchdog
@@ -281,7 +282,7 @@ Research pauses emit host-neutral `{ action: "dispatch_subagent", description, p
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Node 24 unit/package checks run on Linux, macOS, and Windows, including real offline tarball installs. A second three-OS job runs the packed DSH Web composition with Playwright, deterministic native events, and local MCP fixtures only. Jinja2 is installed only into `.omagents/ci-venv` for deep-research integration tests.
+- **CI** (`ci.yml`): Node 24 unit/package checks run on Linux, macOS, and Windows, including real offline tarball installs. A second three-OS job runs the packed DSH Web composition with Playwright, deterministic native events, and local MCP fixtures only. Both jobs create an isolated `.omagents/ci-venv` containing only Jinja2 and pass its absolute interpreter (`bin/python` on Unix, `Scripts/python.exe` on Windows); the browser helper falls back to `python3` on Unix and `python` on Windows when no override is set.
 - **Publish** (`publish.yml`): OIDC trusted publishing on `v*` tag push. No npm token needed.
 
 ## Publishing

@@ -53,6 +53,7 @@ jobs:
           node --check packages/core/src/skills/catalog.js
           node --check packages/core/src/skills/render.js
           node --check scripts/pack-all.js
+          node --check scripts/python-command.js
           node --check scripts/packed-harness.js
           node --check scripts/test-packed-installs.js
           node --check scripts/test-browser.js
@@ -91,10 +92,13 @@ jobs:
         include:
           - os: ubuntu-latest
             playwright-deps: "1"
+            python-bin: ${{ github.workspace }}/.omagents/ci-venv/bin/python
           - os: macos-latest
             playwright-deps: "0"
+            python-bin: ${{ github.workspace }}/.omagents/ci-venv/bin/python
           - os: windows-latest
             playwright-deps: "0"
+            python-bin: ${{ github.workspace }}/.omagents/ci-venv/Scripts/python.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -104,8 +108,18 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Prepare isolated Python test environment
+        run: |
+          python -m venv .omagents/ci-venv
+          ${{ matrix.python-bin }} -m pip install jinja2
 
       - name: Install packed DSH offline
         run: npm run test:packed
@@ -113,4 +127,5 @@ jobs:
       - name: Run real DSH browser verification
         env:
           OMAGENTS_PLAYWRIGHT_WITH_DEPS: ${{ matrix.playwright-deps }}
+          OMAGENTS_TEST_PYTHON: ${{ matrix.python-bin }}
         run: npm run test:browser
