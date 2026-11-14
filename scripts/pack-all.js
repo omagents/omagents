@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process"
+import { execFileSync, spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
@@ -31,6 +31,20 @@ export function run(command, args, options = {}) {
     let timedOut = false
     let timeout
     let forceKill
+    let closeCode
+    let closeSignal
+    let settled = false
+    const groupExists = () => {
+      if (process.platform === "win32") return false
+      const listing = execFileSync("ps", ["-eo", "pid=,pgid="], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+      return listing.split("\n").some((line) => {
+        const columns = line.trim().split(/\s+/)
+        return columns.length === 2 && Number(columns[1]) === child.pid
+      })
+    }
     const terminate = (signal) => {
       try {
         if (process.platform === "win32") {
@@ -46,11 +60,53 @@ export function run(command, args, options = {}) {
         if (error.code !== "ESRCH") child.kill(signal)
       }
     }
+    const finish = (descendantsExited = true) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      clearTimeout(forceKill)
+      const result = {
+        code: closeCode ?? 1,
+        signal: closeSignal,
+        stdout,
+        stderr,
+        timedOut,
+        descendantsExited,
+      }
+      if (closeCode === 0 && !closeSignal && !timedOut && descendantsExited) resolve(result)
+      else {
+        const outcome = timedOut
+          ? `timed out after ${options.timeoutMs}ms${descendantsExited ? "" : " with surviving descendants"}`
+          : `failed (${closeSignal ?? closeCode})`
+        reject(
+          new Error(
+            `${command} ${args.join(" ")} ${outcome}\nstdout:\n${stdout}\nstderr:\n${stderr}`
+          )
+        )
+      }
+    }
+    const verifyDescendantsExited = () => {
+      let attempts = 0
+      const check = () => {
+        if (!groupExists()) {
+          finish(true)
+        } else if (++attempts <= 20) {
+          setTimeout(check, 50)
+        } else {
+          finish(false)
+        }
+      }
+      check()
+    }
+    const escalate = () => {
+      terminate("SIGKILL")
+      verifyDescendantsExited()
+    }
     if (processTree) {
       timeout = setTimeout(() => {
         timedOut = true
         terminate("SIGTERM")
-        forceKill = setTimeout(() => terminate("SIGKILL"), 3_000)
+        forceKill = setTimeout(escalate, 3_000)
       }, options.timeoutMs)
     }
     child.stdout.setEncoding("utf8")
@@ -64,22 +120,20 @@ export function run(command, args, options = {}) {
       if (options.echo) process.stderr.write(chunk)
     })
     child.on("error", (error) => {
+      if (timedOut) {
+        closeCode = 1
+        return
+      }
       clearTimeout(timeout)
       clearTimeout(forceKill)
+      settled = true
       reject(error)
     })
     child.on("close", (code, signal) => {
-      clearTimeout(timeout)
-      clearTimeout(forceKill)
-      const result = { code: code ?? 1, signal, stdout, stderr, timedOut }
-      if (code === 0 && !signal && !timedOut) resolve(result)
-      else {
-        reject(
-          new Error(
-            `${command} ${args.join(" ")} ${timedOut ? `timed out after ${options.timeoutMs}ms` : `failed (${signal ?? code})`}\nstdout:\n${stdout}\nstderr:\n${stderr}`
-          )
-        )
-      }
+      closeCode = code
+      closeSignal = signal
+      if (timedOut && process.platform !== "win32") return
+      finish(true)
     })
   })
 }
@@ -93,6 +147,50 @@ export function runNpm(args, options = {}) {
 
 function digestFile(filePath) {
   return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex")
+}
+
+const PACKAGE_CONTENT_ENTRIES = [
+  "package.json",
+  "src",
+  "dist",
+  "skills",
+  "hooks",
+  "mcp-servers",
+  "bin",
+  "scripts",
+  "cordis.patch.yml",
+  "tsconfig.json",
+  "tsdown.client.config.ts",
+]
+
+function updateFingerprint(hash, root, relativePath) {
+  const absolute = path.join(root, relativePath)
+  if (!fs.existsSync(absolute)) return
+  const stat = fs.statSync(absolute)
+  if (stat.isDirectory()) {
+    for (const entry of fs.readdirSync(absolute).sort()) {
+      updateFingerprint(hash, root, path.join(relativePath, entry))
+    }
+  } else if (stat.isFile()) {
+    hash.update(relativePath)
+    hash.update(fs.readFileSync(absolute))
+  }
+}
+
+export function computeSourceFingerprint() {
+  const hash = createHash("sha256")
+  for (const workspace of PACKAGE_WORKSPACES) {
+    const root = path.join(ROOT, "packages", workspace.id)
+    for (const relativePath of PACKAGE_CONTENT_ENTRIES) {
+      updateFingerprint(hash, root, relativePath)
+    }
+  }
+  hash.update(fs.readFileSync(path.join(ROOT, "package-lock.json")))
+  return hash.digest("hex")
+}
+
+export function computeLockfileFingerprint() {
+  return digestFile(path.join(ROOT, "package-lock.json"))
 }
 
 export async function packAll({ echo = true } = {}) {
@@ -148,6 +246,8 @@ export async function packAll({ echo = true } = {}) {
     schemaVersion: 1,
     version: versions[0],
     createdAt: new Date().toISOString(),
+    sourceSha256: computeSourceFingerprint(),
+    lockfileSha256: computeLockfileFingerprint(),
     artifacts,
   }
   fs.mkdirSync(ARTIFACT_ROOT, { recursive: true })

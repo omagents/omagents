@@ -96,6 +96,8 @@ function runCli(packageName, relativeCli, cwd) {
     cwd,
     env: { ...process.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: path.join(home, ".config"), CODEX_HOME: undefined },
     encoding: "utf8",
+    timeout: 30_000,
+    killSignal: "SIGKILL",
   })
   assert.equal(result.status, 0, result.stderr || result.stdout)
   return result
@@ -142,16 +144,22 @@ const profileDirectory = process.cwd()
 const dshHome = path.resolve(profileDirectory, "..", "..")
 const smokeProfile = path.join(dshHome, "profiles", "loader-smoke")
 fs.mkdirSync(smokeProfile, { recursive: true })
-fs.symlinkSync(path.join(profileDirectory, "node_modules"), path.join(smokeProfile, "node_modules"), process.platform === "win32" ? "junction" : "dir")
+if (!fs.existsSync(path.join(smokeProfile, "node_modules"))) {
+  fs.symlinkSync(path.join(profileDirectory, "node_modules"), path.join(smokeProfile, "node_modules"), process.platform === "win32" ? "junction" : "dir")
+}
 process.env.DSH_HOME = dshHome
 process.env.HOME = path.join(dshHome, "user-home")
 process.env.USERPROFILE = process.env.HOME
 fs.mkdirSync(process.env.HOME, { recursive: true })
 delete process.env.DEEPSEEK_API_KEY
 
+let root
+let entry
+let server
+try {
 const { Context } = await import("@deepseek-ai/cordis")
 const { default: Loader } = await import("@deepseek-ai/cordis-plugin-loader")
-const root = new Context()
+root = new Context()
 const skills = []
 const tools = new Map()
 const commands = new Map()
@@ -164,7 +172,7 @@ root.provide("subagents", { interrupt() {} })
 await root.plugin(Loader, { baseUrl: pathToFileURL(smokeProfile + path.sep).href })
 const id = await root.loader.create({ name: "@omagents/omagents-dsh" })
 await root.loader.await()
-const entry = root.loader.resolve(id)
+entry = root.loader.resolve(id)
 assert.equal(entry.disabled, false)
 assert.ok(entry.fiber)
 await entry.fiber.await()
@@ -182,7 +190,7 @@ const persisted = JSON.parse(fs.readFileSync(path.join(smokeProfile, "omagents",
 assert.equal(persisted.jobs[0].id, job.id)
 
 const clientArtifact = path.join(profileDirectory, "node_modules", "@omagents", "omagents-dsh", "dist", "client.js")
-const server = http.createServer((request, response) => {
+server = http.createServer((request, response) => {
   if (request.url !== "/client.js") { response.writeHead(404).end(); return }
   response.writeHead(200, { "content-type": "text/javascript" })
   fs.createReadStream(clientArtifact).pipe(response)
@@ -194,11 +202,17 @@ assert.equal(served.status, 200)
 const clientSource = await served.text()
 assert.match(clientSource, /window\.__ModuleLoader__\.load\(\{/)
 assert.match(clientSource, /@omagents\/omagents-dsh/)
+if (process.env.OMAGENTS_DSH_PROBE_FAIL) throw new Error("intentional DSH probe failure")
 await new Promise((resolve) => server.close(resolve))
 root.loader.remove(id)
 await entry.fiber.dispose()
 await root.fiber.dispose()
 console.log(JSON.stringify({ realLoader: true, skills: skills.length, clientServed: true, prepareScriptsRun: 0, clientArtifact }))
+} finally {
+  if (server?.listening) await new Promise((resolve) => server.close(resolve))
+  if (entry?.fiber) await Promise.resolve(entry.fiber.dispose()).catch(() => {})
+  if (root) await Promise.resolve(root.fiber.dispose()).catch(() => {})
+}
 `
 
 async function runProbe(name, source, cwd) {
@@ -206,6 +220,7 @@ async function runProbe(name, source, cwd) {
   fs.writeFileSync(probePath, source)
   const result = await run(process.execPath, [probePath], {
     cwd,
+    timeoutMs: Number(process.env.OMAGENTS_PACKED_PROBE_TIMEOUT_MS ?? 120_000),
     env: {
       ...process.env,
       HOME: path.join(path.dirname(cwd), "home"),

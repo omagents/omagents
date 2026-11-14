@@ -27,12 +27,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: "24"
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install dependencies
         run: npm ci
@@ -63,8 +63,8 @@ jobs:
 
       - name: Check Python scripts
         run: |
-          python -m py_compile packages/core/skills/deep-research/scripts/*.py
-          python -m py_compile packages/core/skills/_shared/scripts/loop_engine.py
+          python -m compileall -q packages/core/skills/deep-research/scripts
+          python -m compileall -q packages/core/skills/_shared/scripts
 
       - name: Prepare isolated Python test environment
         run: |
@@ -90,11 +90,11 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
-            playwright-deps: '1'
+            playwright-deps: "1"
           - os: macos-latest
-            playwright-deps: '0'
+            playwright-deps: "0"
           - os: windows-latest
-            playwright-deps: '0'
+            playwright-deps: "0"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -102,7 +102,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: "24"
 
       - name: Install dependencies
         run: npm ci

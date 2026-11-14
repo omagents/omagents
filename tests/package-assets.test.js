@@ -93,6 +93,26 @@ test("standalone browser preparation is bounded separately and precedes the brow
   assert.match(preparation, /reused: summary\.reused === true/)
 })
 
+test("browser installation and packed probes have bounded process lifecycles", () => {
+  const browser = fs.readFileSync(path.join(ROOT, "scripts", "test-browser.js"), "utf8")
+  assert.match(browser, /OMAGENTS_BROWSER_INSTALL_TIMEOUT_MS/)
+  assert.match(browser, /timeoutMs: installTimeoutMs/)
+
+  const packed = fs.readFileSync(path.join(ROOT, "scripts", "test-packed-installs.js"), "utf8")
+  assert.match(packed, /OMAGENTS_PACKED_PROBE_TIMEOUT_MS \?\? 120_000/)
+  assert.match(packed, /timeout: 30_000/)
+  assert.match(packed, /finally \{/)
+  assert.match(packed, /server\?\.listening/)
+  assert.match(packed, /Promise\.resolve\(entry\.fiber\.dispose\(\)\)/)
+})
+
+test("CI compiles Python directories without shell-specific wildcard expansion", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ci.yml"), "utf8")
+  assert.match(workflow, /python -m compileall -q packages\/core\/skills\/deep-research\/scripts/)
+  assert.match(workflow, /python -m compileall -q packages\/core\/skills\/_shared\/scripts/)
+  assert.doesNotMatch(workflow, /python -m py_compile[^\n]*\*\.py/)
+})
+
 test("packed Python and CLI path rules remain Windows-safe", () => {
   const windowsVenv = "C:\\Users\\release\\.venvs\\omagents"
   assert.equal(

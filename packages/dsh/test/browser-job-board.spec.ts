@@ -1,5 +1,6 @@
 // @ts-nocheck
 import assert from "node:assert/strict"
+import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import net from "node:net"
 import path from "node:path"
@@ -8,7 +9,7 @@ import { test } from "node:test"
 
 import { chromium } from "playwright"
 
-import { ARTIFACT_ROOT } from "../../../scripts/pack-all.js"
+import { ARTIFACT_ROOT, ROOT } from "../../../scripts/pack-all.js"
 import { ensureCleanRoom } from "../../../scripts/packed-harness.js"
 
 const PARENT = "browser-parent"
@@ -144,6 +145,21 @@ async function startHost(summary, port) {
   }
 }
 
+async function restartOmAgents(host) {
+  const entry = [...host.ctx.loader.entries()].find(
+    (candidate) => candidate.options.name === "@omagents/omagents-dsh"
+  )
+  assert.ok(entry?.fiber, "the packed OmAgents Loader entry must be running")
+  const id = entry.options.id
+  await entry.fiber.dispose()
+  await host.ctx.loader.create({ id, name: "@omagents/omagents-dsh" })
+  await host.ctx.loader.await()
+  const runtime = runtimeOf(host.ctx)
+  assert.equal(runtime.health.host.status, "ready")
+  assert.equal(runtime.health.persistence.status, "ready")
+  return { ...host, runtime }
+}
+
 function owner(id = PARENT) {
   return { id, session: { id }, status: "idle", promptCalls: [] }
 }
@@ -178,6 +194,118 @@ function endJob(host, lane, stopReason = "completed", text = `${lane.job.descrip
     lastAssistantMessage: [{ type: "text", text }],
   })
   return lane.job
+}
+
+const LOOP_ENGINE = path.join(
+  ROOT,
+  "packages",
+  "core",
+  "skills",
+  "_shared",
+  "scripts",
+  "loop_engine.py"
+)
+
+function runLoop(summary, skill, args) {
+  const result = spawnSync(process.env.OMAGENTS_TEST_PYTHON || "python3", [LOOP_ENGINE, ...args], {
+    cwd: summary.cleanRoot,
+    encoding: "utf8",
+    timeout: 30_000,
+    killSignal: "SIGKILL",
+  })
+  assert.equal(
+    result.status,
+    0,
+    `${skill} ${args.join(" ")} failed:\n${result.stdout}\n${result.stderr}`
+  )
+  return result.stdout.trim()
+}
+
+function queuePath(summary, skill) {
+  return path.join(summary.cleanRoot, ".omagents", "loops", skill, "tasks.json")
+}
+
+function readQueue(summary, skill) {
+  return JSON.parse(fs.readFileSync(queuePath(summary, skill), "utf8"))
+}
+
+async function persistActiveLane(host, summary, lane) {
+  const root = summary.profileDirectory
+  const { Session } = await importFrom(root, "node_modules/@deepseek-ai/dsh-session/lib/index.js")
+  const { SUBAGENT_DESCRIPTOR_VERSION } = await importFrom(
+    root,
+    "node_modules/@deepseek-ai/dsh-subagent/lib/index.js"
+  )
+  const session = Session.create(lane.job.hostTaskId)
+  session.append("subagent/descriptor", {
+    version: SUBAGENT_DESCRIPTOR_VERSION,
+    mode: "continuable",
+    provider: "spawn",
+    label: lane.job.description,
+  })
+  session.append("turn/start", { turn: 1 })
+  session.append("step/start", { turn: 1, step: 1 })
+  const persistence = host.ctx.get("sessionPersistence")
+  assert.ok(persistence, "DSH session persistence is required for same-run recovery")
+  const existing = await persistence.stat(lane.job.hostTaskId)
+  const handle = existing
+    ? await persistence.open(lane.job.hostTaskId, "write")
+    : await persistence.create(session.header)
+  const current = await handle.read()
+  if (current.events.length === 0) {
+    await handle.append(session.snapshotEvents())
+  } else {
+    const openTurns = new Set()
+    for (const event of current.events) {
+      if (event.type === "turn/start") openTurns.add(event.data.turn)
+      else if (event.type === "turn/end") openTurns.delete(event.data.turn)
+    }
+    if (openTurns.size === 0) {
+      const turn =
+        Math.max(
+          0,
+          ...current.events
+            .filter((event) => event.type === "turn/start")
+            .map((event) => event.data.turn)
+        ) + 1
+      await handle.append([
+        { type: "turn/start", seq: current.events.length, time: Date.now(), data: { turn } },
+        {
+          type: "step/start",
+          seq: current.events.length + 1,
+          time: Date.now(),
+          data: { turn, step: 1 },
+        },
+      ])
+    }
+  }
+  await handle.flush()
+  await handle.close()
+}
+
+function resumeOriginalLane(host, summary, lane, skill) {
+  const next = JSON.parse(runLoop(summary, skill, ["next", skill]))
+  assert.equal(next.task_id, lane.job.hostTaskId, "recovery must resume the original queue task")
+  const before = host.runtime.board.list()
+  const current = host.runtime.board.get(lane.job.id)
+  assert.equal(current.executionState, "running", `${lane.job.description} must remain resumable`)
+  lane.job = current
+  host.ctx.emit(
+    host.scopeTarget(host.ctx.subagents, owner(lane.parent)),
+    "subagent/start",
+    lane.run
+  )
+  endJob(host, lane, "completed", `Recovered ${lane.job.description}`)
+  assert.equal(
+    host.runtime.board.list().length,
+    before.length,
+    "recovery must not create a replacement job"
+  )
+  assert.equal(lane.job.id, current.id)
+  assert.equal(lane.job.hostTaskId, next.task_id)
+  assert.equal(lane.job.executionState, "completed")
+  runLoop(summary, skill, ["complete", skill, next.task_id, lane.job.resultSummary])
+  return lane
 }
 
 async function hostSnapshot(host, parent = PARENT) {
@@ -578,6 +706,29 @@ test(
       const gateway = await testNonOwnerGateway(host, completed, secret)
       scenarios.push("non-owner-real-Gateway-invocation-and-stream")
 
+      const recoveryRunId = "browser-recovery-run"
+      const researchSkill = `deep-research-${recoveryRunId}`
+      const hyperplanSkill = `hyperplan-${recoveryRunId}`
+      runLoop(summary, researchSkill, [
+        "init",
+        researchSkill,
+        JSON.stringify([
+          { task_id: "research-one", description: "deep-research evidence lane" },
+          { task_id: "research-two", description: "deep-research gap-analysis lane" },
+        ]),
+      ])
+      runLoop(summary, hyperplanSkill, [
+        "init",
+        hyperplanSkill,
+        JSON.stringify([
+          { task_id: "critic-one", description: "hyperplan security critic" },
+          { task_id: "critic-two", description: "hyperplan architecture critic" },
+          { task_id: "critic-three", description: "hyperplan edge-case critic" },
+        ]),
+      ])
+      const researchQueueCreatedAt = readQueue(summary, researchSkill).created_at
+      const hyperplanQueueCreatedAt = readQueue(summary, hyperplanSkill).created_at
+
       const researchOne = startJob(host, {
         id: "research-one",
         description: "deep-research evidence lane",
@@ -585,8 +736,6 @@ test(
       const researchTwo = startJob(host, {
         id: "research-two",
         description: "deep-research gap-analysis lane",
-        provider: "external",
-        local: false,
       })
       const criticOne = startJob(host, {
         id: "critic-one",
@@ -599,8 +748,6 @@ test(
       const criticThree = startJob(host, {
         id: "critic-three",
         description: "hyperplan edge-case critic",
-        provider: "external",
-        local: false,
       })
       for (const lane of [researchOne, researchTwo, criticOne, criticTwo, criticThree]) {
         await assertWebAgreement(page, lane, "Running")
@@ -608,6 +755,26 @@ test(
       endJob(host, researchOne, "completed", "Evidence validated")
       endJob(host, criticOne, "completed", "Security critique complete")
       endJob(host, criticTwo, "failed", "Architecture critique failed deterministically")
+      runLoop(summary, researchSkill, [
+        "complete",
+        researchSkill,
+        "research-one",
+        "Evidence validated",
+      ])
+      runLoop(summary, hyperplanSkill, [
+        "complete",
+        hyperplanSkill,
+        "critic-one",
+        "Security critique complete",
+      ])
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        runLoop(summary, hyperplanSkill, [
+          "fail",
+          hyperplanSkill,
+          "critic-two",
+          "Architecture critique failed deterministically",
+        ])
+      }
       for (const [lane, state] of [
         [researchOne, "Completed"],
         [criticOne, "Completed"],
@@ -655,22 +822,22 @@ test(
         )
       )
       const completedId = completed.job.id
-      await host.shutdown.shutdown(0)
-      host = await startHost(summary, port)
+      await persistActiveLane(host, summary, researchTwo)
+      await persistActiveLane(host, summary, criticThree)
+      host = await restartOmAgents(host)
       page.host = host
       const restored = host.runtime.board.get(completedId)
       assert.equal(restored.executionState, "completed")
       assert.equal(restored.notificationState, "injected")
-      assert.ok(
-        ["running", "interrupted"].includes(
-          host.runtime.board.get(researchTwo.job.id).executionState
-        )
-      )
-      assert.ok(
-        ["running", "interrupted"].includes(
-          host.runtime.board.get(criticThree.job.id).executionState
-        )
-      )
+      assert.equal(host.runtime.board.get(researchTwo.job.id).executionState, "running")
+      assert.equal(host.runtime.board.get(criticThree.job.id).executionState, "running")
+      assert.equal(host.runtime.board.get(secret.job.id).executionState, "running")
+      const recoveredResearch = resumeOriginalLane(host, summary, researchTwo, researchSkill)
+      const recoveredHyperplan = resumeOriginalLane(host, summary, criticThree, hyperplanSkill)
+      await page.getByRole("button", { name: "OmAgents", exact: true }).click()
+      await page.getByRole("heading", { name: "OmAgents Job Board", exact: true }).waitFor({
+        state: "visible",
+      })
       await page.getByRole("button", { name: "Reconnect", exact: true }).click()
       await assertWebAgreement(page, { job: restored, parent: PARENT }, "Completed")
       const restoredRevision = host.runtime.board.revision
@@ -684,18 +851,43 @@ test(
       assert.equal(restored.notificationState, "injected")
       scenarios.push("restart-recovery/reconnect/no-reinjection")
 
-      const resumedResearch = startJob(host, {
-        id: "research-resumed",
-        description: "deep-research resumed gap sweep",
+      await assertWebAgreement(page, recoveredResearch, "Completed")
+      await assertWebAgreement(page, recoveredHyperplan, "Completed")
+      const recoveredResearchQueue = readQueue(summary, researchSkill)
+      const recoveredHyperplanQueue = readQueue(summary, hyperplanSkill)
+      assert.equal(recoveredResearchQueue.created_at, researchQueueCreatedAt)
+      assert.equal(recoveredHyperplanQueue.created_at, hyperplanQueueCreatedAt)
+      assert.deepEqual(
+        recoveredResearchQueue.tasks.map((task) => task.status),
+        ["completed", "completed"]
+      )
+      assert.deepEqual(
+        recoveredHyperplanQueue.tasks.map((task) => task.status),
+        ["completed", "blocked", "completed"]
+      )
+      assert.equal(recoveredHyperplanQueue.tasks[1].result, undefined)
+      await host.runtime.board.flush()
+      await host.shutdown.shutdown(0)
+      host = await startHost(summary, port)
+      page.host = host
+      assert.equal(host.runtime.board.get(secret.job.id).executionState, "interrupted")
+      assert.equal(host.runtime.board.get(recoveredResearch.job.id).executionState, "completed")
+      assert.equal(host.runtime.board.get(recoveredHyperplan.job.id).executionState, "completed")
+      await page.getByRole("button", { name: "OmAgents", exact: true }).click()
+      await page.getByRole("heading", { name: "OmAgents Job Board", exact: true }).waitFor({
+        state: "visible",
       })
-      const resumedHyperplan = startJob(host, {
-        id: "hyperplan-resumed",
-        description: "hyperplan resumed final review",
-      })
-      endJob(host, resumedResearch, "completed", "Recovered research queue completed")
-      endJob(host, resumedHyperplan, "completed", "Recovered hyperplan queue completed")
-      await assertWebAgreement(page, resumedResearch, "Completed")
-      await assertWebAgreement(page, resumedHyperplan, "Completed")
+      await page.getByRole("button", { name: "Reconnect", exact: true }).click()
+      const recovery = {
+        runId: recoveryRunId,
+        researchHostTaskId: recoveredResearch.job.hostTaskId,
+        researchRunId: recoveredResearch.run.runId,
+        hyperplanHostTaskId: recoveredHyperplan.job.hostTaskId,
+        hyperplanRunId: recoveredHyperplan.run.runId,
+        externalOneShotState: host.runtime.board.get(secret.job.id).executionState,
+        researchQueueCreatedAt,
+        hyperplanQueueCreatedAt,
+      }
       scenarios.push("deep-research-hyperplan-recovery")
 
       await host.runtime.board.flush()
@@ -720,6 +912,7 @@ test(
         prepareScriptsRun: summary.prepareScriptsRun,
         scenarios,
         gateway,
+        recovery,
         pageErrors: pageBundle.pageErrors,
         omagentsClientResponses: [...new Set(pageBundle.clientResponses)],
         screenshots: ["browser-light.png", "browser-dark.png", "browser-reconnected.png"],

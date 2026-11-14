@@ -26,5 +26,8 @@
   },
   "dependencies": {
     "@omagents/core": "0.13.1"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
   }
 }

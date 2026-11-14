@@ -10,6 +10,8 @@ import {
   PACK_MANIFEST,
   PACKAGE_WORKSPACES,
   ROOT,
+  computeLockfileFingerprint,
+  computeSourceFingerprint,
   packAll,
   readPackManifest,
   runNpm,
@@ -391,7 +393,10 @@ export async function prepareCleanRoom({ pack = false, echo = true } = {}) {
 
   const summary = {
     schemaVersion: 1,
+    reused: false,
     packSha256: hash(fs.readFileSync(PACK_MANIFEST)),
+    sourceSha256: packed.sourceSha256,
+    lockfileSha256: packed.lockfileSha256,
     cleanRoot,
     home,
     hostProject,
@@ -414,8 +419,21 @@ export function readCleanRoom({ current = true } = {}) {
     if (!fs.existsSync(directory)) throw new Error(`Clean-room directory is missing: ${directory}`)
   }
   if (current) {
+    const packed = readPackManifest()
     const expected = hash(fs.readFileSync(PACK_MANIFEST))
     if (summary.packSha256 !== expected) throw new Error("The clean-room installation is stale")
+    if (
+      summary.sourceSha256 !== packed.sourceSha256 ||
+      summary.sourceSha256 !== computeSourceFingerprint()
+    ) {
+      throw new Error("Package source or built artifacts changed since the clean-room install")
+    }
+    if (summary.lockfileSha256 !== packed.lockfileSha256) {
+      throw new Error("The pack manifest's dependency lock is stale")
+    }
+    if (summary.lockfileSha256 !== computeLockfileFingerprint()) {
+      throw new Error("package-lock.json changed since the clean-room install")
+    }
   }
   return summary
 }
@@ -424,7 +442,7 @@ export async function ensureCleanRoom(options = {}) {
   try {
     return { ...readCleanRoom(), reused: true }
   } catch {
-    return prepareCleanRoom(options)
+    return prepareCleanRoom({ ...options, pack: true })
   }
 }
 

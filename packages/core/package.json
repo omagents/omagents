@@ -16,6 +16,7 @@
     "superpowers"
   ],
   "scripts": {
+    "test": "node --test test/*.test.js",
     "prepack": "node scripts/pack-superpowers.js",
     "postpack": "node scripts/pack-superpowers.js --cleanup"
   }

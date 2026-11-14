@@ -9,6 +9,14 @@ const env = {
   ...process.env,
   PLAYWRIGHT_BROWSERS_PATH: path.join(ROOT, ".omagents", "playwright-browsers"),
 }
+const preparationTimeoutMs = positiveTimeout(
+  process.env.OMAGENTS_BROWSER_PREPARE_TIMEOUT_MS ?? 900_000,
+  "OMAGENTS_BROWSER_PREPARE_TIMEOUT_MS"
+)
+const installTimeoutMs = positiveTimeout(
+  process.env.OMAGENTS_BROWSER_INSTALL_TIMEOUT_MS ?? preparationTimeoutMs,
+  "OMAGENTS_BROWSER_INSTALL_TIMEOUT_MS"
+)
 if (process.env.OMAGENTS_PLAYWRIGHT_EXECUTABLE) {
   if (!fs.existsSync(process.env.OMAGENTS_PLAYWRIGHT_EXECUTABLE)) {
     throw new Error(
@@ -22,7 +30,12 @@ if (process.env.OMAGENTS_PLAYWRIGHT_EXECUTABLE) {
   )
   const installArgs = [playwrightCli, "install", "chromium"]
   if (process.env.OMAGENTS_PLAYWRIGHT_WITH_DEPS === "1") installArgs.push("--with-deps")
-  await run(process.execPath, installArgs, { cwd: ROOT, env, echo: true })
+  await run(process.execPath, installArgs, {
+    cwd: ROOT,
+    env,
+    echo: true,
+    timeoutMs: installTimeoutMs,
+  })
 }
 function positiveTimeout(value, name) {
   const timeout = Number(value)
@@ -32,10 +45,6 @@ function positiveTimeout(value, name) {
   return timeout
 }
 
-const preparationTimeoutMs = positiveTimeout(
-  process.env.OMAGENTS_BROWSER_PREPARE_TIMEOUT_MS ?? 900_000,
-  "OMAGENTS_BROWSER_PREPARE_TIMEOUT_MS"
-)
 await run(process.execPath, [path.join(ROOT, "scripts", "prepare-browser-clean-room.js")], {
   cwd: ROOT,
   env,

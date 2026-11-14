@@ -1,5 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert"
+import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -32,6 +33,36 @@ test("OpenCode depends on Core and Core bundles pinned Superpowers assets", () =
   assert.equal(pkg.dependencies.superpowers, undefined)
   assert.ok(core.dependencies.superpowers.includes("#8ca22dba9a94f28898bbce59f2537ff4d87c747d"))
   assert.ok(core.bundledDependencies.includes("superpowers"))
+})
+
+test("every workspace with tests is discovered exactly once, including Codex", () => {
+  const root = readJson("package.json")
+  assert.doesNotMatch(root.scripts.test, /packages\/codex\/test/)
+  assert.doesNotMatch(root.scripts.test, /packages\/core\/test/)
+
+  const workspaceDirectories = fs
+    .readdirSync(path.join(ROOT, "packages"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+  for (const directory of workspaceDirectories) {
+    const testDirectory = path.join(ROOT, "packages", directory, "test")
+    if (!fs.existsSync(testDirectory)) continue
+    const pkg = readJson(`packages/${directory}/package.json`)
+    assert.ok(
+      pkg.scripts?.test,
+      `${pkg.name} has test files but npm test --workspaces would skip them`
+    )
+  }
+
+  const result = spawnSync(
+    process.platform === "win32" ? "npm.cmd" : "npm",
+    ["test", "--workspaces", "--if-present", "--dry-run"],
+    { cwd: ROOT, encoding: "utf8" }
+  )
+  assert.equal(result.status, 0, result.stderr || result.stdout)
+  const output = `${result.stdout}\n${result.stderr}`
+  assert.equal(output.match(/@omagents\/omagents-codex/g)?.length, 1, output)
+  assert.equal(output.match(/@omagents\/omagents-dsh/g)?.length, 1, output)
 })
 
 test("development entry only re-exports the packaged OpenCode implementation", () => {
