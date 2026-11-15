@@ -121,18 +121,26 @@ test("browser CI provisions and passes an isolated interpreter on every OS", () 
   assert.match(browserJob, /python -m venv \.omagents\/ci-venv/)
   assert.match(
     browserJob,
-    /python-bin: \$\{\{ github\.workspace \}\}\/\.omagents\/ci-venv\/bin\/python/
+    /python_bin: \$\{\{ github\.workspace \}\}\/\.omagents\/ci-venv\/bin\/python/
   )
   assert.match(
     browserJob,
-    /python-bin: \$\{\{ github\.workspace \}\}\/\.omagents\/ci-venv\/Scripts\/python\.exe/
+    /python_bin: \$\{\{ github\.workspace \}\}\/\.omagents\/ci-venv\/Scripts\/python\.exe/
   )
-  assert.match(browserJob, /OMAGENTS_TEST_PYTHON: \$\{\{ matrix\.python-bin \}\}/)
+  assert.match(browserJob, /OMAGENTS_TEST_PYTHON: \$\{\{ matrix\.python_bin \}\}/)
   const browserSpec = fs.readFileSync(
     path.join(ROOT, "packages", "dsh", "test", "browser-job-board.spec.ts"),
     "utf8"
   )
   assert.doesNotMatch(browserSpec, /process\.env\.OMAGENTS_TEST_PYTHON \|\| "python3"/)
+})
+
+test("CI matrix Python key uses expression-safe underscore naming", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ci.yml"), "utf8")
+  assert.doesNotMatch(workflow, /python-bin:/)
+  assert.doesNotMatch(workflow, /matrix\.python-bin/)
+  assert.match(workflow, /python_bin:/)
+  assert.match(workflow, /matrix\.python_bin/)
 })
 
 test("packed Python and CLI path rules remain Windows-safe", () => {
