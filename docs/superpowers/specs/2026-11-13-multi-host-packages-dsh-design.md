@@ -1,7 +1,7 @@
 # Multi-Host Packages and Full DeepSeek Harness Support Design
 
 Date: 2026-11-13
-Status: Approved design; implementation in progress
+Status: Implementation verified locally on macOS arm64; Linux, Windows, and default pinned Chromium support require first CI confirmation; no release published
 
 ## Purpose
 

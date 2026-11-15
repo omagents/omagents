@@ -1,12 +1,27 @@
+import fs from "node:fs"
 import path from "node:path"
 import { createRequire } from "node:module"
 import { fileURLToPath } from "node:url"
 
 const require = createRequire(import.meta.url)
 
-function resolveOptionalSuperpowersDir() {
+function resolveOptionalSuperpowersDir(coreRoot) {
+  const packageParent = path.dirname(coreRoot)
+  const isScopedInstall =
+    path.basename(packageParent).startsWith("@") &&
+    path.basename(path.dirname(packageParent)) === "node_modules"
+  const appRoot = path.resolve(coreRoot, isScopedInstall ? "../../.." : "../..")
+  const candidates = [
+    path.join(appRoot, "node_modules", "superpowers"),
+    path.join(coreRoot, "node_modules", "superpowers"),
+  ]
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, "package.json"))) return candidate
+  }
+
   try {
-    return path.dirname(require.resolve("superpowers/package.json"))
+    const resolved = path.dirname(require.resolve("superpowers/package.json"))
+    return fs.existsSync(path.join(resolved, "package.json")) ? resolved : null
   } catch (error) {
     if (error.code !== "MODULE_NOT_FOUND") throw error
     return null
@@ -22,7 +37,7 @@ function resolveOptionalSuperpowersDir() {
  */
 export function getCorePaths() {
   const root = path.resolve(fileURLToPath(new URL("../", import.meta.url)))
-  const superpowersDir = resolveOptionalSuperpowersDir()
+  const superpowersDir = resolveOptionalSuperpowersDir(root)
 
   return {
     root,

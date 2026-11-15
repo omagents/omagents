@@ -39,6 +39,8 @@ function outcomeFromStopReason(stopReason, resultSummary) {
     const summary = resultSummary === undefined ? {} : { resultSummary };
     if (stopReason === "completed")
         return { state: "completed", ...summary };
+    if (stopReason === "interrupted")
+        return { state: "interrupted", ...summary };
     if (stopReason === "aborted")
         return { state: "cancelled", ...summary };
     return { state: "failed", ...summary, error: stopReasonError(stopReason) };
@@ -64,8 +66,9 @@ function stopReasonFromEvents(events) {
         case "completed":
             return droppedUnrun ? "aborted" : "completed";
         case "aborted":
-        case "interrupted":
             return "aborted";
+        case "interrupted":
+            return "interrupted";
         case "error":
             return "error";
         case "max-tokens":

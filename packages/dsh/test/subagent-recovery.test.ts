@@ -67,7 +67,14 @@ test("missed completion is recovered from a real Session turn outcome, not infer
   const session = sessionWithTurn("completed-child", { kind: "completed" })
   const agents = new Map([
     ["completed-child", { id: session.id, session, status: "idle" }],
-    ["waiting-child", { id: "waiting-child", session: sessionWithTurn("waiting-child", { kind: "completed" }, { end: false }), status: "idle" }],
+    [
+      "waiting-child",
+      {
+        id: "waiting-child",
+        session: sessionWithTurn("waiting-child", { kind: "completed" }, { end: false }),
+        status: "idle",
+      },
+    ],
   ])
   const { board, tracker } = await setup(t, { agents })
   const completed = launch(board, "completed-child")
@@ -89,8 +96,17 @@ test("missed completion is recovered from a real Session turn outcome, not infer
 
 test("persisted failed and cancelled outcomes reconcile after the live Agent is gone", async (t) => {
   const sessions = new Map([
-    ["failed-child", sessionWithTurn("failed-child", { kind: "error", error: { message: "model failed", code: "MODEL" } })],
-    ["cancelled-child", sessionWithTurn("cancelled-child", { kind: "aborted", reason: { kind: "user" } })],
+    [
+      "failed-child",
+      sessionWithTurn("failed-child", {
+        kind: "error",
+        error: { message: "model failed", code: "MODEL" },
+      }),
+    ],
+    [
+      "cancelled-child",
+      sessionWithTurn("cancelled-child", { kind: "aborted", reason: { kind: "user" } }),
+    ],
   ])
   const { board, tracker } = await setup(t, {
     async readSession(id) {
@@ -115,6 +131,33 @@ test("persisted failed and cancelled outcomes reconcile after the live Agent is 
   })
   assert.equal(cancelled.executionState, "cancelled")
   assert.equal(cancelled.notificationState, "pending")
+})
+
+test("cold Host-interrupted Sessions recover as interrupted for local and external runs", async (t) => {
+  const sessions = new Map([
+    ["host-interrupted-local", sessionWithTurn("host-interrupted-local", { kind: "interrupted" })],
+    [
+      "host-interrupted-external",
+      sessionWithTurn("host-interrupted-external", { kind: "interrupted" }),
+    ],
+  ])
+  const { board, tracker } = await setup(t, {
+    async readSession(id) {
+      const session = sessions.get(id)
+      assert.ok(session, `unexpected Session read for ${id}`)
+      return { session: session.header, events: session.snapshotEvents() }
+    },
+  })
+  const local = launch(board, "host-interrupted-local")
+  const external = launch(board, "host-interrupted-external", { agent: "external" })
+
+  assert.deepEqual(await tracker.query(local), { kind: "terminal", state: "interrupted" })
+  assert.deepEqual(await tracker.query(external), { kind: "terminal", state: "interrupted" })
+  await board.reconcile({ query: (job) => tracker.query(job) })
+  assert.equal(local.executionState, "interrupted")
+  assert.equal(external.executionState, "interrupted")
+  assert.equal(local.notificationState, "pending")
+  assert.equal(external.notificationState, "pending")
 })
 
 test("missing and unreadable outcomes become interrupted without false completion", async (t) => {
@@ -217,7 +260,11 @@ test("startup recovery waits for delayed sessionQuery before classifying a resto
   t.after(() => tracker.dispose())
   await new Promise((resolve) => setImmediate(resolve))
   await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(restored.executionState, "running", "missing query services must not be sticky missing evidence")
+  assert.equal(
+    restored.executionState,
+    "running",
+    "missing query services must not be sticky missing evidence"
+  )
   assert.deepEqual(
     await tracker.query(restored),
     { kind: "active" },
@@ -288,9 +335,7 @@ test("startup recovery runs after delayed subagent/tools activation and preserve
   const session = sessionWithTurn("restart-complete", { kind: "completed" })
   root.provide("agents", {
     get(id) {
-      return id === "restart-complete"
-        ? { id: session.id, session, status: "idle" }
-        : undefined
+      return id === "restart-complete" ? { id: session.id, session, status: "idle" } : undefined
     },
   })
   root.provide("sessionQuery", {

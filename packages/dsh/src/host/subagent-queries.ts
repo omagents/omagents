@@ -84,17 +84,21 @@ function stopReasonError(stopReason: SubagentStopReason): { code: string; messag
 }
 
 function outcomeFromStopReason(
-  stopReason: SubagentStopReason,
+  stopReason: SubagentStopReason | "interrupted",
   resultSummary?: string
 ): DshTerminalOutcome {
   const summary = resultSummary === undefined ? {} : { resultSummary }
   if (stopReason === "completed") return { state: "completed", ...summary }
+  if (stopReason === "interrupted") return { state: "interrupted", ...summary }
   if (stopReason === "aborted") return { state: "cancelled", ...summary }
   return { state: "failed", ...summary, error: stopReasonError(stopReason) }
 }
 
 export function outcomeFromSubagentEnd(info: SubagentRunEndInfo): DshTerminalOutcome {
-  return outcomeFromStopReason(info.stopReason, summarizeAssistantMessage(info.lastAssistantMessage))
+  return outcomeFromStopReason(
+    info.stopReason,
+    summarizeAssistantMessage(info.lastAssistantMessage)
+  )
 }
 
 function hasOpenTurn(events: readonly SessionEvent[]): boolean {
@@ -106,15 +110,18 @@ function hasOpenTurn(events: readonly SessionEvent[]): boolean {
   return open.size > 0
 }
 
-function stopReasonFromEvents(events: readonly SessionEvent[]): SubagentStopReason | undefined {
+function stopReasonFromEvents(
+  events: readonly SessionEvent[]
+): SubagentStopReason | "interrupted" | undefined {
   const { end, droppedUnrun } = foldConsumedWork(events)
   if (!end) return droppedUnrun ? "aborted" : undefined
   switch (end.data.reason.kind) {
     case "completed":
       return droppedUnrun ? "aborted" : "completed"
     case "aborted":
-    case "interrupted":
       return "aborted"
+    case "interrupted":
+      return "interrupted"
     case "error":
       return "error"
     case "max-tokens":

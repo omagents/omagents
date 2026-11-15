@@ -10,7 +10,7 @@ Core must remain host-neutral. Do not import OpenCode, Codex, DSH, Cordis, React
 - `src/storage/`: validated, versioned, serialized, atomic JSON persistence and recovery.
 - `src/skills/`: discovery and full-content rendering for exactly `opencode-v1`, `opencode-v2`, `codex`, and `dsh`.
 - `src/mcp/` and `mcp-servers/base.json`: canonical environment-dependent MCP resolution.
-- `src/paths.js`: packaged asset resolution through `import.meta.url`, never cwd or accidental hoisting.
+- `src/paths.js`: packaged asset resolution through `import.meta.url`, never cwd. Superpowers resolution explicitly prefers the real workspace/app-hoisted installation, falls back to Core's bundled nested dependency, and remains stable across prepack materialization/postpack cleanup.
 - `hooks/`: persistent Python base and on-demand project overlay management.
 - `skills/`: 18 OmAgents skills, shared scripts, and research assets; pinned Superpowers supplies 15 process skills.
 

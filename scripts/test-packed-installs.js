@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { test } from "node:test"
 
@@ -241,7 +242,27 @@ test(
   "four aligned tarballs install and run in an offline clean room",
   { timeout: 900_000 },
   async (t) => {
+    const previousTestTmp = process.env.OMAGENTS_TEST_TMP
+    const aliasContainer = fs.mkdtempSync(path.join(ARTIFACT_ROOT, "realpath-alias-"))
+    const testTmpAlias = path.join(aliasContainer, "tmp")
+    fs.symlinkSync(
+      fs.realpathSync(os.tmpdir()),
+      testTmpAlias,
+      process.platform === "win32" ? "junction" : "dir"
+    )
+    process.env.OMAGENTS_TEST_TMP = testTmpAlias
+    t.after(() => {
+      if (previousTestTmp === undefined) delete process.env.OMAGENTS_TEST_TMP
+      else process.env.OMAGENTS_TEST_TMP = previousTestTmp
+      fs.rmSync(aliasContainer, { recursive: true, force: true })
+    })
+
     const summary = await prepareCleanRoom({ pack: true })
+    assert.equal(
+      summary.cleanRoot,
+      fs.realpathSync(summary.cleanRoot),
+      "OMAGENTS_TEST_TMP aliases must produce canonical clean-room paths"
+    )
     assert.equal(summary.packed.artifacts.length, 4)
     assert.equal(new Set(summary.packed.artifacts.map((artifact) => artifact.version)).size, 1)
     assert.equal(summary.prepareScriptsRun, 0)

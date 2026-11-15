@@ -30,7 +30,7 @@ function hash(value) {
 function temporaryRoot(prefix) {
   const base = process.env.OMAGENTS_TEST_TMP ?? os.tmpdir()
   fs.mkdirSync(base, { recursive: true })
-  return fs.mkdtempSync(path.join(base, prefix))
+  return fs.realpathSync(fs.mkdtempSync(path.join(base, prefix)))
 }
 
 function tarballDependency(artifact) {

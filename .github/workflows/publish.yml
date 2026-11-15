@@ -3,7 +3,7 @@ name: Publish to npm
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   id-token: write
@@ -18,16 +18,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           # Node 24 ships with npm >= 11.5.1, which supports OIDC trusted publishing.
-          node-version: '24'
+          node-version: "24"
           package-manager-cache: false
-        # Don't set registry-url here: it writes an .npmrc with a placeholder
-        # NODE_AUTH_TOKEN, which prevents npm from using OIDC trusted publishing.
 
       - run: npm ci
 
-      - name: Check plugin syntax
-        run: |
-          node --check .opencode/plugins/index.js
-          node --check .opencode/plugins/parallel.js
-
-      - run: npm publish --access public
+      - name: Verify and publish the aligned four-package release
+        run: node scripts/publish-all.js --execute
