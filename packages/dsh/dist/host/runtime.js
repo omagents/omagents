@@ -6,14 +6,15 @@ import { createHealthRecords } from "./health.js";
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
 }
-/**
- * DSH keeps its current in-memory Board usable after storage failures. Core's
- * stricter sticky-write contract remains unchanged for hosts that need it.
- */
+const PROFILE_JOB_PERSISTENCE = new Map();
 function createDegradingJobStore(store) {
     const failures = [];
     let degraded = false;
-    let saveTail = Promise.resolve();
+    const shared = PROFILE_JOB_PERSISTENCE.get(store.filePath) ?? {
+        tail: Promise.resolve(),
+        latestRevision: 0,
+    };
+    PROFILE_JOB_PERSISTENCE.set(store.filePath, shared);
     const record = (code, operation, error) => {
         const message = `DSH Job Board persistence ${operation} failed; continuing in memory: ${errorMessage(error)}`;
         if (failures.some((diagnostic) => diagnostic.code === code && diagnostic.message === message)) {
@@ -25,9 +26,9 @@ function createDegradingJobStore(store) {
         // A flush/close must include saves admitted at its boundary, including
         // adapter-queued saves that have not entered Core's own write queue yet.
         while (true) {
-            const pending = saveTail;
+            const pending = shared.tail;
             await pending;
-            if (pending === saveTail)
+            if (pending === shared.tail)
                 return;
         }
     };
@@ -41,32 +42,48 @@ function createDegradingJobStore(store) {
             ];
         },
         async load() {
-            try {
-                return await store.load();
-            }
-            catch (error) {
-                degraded = true;
-                record("ERR_DSH_JOB_STORE_LOAD", "read", error);
-                return { version: 1, revision: 0, jobs: [] };
-            }
+            const loading = shared.tail.then(async () => {
+                try {
+                    const snapshot = await store.load();
+                    shared.latestRevision = snapshot.revision;
+                    return snapshot;
+                }
+                catch (error) {
+                    degraded = true;
+                    record("ERR_DSH_JOB_STORE_LOAD", "read", error);
+                    return { version: 1, revision: 0, jobs: [] };
+                }
+            });
+            shared.tail = loading.then(() => { });
+            return loading;
         },
         save(snapshot) {
             if (degraded)
-                return saveTail;
-            const admitted = saveTail.then(async () => {
+                return shared.tail;
+            const admitted = shared.tail.then(async () => {
                 // Earlier failure settles every adapter-queued save before this check.
                 // Once degraded, no later admission reaches Core's disk-write queue.
                 if (degraded)
                     return;
+                const revision = typeof snapshot === "object" &&
+                    snapshot !== null &&
+                    "revision" in snapshot &&
+                    typeof snapshot.revision === "number"
+                    ? snapshot.revision
+                    : 0;
+                // A disposed or older overlapping runtime must not replace a newer Board.
+                if (revision < shared.latestRevision)
+                    return;
                 try {
                     await store.save(snapshot);
+                    shared.latestRevision = revision;
                 }
                 catch (error) {
                     degraded = true;
                     record("ERR_DSH_JOB_STORE_SAVE", "write", error);
                 }
             });
-            saveTail = admitted;
+            shared.tail = admitted;
             return admitted;
         },
         async flush() {

@@ -440,7 +440,10 @@ test("a startup store read failure falls back to a visible in-memory Board", asy
   const job = runtime.board.registerLaunch(launch)
   await runtime.board.flush()
   await runtime.board.reconcile({ query: async () => ({ kind: "active" }) })
-  assert.deepEqual(runtime.board.list().map((candidate) => candidate.id), [job.id])
+  assert.deepEqual(
+    runtime.board.list().map((candidate) => candidate.id),
+    [job.id]
+  )
   assert.equal(await fs.readFile(storePath, "utf8"), repairedSnapshot)
   await runtime.dispose()
 })
@@ -475,7 +478,10 @@ test("later write failures preserve in-memory reconciliation and Remote list/wat
     authorizeScope: () => true,
   })
   const listed = await remote.listJobs({ parentSessionId: job.parentSessionId })
-  assert.deepEqual(listed.map((candidate) => candidate.id), [job.id])
+  assert.deepEqual(
+    listed.map((candidate) => candidate.id),
+    [job.id]
+  )
 
   const stream = remote
     .watchJobs({ parentSessionId: job.parentSessionId }, new AbortController().signal)
@@ -494,7 +500,10 @@ test("later write failures preserve in-memory reconciliation and Remote list/wat
   assert.equal(health.persistence.status, "degraded")
   assert.ok(health.persistence.diagnostics.length > 0)
   assert.equal(health.host.status, "ready")
-  assert.deepEqual((await remote.listJobs({})).map((candidate) => candidate.id), [job.id])
+  assert.deepEqual(
+    (await remote.listJobs({})).map((candidate) => candidate.id),
+    [job.id]
+  )
   await runtime.dispose()
 })
 
@@ -585,4 +594,50 @@ test("queued writes cannot overwrite a repaired snapshot after persistence degra
     name.endsWith(".tmp")
   )
   assert.deepEqual(temporaryFiles, [])
+})
+
+test("an older runtime cannot overwrite a newer profile Board", async (t) => {
+  const isolated = await createIsolatedProfile(t)
+  const storePath = join(isolated.profileDir, "omagents", "job-board.json")
+  const { createDshRuntime } = await import("../dist/host/runtime.js")
+  const context = new Context()
+  context.baseUrl = isolated.baseUrl
+  const staleRuntime = await createDshRuntime(context)
+  const newerRuntime = await createDshRuntime(context)
+  t.after(() => Promise.all([staleRuntime.dispose(), newerRuntime.dispose()]))
+  t.after(() => context.fiber.dispose())
+
+  const newerJob = newerRuntime.board.registerLaunch(launch)
+  newerRuntime.board.markTerminal(newerJob.id, {
+    state: "completed",
+    resultSummary: "newer terminal state",
+  })
+  newerRuntime.board.markInjected([newerJob.id])
+  await newerRuntime.board.flush()
+
+  staleRuntime.board.registerLaunch({
+    ...launch,
+    hostTaskId: "stale-runtime-job",
+    description: "stale runtime snapshot",
+  })
+  await staleRuntime.board.flush()
+  await staleRuntime.dispose()
+  await newerRuntime.dispose()
+
+  const persisted = JSON.parse(await fs.readFile(storePath, "utf8"))
+  assert.equal(persisted.revision, newerRuntime.board.revision)
+  assert.deepEqual(
+    persisted.jobs.map((job) => ({
+      id: job.id,
+      executionState: job.executionState,
+      resultSummary: job.resultSummary,
+    })),
+    [
+      {
+        id: newerJob.id,
+        executionState: "completed",
+        resultSummary: "newer terminal state",
+      },
+    ]
+  )
 })
