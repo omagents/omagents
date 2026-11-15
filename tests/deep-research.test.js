@@ -14,9 +14,9 @@ const PYTHON =
 const SCRIPTS = path.join(ROOT, "packages", "core", "skills", "deep-research", "scripts")
 const LEGACY_CONSOLE = {
   PYTHONIOENCODING: "cp1252",
-  PYTHONUTF8: "0",
-  PYTHONCOERCECLOCALE: "0",
-  LC_ALL: "C",
+  ...(process.platform === "win32"
+    ? { PYTHONUTF8: "0", PYTHONCOERCECLOCALE: "0", LC_ALL: "C" }
+    : {}),
 }
 const PRE_RESEARCH = path.join(SCRIPTS, "pre_research.py")
 const DEEP_RESEARCH = path.join(SCRIPTS, "deep_research.py")
@@ -31,7 +31,17 @@ const LOOP_ENGINE = path.join(
 )
 
 function makeProject(t) {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "omagents-research-")))
+  const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "omagents-research-")))
+  let project = temporary
+  if (process.platform === "win32") {
+    const resolved = spawnSync(
+      PYTHON,
+      ["-c", "import os, sys; print(os.path.realpath(sys.argv[1]))", temporary],
+      { encoding: "utf-8" }
+    )
+    assert.strictEqual(resolved.status, 0, resolved.stderr)
+    project = resolved.stdout.trim()
+  }
   t.after(() => fs.rmSync(project, { recursive: true, force: true }))
   return project
 }

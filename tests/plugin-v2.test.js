@@ -384,7 +384,14 @@ function makeInstalledCopy(t, { includeSuperpowers = true } = {}) {
   for (const f of fs.readdirSync(PLUGINS_DIR).filter((file) => file.endsWith(".js"))) {
     fs.copyFileSync(path.join(PLUGINS_DIR, f), path.join(moduleDir, f))
   }
-  fs.cpSync(path.join(ROOT, "packages", "core"), coreDir, { recursive: true })
+  const coreSource = path.join(ROOT, "packages", "core")
+  fs.cpSync(coreSource, coreDir, {
+    recursive: true,
+    filter: (source) => {
+      const relative = path.relative(coreSource, source)
+      return relative !== "node_modules" && !relative.startsWith(`node_modules${path.sep}`)
+    },
+  })
 
   // A minimal installed dependency is sufficient for these adapter tests; the
   // real pinned Superpowers implementation is exercised by the local suite.
