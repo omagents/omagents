@@ -24,15 +24,26 @@ const DEEP_RESEARCH = join(SCRIPTS, "deep_research.py")
 const LOOP_ENGINE = join(ROOT, "packages", "core", "skills", "_shared", "scripts", "loop_engine.py")
 
 async function project(t) {
-  const directory = fs.realpathSync(await mkdtemp(join(tmpdir(), "omagents-dsh-research-")))
+  const temporary = fs.realpathSync(await mkdtemp(join(tmpdir(), "omagents-dsh-research-")))
+  let directory = temporary
+  if (process.platform === "win32") {
+    const resolved = spawnSync(
+      PYTHON,
+      ["-c", "import os, sys; print(os.path.realpath(sys.argv[1]))", temporary],
+      { encoding: "utf8" }
+    )
+    assert.equal(resolved.status, 0, resolved.stderr)
+    directory = resolved.stdout.trim()
+  }
   t.after(() => rm(directory, { recursive: true, force: true }))
   return directory
 }
 
 function dispatchFrom(output) {
-  const start = output.lastIndexOf('{\n  "action"')
+  const normalized = output.replaceAll("\r\n", "\n")
+  const start = normalized.lastIndexOf('{\n  "action"')
   assert.notEqual(start, -1, `missing dispatch JSON:\n${output}`)
-  return JSON.parse(output.slice(start))
+  return JSON.parse(normalized.slice(start))
 }
 
 async function runPython(script, args, cwd) {

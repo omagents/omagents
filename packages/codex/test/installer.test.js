@@ -6,9 +6,9 @@ import os from "node:os"
 import path from "node:path"
 
 import { withCorePackLock } from "../../../tests/core-pack-lock.js"
+import { runNpm } from "../../../tests/npm-launcher.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..", "..")
-const NPM = process.platform === "win32" ? "npm.cmd" : "npm"
 const PACKAGE_NAME = "@omagents/omagents-codex"
 const VERSION = "0.13.1"
 const OLD_CODEX_COMMAND = "npx @omagents/omagents" + " codex"
@@ -27,9 +27,22 @@ function run(command, args, options = {}) {
   return result
 }
 
+function runNpmCommand(args, options = {}) {
+  const result = runNpm(args, {
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+    ...options,
+  })
+  assert.equal(
+    result.status,
+    0,
+    `npm ${args.join(" ")} failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}\nerror: ${result.error || "none"}`
+  )
+  return result
+}
+
 function packWorkspace(name, destination) {
-  const result = run(
-    NPM,
+  const result = runNpmCommand(
     ["pack", "--workspace", name, "--pack-destination", destination, "--json"],
     { cwd: ROOT }
   )
@@ -95,8 +108,7 @@ describe("isolated standalone Codex package", () => {
 
     const core = withCorePackLock(() => packWorkspace("@omagents/core", packDir))
     const codex = packWorkspace(PACKAGE_NAME, packDir)
-    run(
-      NPM,
+    runNpmCommand(
       [
         "install",
         "--prefix",

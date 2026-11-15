@@ -56,8 +56,13 @@ function assertPrivateModes(codexHome) {
 test("generated config TOML parses Windows-like and quote-containing install paths", async (t) => {
   const temporaryDirectory = makeTempDir(t)
   const homes = [
-    path.join(temporaryDirectory, "C:\\Users\\runner\\AppData\\Roaming\\.codex"),
-    path.join(temporaryDirectory, 'codex-"quoted"-home'),
+    process.platform === "win32"
+      ? path.join(temporaryDirectory, "runner", "AppData", "Roaming", ".codex")
+      : path.join(temporaryDirectory, "C:\\Users\\runner\\AppData\\Roaming\\.codex"),
+    path.join(
+      temporaryDirectory,
+      process.platform === "win32" ? "codex-'quoted'-home" : 'codex-"quoted"-home'
+    ),
   ]
   for (const codexHome of homes) {
     await t.test(path.basename(codexHome), async (t) => {
