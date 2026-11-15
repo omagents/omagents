@@ -1,16 +1,27 @@
 import { test } from "node:test"
 import assert from "node:assert"
-import { execSync } from "child_process"
-import fs from "fs"
-import path from "path"
+import { spawnSync } from "node:child_process"
+import fs from "node:fs"
+import path from "node:path"
+import { resolvePythonCommand } from "../scripts/python-command.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
-const ENGINE = `python3 ${path.join(ROOT, "packages", "core", "skills", "_shared", "scripts", "loop_engine.py")}`
+const ENGINE = path.join(ROOT, "packages", "core", "skills", "_shared", "scripts", "loop_engine.py")
 const SKILL = "test-unit"
 const LOOP_PATH = path.join(ROOT, ".omagents", "loops", SKILL, "tasks.json")
 
-function run(cmd) {
-  return execSync(cmd, { cwd: ROOT, encoding: "utf-8" }).trim()
+function run(args, expectedStatus = 0, environment = {}) {
+  const result = spawnSync(resolvePythonCommand(), [ENGINE, ...args], {
+    cwd: ROOT,
+    encoding: "utf-8",
+    env: { ...process.env, ...environment },
+  })
+  assert.strictEqual(
+    result.status,
+    expectedStatus,
+    `Loop engine failed (${result.status}): ${result.stdout}\n${result.stderr}\n${result.error?.message || ""}`
+  )
+  return result.stdout.trim()
 }
 
 function loadState() {
@@ -18,7 +29,7 @@ function loadState() {
 }
 
 test("init creates task queue with correct stats", () => {
-  run(`${ENGINE} init ${SKILL} '[{"description":"task A"},{"description":"task B"}]'`)
+  run(["init", SKILL, JSON.stringify([{ description: "task A" }, { description: "task B" }])])
   const state = loadState()
   assert.strictEqual(state.tasks.length, 2)
   assert.strictEqual(state.stats.total, 2)
@@ -27,7 +38,7 @@ test("init creates task queue with correct stats", () => {
 })
 
 test("next returns first pending task", () => {
-  const out = run(`${ENGINE} next ${SKILL}`)
+  const out = run(["next", SKILL])
   const task = JSON.parse(out)
   assert.strictEqual(task.id, 1)
   assert.strictEqual(task.status, "pending")
@@ -35,7 +46,7 @@ test("next returns first pending task", () => {
 })
 
 test("complete marks task done and updates stats", () => {
-  run(`${ENGINE} complete ${SKILL} 1 "found 3 issues"`)
+  run(["complete", SKILL, "1", "found 3 issues"])
   const state = loadState()
   assert.strictEqual(state.tasks[0].status, "completed")
   assert.strictEqual(state.tasks[0].result, "found 3 issues")
@@ -44,32 +55,32 @@ test("complete marks task done and updates stats", () => {
 })
 
 test("next skips completed tasks", () => {
-  const out = run(`${ENGINE} next ${SKILL}`)
+  const out = run(["next", SKILL])
   const task = JSON.parse(out)
   assert.strictEqual(task.id, 2)
   assert.strictEqual(task.description, "task B")
 })
 
 test("next returns null when all done", () => {
-  run(`${ENGINE} complete ${SKILL} 2 "clean"`)
-  const out = run(`${ENGINE} next ${SKILL}`)
+  run(["complete", SKILL, "2", "clean"])
+  const out = run(["next", SKILL])
   assert.strictEqual(out, "null")
 })
 
 test("fail retries 3 times then blocks", () => {
-  run(`${ENGINE} init ${SKILL} '[{"description":"failing task"}]'`)
+  run(["init", SKILL, JSON.stringify([{ description: "failing task" }])])
 
-  run(`${ENGINE} fail ${SKILL} 1 "error 1"`)
+  run(["fail", SKILL, "1", "error 1"])
   let state = loadState()
   assert.strictEqual(state.tasks[0].status, "pending")
   assert.strictEqual(state.tasks[0].attempts, 1)
 
-  run(`${ENGINE} fail ${SKILL} 1 "error 2"`)
+  run(["fail", SKILL, "1", "error 2"])
   state = loadState()
   assert.strictEqual(state.tasks[0].status, "pending")
   assert.strictEqual(state.tasks[0].attempts, 2)
 
-  run(`${ENGINE} fail ${SKILL} 1 "error 3"`)
+  run(["fail", SKILL, "1", "error 3"])
   state = loadState()
   assert.strictEqual(state.tasks[0].status, "blocked")
   assert.strictEqual(state.tasks[0].attempts, 3)
@@ -78,9 +89,9 @@ test("fail retries 3 times then blocks", () => {
 })
 
 test("add appends new task with auto-incremented id", () => {
-  run(`${ENGINE} init ${SKILL} '[{"description":"original"}]'`)
-  run(`${ENGINE} complete ${SKILL} 1 "done"`)
-  run(`${ENGINE} add ${SKILL} '{"description":"new task"}'`)
+  run(["init", SKILL, JSON.stringify([{ description: "original" }])])
+  run(["complete", SKILL, "1", "done"])
+  run(["add", SKILL, JSON.stringify({ description: "new task" })])
   const state = loadState()
   assert.strictEqual(state.tasks.length, 2)
   assert.strictEqual(state.tasks[1].id, 2)
@@ -90,26 +101,36 @@ test("add appends new task with auto-incremented id", () => {
 })
 
 test("status prints correct stats", () => {
-  run(`${ENGINE} init ${SKILL} '[{"description":"a"},{"description":"b"},{"description":"c"}]'`)
-  run(`${ENGINE} complete ${SKILL} 1 "done"`)
-  const out = run(`${ENGINE} status ${SKILL}`)
+  run([
+    "init",
+    SKILL,
+    JSON.stringify([{ description: "a" }, { description: "b" }, { description: "c" }]),
+  ])
+  run(["complete", SKILL, "1", "done"])
+  const out = run(["status", SKILL])
   assert.ok(out.includes("Total: 3"))
   assert.ok(out.includes("Completed: 1"))
   assert.ok(out.includes("Pending: 2"))
 })
 
 test("summary shows icons and results", () => {
-  const out = run(`${ENGINE} summary ${SKILL}`)
+  const out = run(["summary", SKILL])
   assert.ok(out.includes("[x]"))
   assert.ok(out.includes("[ ]"))
 })
 
+test("next emits Unicode tasks with a legacy console encoding", () => {
+  run(["init", SKILL, JSON.stringify([{ description: "研究 task" }])])
+  const out = run(["next", SKILL], 0, { PYTHONIOENCODING: "cp1252" })
+  assert.strictEqual(JSON.parse(out).description, "研究 task")
+})
+
 test("reset clears the queue", () => {
-  run(`${ENGINE} reset ${SKILL}`)
+  run(["reset", SKILL])
   assert.ok(!fs.existsSync(LOOP_PATH))
 })
 
 test("next on non-existent skill returns error", () => {
-  const out = run(`${ENGINE} next non-existent-skill 2>&1 || true`)
+  const out = run(["next", "non-existent-skill"], 1)
   assert.ok(out.includes("error") || out.includes("No loop found"))
 })

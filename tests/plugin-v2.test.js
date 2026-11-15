@@ -315,8 +315,13 @@ test("V2 shell hook prepends venv and skill script dirs to PATH", async (t) => {
     const event = { env: { PATH: "/usr/bin:/bin" } }
     await hook(event)
     const parts = event.env.PATH.split(path.delimiter)
+    const venvBin = path.join(
+      ".venvs",
+      "omagents",
+      process.platform === "win32" ? "Scripts" : "bin"
+    )
     assert.ok(
-      parts.some((p) => p.endsWith(path.join(".venvs", "omagents", "bin"))),
+      parts.some((p) => p.endsWith(venvBin)),
       "venv bin on PATH"
     )
     assert.ok(
@@ -327,7 +332,7 @@ test("V2 shell hook prepends venv and skill script dirs to PATH", async (t) => {
     await hook(event)
     const again = event.env.PATH.split(path.delimiter)
     assert.strictEqual(
-      again.filter((p) => p.endsWith(path.join(".venvs", "omagents", "bin"))).length,
+      again.filter((p) => p.endsWith(venvBin)).length,
       1,
       "venv bin appears exactly once"
     )

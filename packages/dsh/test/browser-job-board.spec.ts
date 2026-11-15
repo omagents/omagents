@@ -868,6 +868,22 @@ test(
       )
       assert.equal(recoveredHyperplanQueue.tasks[1].result, undefined)
       await host.runtime.board.flush()
+      const recoveredSnapshot = JSON.parse(
+        fs.readFileSync(path.join(summary.profileDirectory, "omagents", "job-board.json"), "utf8")
+      )
+      assert.equal(
+        recoveredSnapshot.revision,
+        host.runtime.board.revision,
+        `recovered Board must be durable before full Host shutdown: ${JSON.stringify(host.runtime.health.persistence)}`
+      )
+      for (const lane of [recoveredResearch, recoveredHyperplan]) {
+        const persisted = recoveredSnapshot.jobs.find((job) => job.id === lane.job.id)
+        assert.equal(
+          persisted?.executionState,
+          "completed",
+          `${lane.job.description} must persist before full Host shutdown: ${JSON.stringify({ persisted, health: host.runtime.health.persistence })}`
+        )
+      }
       await host.shutdown.shutdown(0)
       host = await startHost(summary, port)
       page.host = host

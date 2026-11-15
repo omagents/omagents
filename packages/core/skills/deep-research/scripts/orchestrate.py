@@ -88,7 +88,7 @@ def run_script(script_name: str, extra_args: list[str]) -> int:
 
 def _run_capture(cmd: list[str]) -> str:
     """Run a command and return stdout."""
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    result = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=False)
     return result.stdout.strip()
 
 

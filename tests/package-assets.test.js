@@ -1,14 +1,13 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { getCorePaths } from "../packages/core/src/paths.js"
 import { getVenvPython } from "../packages/core/hooks/python-env.js"
 import { withCorePackLock } from "./core-pack-lock.js"
+import { runNpm } from "./npm-launcher.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
-const NPM = process.platform === "win32" ? "npm.cmd" : "npm"
 const CORE_PATHS = getCorePaths()
 const SUPERPOWERS_SKILLS = [
   "brainstorming",
@@ -33,14 +32,14 @@ test("workspace-packed Core bundles the pinned Superpowers plugin and all 15 ski
     fs.readFileSync(path.join(CORE_PATHS.superpowersDir, "package.json"), "utf8")
   )
   const result = withCorePackLock(() =>
-    spawnSync(NPM, ["pack", "--workspace", "@omagents/core", "--dry-run", "--json"], {
+    runNpm(["pack", "--workspace", "@omagents/core", "--dry-run", "--json"], {
       cwd: ROOT,
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
     })
   )
 
-  assert.equal(result.status, 0, result.stderr || result.stdout)
+  assert.equal(result.status, 0, result.stderr || result.stdout || result.error?.message)
   const [artifact] = JSON.parse(result.stdout)
   const packedPaths = new Set([...artifact.files.map((file) => file.path), ...artifact.bundled])
   const expected = [
@@ -154,7 +153,7 @@ test("packed Python and CLI path rules remain Windows-safe", () => {
     getVenvPython(windowsVenv, "win32"),
     "C:\\Users\\release\\.venvs\\omagents\\Scripts\\python.exe"
   )
-  assert.equal(getVenvPython("/opt/omagents", "linux"), "/opt/omagents/bin/python")
+  assert.equal(getVenvPython("/opt/omagents", "linux"), path.join("/opt/omagents", "bin", "python"))
   for (const directory of ["opencode", "codex"]) {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(ROOT, "packages", directory, "package.json"), "utf8")

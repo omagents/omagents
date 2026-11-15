@@ -197,6 +197,11 @@ COMMANDS = {
 
 
 def main():
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+
     if len(sys.argv) < 3 or sys.argv[1] not in COMMANDS:
         print(__doc__)
         sys.exit(1)

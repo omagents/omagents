@@ -12,6 +12,12 @@ const PYTHON =
     ? path.resolve(ROOT, PYTHON_SETTING)
     : PYTHON_SETTING
 const SCRIPTS = path.join(ROOT, "packages", "core", "skills", "deep-research", "scripts")
+const LEGACY_CONSOLE = {
+  PYTHONIOENCODING: "cp1252",
+  PYTHONUTF8: "0",
+  PYTHONCOERCECLOCALE: "0",
+  LC_ALL: "C",
+}
 const PRE_RESEARCH = path.join(SCRIPTS, "pre_research.py")
 const DEEP_RESEARCH = path.join(SCRIPTS, "deep_research.py")
 const LOOP_ENGINE = path.join(
@@ -30,10 +36,11 @@ function makeProject(t) {
   return project
 }
 
-function runPython(script, args, cwd, expectedStatus = 0) {
+function runPython(script, args, cwd, expectedStatus = 0, environment = {}) {
   const result = spawnSync(PYTHON, [script, ...args], {
     cwd,
     encoding: "utf-8",
+    env: { ...process.env, ...environment },
   })
   assert.strictEqual(
     result.status,
@@ -70,10 +77,34 @@ function preFinding() {
 }
 
 function dispatchFrom(output) {
-  const start = output.lastIndexOf('{\n  "action"')
+  const normalized = output.replaceAll("\r\n", "\n")
+  const start = normalized.lastIndexOf('{\n  "action"')
   assert.notStrictEqual(start, -1, `No dispatch JSON in output:\n${output}`)
-  return JSON.parse(output.slice(start))
+  return JSON.parse(normalized.slice(start))
 }
+
+function shellRoundTrip(quoted) {
+  if (process.platform === "win32") {
+    return spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::Out.Write(${quoted})`,
+      ],
+      { encoding: "utf-8" }
+    )
+  }
+  return spawnSync("/bin/sh", ["-c", `printf '%s' ${quoted}`], { encoding: "utf-8" })
+}
+
+test("dispatch parser accepts Windows CRLF output", () => {
+  const dispatch = dispatchFrom(
+    'Phase 1: Creating research plan...\r\n{\r\n  "action": "dispatch_subagent",\r\n  "run_id": "windows-crlf",\r\n  "tasks": []\r\n}\r\n'
+  )
+  assert.equal(dispatch.action, "dispatch_subagent")
+  assert.equal(dispatch.run_id, "windows-crlf")
+})
 
 test("Python research layout resolver", () => {
   const result = spawnSync(
@@ -149,15 +180,16 @@ test("test_pre_research_supports_unicode_workspace_with_spaces", (t) => {
   const project = makeProject(t)
   const workspace = "研究 topic with spaces"
   const query = "边缘计算 2026"
+  const runWithLegacyConsole = (args) => runPython(PRE_RESEARCH, args, project, 0, LEGACY_CONSOLE)
 
-  runPython(PRE_RESEARCH, ["init", "--query", query, "--workspace", workspace], project)
-  const next = JSON.parse(runPython(PRE_RESEARCH, ["next", "-w", workspace], project).stdout)
+  runWithLegacyConsole(["init", "--query", query, "--workspace", workspace])
+  const next = JSON.parse(runWithLegacyConsole(["next", "-w", workspace]).stdout)
   assert.match(next.description, /边缘计算 2026/)
 
   const internal = runDir(project)
   writeJson(path.join(internal, "pre_findings", "pre-1.json"), preFinding())
-  runPython(PRE_RESEARCH, ["complete", "pre-1", "-w", workspace], project)
-  runPython(PRE_RESEARCH, ["finalize", "-w", workspace], project)
+  runWithLegacyConsole(["complete", "pre-1", "-w", workspace])
+  runWithLegacyConsole(["finalize", "-w", workspace])
   const consolidated = JSON.parse(
     fs.readFileSync(path.join(internal, "pre_research.json"), "utf-8")
   )
@@ -793,16 +825,17 @@ test("test_agent_output_paths_shell_round_trip", (t) => {
   const preWorkspace = "研究 topic's & spaces"
   const preResult = runPython(
     DEEP_RESEARCH,
-    ["run-all", "--query", "Shell paths", "--workspace", preWorkspace],
-    project
+    ["run-all", "--query", "Shell paths 研究", "--workspace", preWorkspace],
+    project,
+    0,
+    LEGACY_CONSOLE
   )
   const pre = dispatchFrom(preResult.stdout)
-  assert.strictEqual(pre.shell, "posix")
+  assert.ok(pre.task.description.includes("Shell paths 研究"))
+  assert.strictEqual(pre.shell, process.platform === "win32" ? "powershell" : "posix")
   assert.strictEqual(path.basename(pre.output_path), "pre-1.json")
   assert.ok(pre.output_path.includes(".omagents"))
-  const preRoundTrip = spawnSync("/bin/sh", ["-c", `printf '%s' ${pre.output_path_quoted}`], {
-    encoding: "utf-8",
-  })
+  const preRoundTrip = shellRoundTrip(pre.output_path_quoted)
   assert.strictEqual(preRoundTrip.status, 0, preRoundTrip.stderr)
   assert.strictEqual(preRoundTrip.stdout, pre.output_path)
   assert.ok(path.isAbsolute(pre.resume_command.executable))
@@ -825,16 +858,16 @@ test("test_agent_output_paths_shell_round_trip", (t) => {
   const mainResult = runPython(
     DEEP_RESEARCH,
     ["run-all", "--query", "Main shell paths", "--workspace", mainWorkspace, "--skip-pre-research"],
-    project
+    project,
+    0,
+    LEGACY_CONSOLE
   )
   const main = dispatchFrom(mainResult.stdout)
-  assert.strictEqual(main.shell, "posix")
+  assert.strictEqual(main.shell, process.platform === "win32" ? "powershell" : "posix")
   assert.ok(main.tasks.length > 0)
   for (const task of main.tasks) {
     assert.strictEqual(path.basename(task.output_path), `${task.task_id}.json`)
-    const roundTrip = spawnSync("/bin/sh", ["-c", `printf '%s' ${task.output_path_quoted}`], {
-      encoding: "utf-8",
-    })
+    const roundTrip = shellRoundTrip(task.output_path_quoted)
     assert.strictEqual(roundTrip.status, 0, roundTrip.stderr)
     assert.strictEqual(roundTrip.stdout, task.output_path)
   }

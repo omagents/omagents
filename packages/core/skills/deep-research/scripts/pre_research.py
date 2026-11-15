@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -58,7 +59,7 @@ def _search_context() -> str:
 
 def _run_loop(cmd: list[str]) -> str:
     """Run loop_engine.py and return stdout."""
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    result = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=False)
     return result.stdout.strip()
 
 
@@ -340,6 +341,11 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+
     parser = argparse.ArgumentParser(description="Pre-research landscape scan for deep-research.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -237,13 +237,20 @@ test("material DSH workflows use full overrides and native tool mappings", () =>
   assert.match(doctor, /@omagents\/omagents-dsh/)
   assert.match(doctor, /33/)
   assert.match(doctor, /native `subagent`|native DSH `subagent`/)
+  const normalizeDoctorPath = (value) => value.replaceAll("\\", "/")
   assert.ok(
-    doctor.includes(
-      path.join(CORE_PATHS.root, "skills", "deep-research", "scripts", "deep_research.py")
+    normalizeDoctorPath(doctor).includes(
+      normalizeDoctorPath(
+        path.join(CORE_PATHS.root, "skills", "deep-research", "scripts", "deep_research.py")
+      )
     ),
     "doctor must diagnose the deep-research package, not its own scripts directory"
   )
-  assert.ok(!doctor.includes(path.join(byName.doctor.directory, "scripts", "deep_research.py")))
+  assert.ok(
+    !normalizeDoctorPath(doctor).includes(
+      normalizeDoctorPath(path.join(byName.doctor.directory, "scripts", "deep_research.py"))
+    )
+  )
 
   const lsp = renderSkillForHost(byName["lsp-guide"], "dsh").content
   assert.match(lsp, /mcp__codegraph__codegraph_explore/)

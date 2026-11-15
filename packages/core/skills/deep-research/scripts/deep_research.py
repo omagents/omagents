@@ -361,6 +361,11 @@ def run_all(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+
     parser = argparse.ArgumentParser(
         prog="deep_research",
         description="OpenCode Deep Research unified CLI",
