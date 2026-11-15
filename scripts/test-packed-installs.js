@@ -243,6 +243,7 @@ test(
   { timeout: 900_000 },
   async (t) => {
     const previousTestTmp = process.env.OMAGENTS_TEST_TMP
+    fs.mkdirSync(ARTIFACT_ROOT, { recursive: true })
     const aliasContainer = fs.mkdtempSync(path.join(ARTIFACT_ROOT, "realpath-alias-"))
     const testTmpAlias = path.join(aliasContainer, "tmp")
     fs.symlinkSync(
