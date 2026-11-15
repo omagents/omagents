@@ -50,7 +50,7 @@ test("every README language has exactly the approved host installation surface",
     assert.doesNotMatch(text, /npx\s+@omagents\/omagents\s+codex\b/, file)
     assert.doesNotMatch(text, /npx\s+@omagents\/omagents\s+opencode\b/, file)
     assert.ok(text.includes("@omagents/core"), `${file} must identify the shared Core package`)
-    assert.ok(text.includes("0.13.1"), `${file} must identify the aligned release candidate`)
+    assert.ok(text.includes("0.14.0"), `${file} must identify the aligned release candidate`)
   }
 })
 
@@ -89,11 +89,11 @@ test("every README language has a complete host and shared-Core support matrix",
 test("release guidance keeps four versions aligned and publishes Core before sequential hosts", () => {
   assert.deepEqual(
     PACKAGE_MANIFESTS.map((file) => readJson(file).version),
-    ["0.13.1", "0.13.1", "0.13.1", "0.13.1"]
+    ["0.14.0", "0.14.0", "0.14.0", "0.14.0"]
   )
   for (const file of HOST_MANIFESTS) {
     const pkg = readJson(file)
-    assert.equal(pkg.dependencies["@omagents/core"], "0.13.1", file)
+    assert.equal(pkg.dependencies["@omagents/core"], "0.14.0", file)
     for (const otherHost of PACKAGE_NAMES.slice(1)) {
       assert.equal(
         pkg.dependencies[otherHost],
@@ -238,11 +238,10 @@ test("root READMEs qualify interrupted recovery with the observed-active cold-mi
   }
 })
 
-test("changelog has an Unreleased multi-host and full-DSH entry without a new version", () => {
+test("changelog has a versioned multi-host and full-DSH release entry", () => {
   const changelog = read("CHANGELOG.md")
-  const unreleased = changelog.split("## [0.13.1]")[0]
-  assert.match(unreleased, /^## \[Unreleased\]$/m)
-  assert.doesNotMatch(unreleased, /^## \[Unreleased\]\s+-\s+\d{4}-/m)
+  const release = changelog.split("## [0.13.1]")[0]
+  assert.match(release, /^## \[0.14.0\] - 2026-11-15$/m)
   for (const required of [
     "@omagents/core",
     "@omagents/omagents-codex",
@@ -251,7 +250,7 @@ test("changelog has an Unreleased multi-host and full-DSH entry without a new ve
     "33",
     "npm workspaces",
   ]) {
-    assert.ok(unreleased.includes(required), `Unreleased changelog omits ${required}`)
+    assert.ok(release.includes(required), `0.14.0 changelog omits ${required}`)
   }
 })
 
@@ -272,15 +271,22 @@ test("scoped package guides and approved multi-host design artifacts are present
   assert.ok(read("packages/dsh/AGENTS.md").includes(DSH_WORKSPACE_TEST))
 })
 
-test("verification notes do not overclaim unconfirmed platforms or browser runs", () => {
-  for (const file of ["CONTRIBUTING.md", "packages/dsh/README.md", "packages/dsh/AGENTS.md"]) {
+test("verification notes include the confirmed cross-platform CI run", () => {
+  for (const file of [
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "packages/dsh/README.md",
+    "packages/dsh/AGENTS.md",
+  ]) {
     const text = read(file)
     assert.ok(text.includes("macOS arm64"), file)
     assert.ok(text.includes("chromium_headless_shell-1228"), file)
-    assert.ok(text.includes("first CI confirmation"), file)
+    assert.ok(text.includes("43688132997"), file)
+    assert.ok(text.includes("Linux"), file)
+    assert.ok(text.includes("Windows"), file)
     assert.doesNotMatch(
       text,
-      /Linux[^\n]*Windows[^\n]*(?:all\s+)?(?:tests|checks)\s+(?:pass|passed)/i,
+      /require first CI confirmation|still require first CI confirmation/,
       file
     )
   }

@@ -24,7 +24,7 @@ function readJson(filePath) {
 
 const RELEASE_TAG = `v${readJson(path.join(ROOT, "package.json")).version}`
 
-function makeWorkspace(t, version = "0.13.1") {
+function makeWorkspace(t, version = "0.14.0") {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-release-test-"))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
 
@@ -72,7 +72,7 @@ async function releasePublisher() {
   return import("../scripts/publish-all.js")
 }
 
-function fakeArtifacts(version = "0.13.1") {
+function fakeArtifacts(version = "0.14.0") {
   return {
     version,
     artifacts: PACKAGE_DEFINITIONS.map(({ id, name }) => ({

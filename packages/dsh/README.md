@@ -104,7 +104,7 @@ npm run test:packed
 npm run test:browser
 ```
 
-Current release-candidate verification ran locally on **macOS arm64** with the **`chromium_headless_shell-1228`** override. Linux, Windows, and the default pinned Chromium require **first CI confirmation**; this document does not claim those runs already passed.
+Current release-candidate verification includes local **macOS arm64** with the **`chromium_headless_shell-1228`** override and main CI run **`43688132997`** on Linux, macOS, and Windows with the default pinned Chromium. All six Unit/packed and DSH Web jobs passed.
 
 ## License
 

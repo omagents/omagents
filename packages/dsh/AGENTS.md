@@ -49,7 +49,7 @@ npm run test:browser
 
 Host tests must use the real Cordis Plugin Loader with an isolated `DSH_HOME`; do not replace them with direct `apply()` smoke tests. Keep real local MCP handshakes, Remote authorization/stream cleanup, React accessibility, lifecycle cancellation/recovery, package-surface, and lazy-CJS artifact coverage. Never require an external model API key.
 
-Current release-candidate verification ran locally on macOS arm64 with the `chromium_headless_shell-1228` override. Linux, Windows, and the default pinned Chromium require first CI confirmation; do not claim those runs already passed.
+Current release-candidate verification includes local macOS arm64 with the `chromium_headless_shell-1228` override and main CI run `43688132997` on Linux, macOS, and Windows with the default pinned Chromium; all six Unit/packed and DSH Web jobs passed.
 
 ## Release
 
