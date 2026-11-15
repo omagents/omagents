@@ -42,7 +42,7 @@ function readJson(filePath) {
 }
 
 function mkdirp(dir) {
-  fs.mkdirSync(dir, { recursive: true })
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
 }
 
 function copyDir(src, dest) {
@@ -126,6 +126,12 @@ function generateMarketplaceJson() {
 }
 
 // ─── config.toml management ─────────────────────────────────────────────────
+
+/** JSON and TOML basic strings share the escapes emitted here, except DEL. */
+export function serializeTomlBasicString(value) {
+  if (typeof value !== "string") throw new TypeError("TOML string value must be a string")
+  return JSON.stringify(value).replace(/\u007f/g, "\\u007F")
+}
 
 const MARKER_START = "# >>> omagents >>>"
 const MARKER_END = "# <<< omagents <<<"
@@ -219,8 +225,13 @@ export async function installCodex(options = {}) {
     JSON.stringify(generatePluginJson(pkg.version, pkg.description), null, 2) + "\n"
   )
 
-  // 2. .mcp.json
-  fs.writeFileSync(path.join(cacheDir, ".mcp.json"), JSON.stringify(mcpJson, null, 2) + "\n")
+  // 2. .mcp.json (Exa/Context7 values may be credentials)
+  const mcpPath = path.join(cacheDir, ".mcp.json")
+  fs.writeFileSync(mcpPath, JSON.stringify(mcpJson, null, 2) + "\n", {
+    encoding: "utf8",
+    mode: 0o600,
+  })
+  fs.chmodSync(mcpPath, 0o600)
 
   // 3. hooks
   const hooksDir = path.join(cacheDir, "hooks")
@@ -274,7 +285,7 @@ export async function installCodex(options = {}) {
   const pluginSection = [
     `[marketplaces.omagents]`,
     `source_type = "local"`,
-    `source = "${marketplaceRoot}"`,
+    `source = ${serializeTomlBasicString(marketplaceRoot)}`,
     ``,
     `[plugins."omagents@omagents"]`,
     `enabled = true`,

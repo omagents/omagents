@@ -11,6 +11,7 @@ import SkillRegistry from "@deepseek-ai/dsh-skill"
 import SystemPrompt from "@deepseek-ai/dsh-system-prompt"
 
 import type { DshRuntime } from "../dist/host/runtime.js"
+import { OmAgentsRemote } from "../dist/host/remote-service.js"
 
 const launch = {
   host: "dsh",
@@ -411,4 +412,88 @@ test("runtime isolates active profiles and reports persistence health independen
   )
   assert.equal(persisted.jobs.length, 1)
   await assert.rejects(fs.access(otherStorePath), { code: "ENOENT" })
+})
+
+test("a startup store read failure falls back to a visible in-memory Board", async (t) => {
+  const isolated = await createIsolatedProfile(t)
+  const storePath = join(isolated.profileDir, "omagents", "job-board.json")
+  await fs.mkdir(storePath, { recursive: true })
+  const { createDshRuntime } = await import("../dist/host/runtime.js")
+  const context = new Context()
+  context.baseUrl = isolated.baseUrl
+  const runtime = await createDshRuntime(context)
+  t.after(() => runtime.dispose())
+
+  assert.equal(runtime.health.host.status, "ready")
+  assert.equal(runtime.health.persistence.status, "degraded")
+  const loadDiagnostic = runtime.health.persistence.diagnostics.find(
+    (diagnostic) => diagnostic.code === "ERR_DSH_JOB_STORE_LOAD"
+  )
+  assert.ok(loadDiagnostic, JSON.stringify(runtime.health.persistence.diagnostics))
+  assert.match(loadDiagnostic.message, /in memory/i)
+
+  // Even if the path becomes writable again, this already-degraded runtime must
+  // not overwrite a store whose previous contents could not be read at startup.
+  await fs.rm(storePath, { recursive: true, force: true })
+  const repairedSnapshot = `${JSON.stringify({ version: 1, revision: 0, jobs: [] }, null, 2)}\n`
+  await fs.writeFile(storePath, repairedSnapshot, "utf8")
+  const job = runtime.board.registerLaunch(launch)
+  await runtime.board.flush()
+  await runtime.board.reconcile({ query: async () => ({ kind: "active" }) })
+  assert.deepEqual(runtime.board.list().map((candidate) => candidate.id), [job.id])
+  assert.equal(await fs.readFile(storePath, "utf8"), repairedSnapshot)
+  await runtime.dispose()
+})
+
+test("later write failures preserve in-memory reconciliation and Remote list/watch", async (t) => {
+  const isolated = await createIsolatedProfile(t)
+  const dataDirectory = join(isolated.profileDir, "omagents")
+  await fs.mkdir(dataDirectory, { recursive: true })
+  const { createDshRuntime } = await import("../dist/host/runtime.js")
+  const context = new Context()
+  context.baseUrl = isolated.baseUrl
+  const runtime = await createDshRuntime(context)
+  t.after(() => runtime.dispose())
+  t.after(() => context.fiber.dispose())
+
+  await fs.rename(dataDirectory, `${dataDirectory}-empty`)
+  await fs.writeFile(dataDirectory, "force atomic replacement to fail", "utf8")
+  const job = runtime.board.registerLaunch(launch)
+  await runtime.board.flush()
+  await runtime.board.reconcile({ query: async () => ({ kind: "active" }) })
+  assert.equal(runtime.board.get(job.id).executionState, "running")
+
+  const remote = new OmAgentsRemote(context, {
+    board: runtime.board,
+    tracker: {
+      async query() {
+        return { kind: "active" }
+      },
+      async cancel() {},
+    },
+    health: runtime.health,
+    authorizeScope: () => true,
+  })
+  const listed = await remote.listJobs({ parentSessionId: job.parentSessionId })
+  assert.deepEqual(listed.map((candidate) => candidate.id), [job.id])
+
+  const stream = remote
+    .watchJobs({ parentSessionId: job.parentSessionId }, new AbortController().signal)
+    [Symbol.asyncIterator]()
+  const baseline = await within(stream.next(), "degraded persistence watch baseline")
+  assert.equal(baseline.value.jobs[0].id, job.id)
+  assert.equal(baseline.value.jobs[0].executionState, "running")
+
+  runtime.board.markTerminal(job.id, { state: "completed", resultSummary: "kept in memory" })
+  const changed = await within(stream.next(), "degraded persistence watch update")
+  assert.equal(changed.value.jobs[0].executionState, "completed")
+  assert.equal(changed.value.jobs[0].resultSummary, "kept in memory")
+  await stream.return()
+
+  const health = await remote.getHealth()
+  assert.equal(health.persistence.status, "degraded")
+  assert.ok(health.persistence.diagnostics.length > 0)
+  assert.equal(health.host.status, "ready")
+  assert.deepEqual((await remote.listJobs({})).map((candidate) => candidate.id), [job.id])
+  await runtime.dispose()
 })

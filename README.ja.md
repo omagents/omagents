@@ -43,6 +43,8 @@ export GITHUB_TOKEN="your-github-token"
 - **`CONTEXT7_API_KEY`**：ローカル`@upstash/context7-mcp` serverのレート制限を緩和するオプションの認証情報です。
 - **`GITHUB_TOKEN`**：GitHub Copilot MCPを有効にします。未設定の場合、OmAgentsは`mcp.grep.app`で公開コードを検索します。
 
+Codexでは、GitHub認証はトークン値ではなく`GITHUB_TOKEN`環境変数参照（`bearer_token_env_var`）として保存されます。Codex pluginの`.mcp.json`契約には、Exaの`x-api-key`やContext7のstdio `env`に相当する間接参照がないため、設定されたExaとContext7の値はこのファイルに書き込まれます。POSIXモードを尊重するプラットフォームでは、インストーラーは非公開ディレクトリを`0700`で作成し、`.mcp.json`を`0600`で書き込み・再書き込みします。
+
 ## サポートマトリクス
 
 | ホストまたは役割 | パッケージ | インストール | Skills | バックグラウンド実行と復旧 | 管理サーフェス |

@@ -43,6 +43,8 @@ export GITHUB_TOKEN="your-github-token"
 - **`CONTEXT7_API_KEY`**: optional rate-limit credentials for the local `@upstash/context7-mcp` server.
 - **`GITHUB_TOKEN`**: enables the GitHub Copilot MCP. Without it, OmAgents uses `mcp.grep.app` for public code search.
 
+For Codex, GitHub authentication is stored as the `GITHUB_TOKEN` environment-variable reference (`bearer_token_env_var`), not the token value. The Codex plugin `.mcp.json` contract has no equivalent indirection for Exa's `x-api-key` or Context7's stdio `env`, so configured Exa and Context7 values are written to that file. On platforms that honor POSIX modes, the installer creates private directories with mode `0700` and writes or rewrites `.mcp.json` with mode `0600`.
+
 ## Support Matrix
 
 | Host or role | Package | Installation | Skills | Background execution and recovery | Management surface |

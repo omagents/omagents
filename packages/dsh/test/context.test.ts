@@ -1,13 +1,18 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import fs from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { Context } from "@deepseek-ai/cordis"
+import { Session, SessionId } from "@deepseek-ai/dsh-session"
+import { SUBAGENT_DESCRIPTOR_VERSION } from "@deepseek-ai/dsh-subagent"
 import SystemPrompt, { renderContextSnapshot, renderPrompt } from "@deepseek-ai/dsh-system-prompt"
-import { getCorePaths, JobBoard } from "@omagents/core"
+import { getCorePaths, JobBoard, JsonJobStore } from "@omagents/core"
 
 import { createHealthRecords } from "../dist/host/health.js"
 import { registerDshContext } from "../dist/host/register-context.js"
+import { createSubagentTracker } from "../dist/host/subagent-tracker.js"
 
 function createBoard() {
   let nextId = 0
@@ -110,27 +115,34 @@ test("DSH prompt has native instructions and one dynamic running/pending Board s
   const dispose = registerDshContext(root, board, health)
   const agent = { id: "parent-1", session: { id: "parent-1" } }
   const assemblyContext = { agent, scope: agent }
-  const revision = board.revision
-
   const first = await root.systemPrompt.assemble(assemblyContext)
+  const firstPrompt = renderPrompt(first)
+  const firstContext = renderContextSnapshot(first)
+  assert.equal(occurrences(firstPrompt, "<Parallel_Execution>"), 1)
+  assert.match(firstPrompt, /native DSH.*subagent|native `subagent`/)
+  assert.match(firstPrompt, /parallel_status/)
+  assert.doesNotMatch(firstPrompt, /\btask\s*\(\s*background|background\s*:/)
+  assert.equal(occurrences(firstContext, "OmAgents State Preservation"), 1)
+  assert.equal(occurrences(firstContext, "### Background Job Board"), 1)
+  assert.match(firstContext, /#### Running/)
+  assert.match(firstContext, new RegExp(`${running.alias}.*running`))
+  assert.match(firstContext, /Objective: Running objective/)
+  assert.match(firstContext, /#### Pending outcomes/)
+  assert.match(firstContext, new RegExp(`${finished.alias}.*completed`))
+  assert.match(firstContext, /Result: Useful result/)
+  assert.doesNotMatch(firstContext, /Other parent objective/)
+  assert.equal(finished.notificationState, "injected")
+  const injectedRevision = board.revision
+
   const second = await root.systemPrompt.assemble(assemblyContext)
-  for (const assembly of [first, second]) {
-    const prompt = renderPrompt(assembly)
-    const context = renderContextSnapshot(assembly)
-    assert.equal(occurrences(prompt, "<Parallel_Execution>"), 1)
-    assert.match(prompt, /native DSH.*subagent|native `subagent`/)
-    assert.match(prompt, /parallel_status/)
-    assert.doesNotMatch(prompt, /\btask\s*\(\s*background|background\s*:/)
-    assert.equal(occurrences(context, "OmAgents State Preservation"), 1)
-    assert.equal(occurrences(context, "### Background Job Board"), 1)
-    assert.match(context, /#### Running/)
-    assert.match(context, new RegExp(`${running.alias}.*running`))
-    assert.match(context, /Objective: Running objective/)
-    assert.match(context, /#### Pending outcomes/)
-    assert.match(context, new RegExp(`${finished.alias}.*completed`))
-    assert.match(context, /Result: Useful result/)
-    assert.doesNotMatch(context, /Other parent objective/)
-  }
+  const secondContext = renderContextSnapshot(second)
+  assert.equal(occurrences(renderPrompt(second), "<Parallel_Execution>"), 1)
+  assert.equal(occurrences(secondContext, "### Background Job Board"), 1)
+  assert.match(secondContext, /#### Running/)
+  assert.match(secondContext, /Objective: Running objective/)
+  assert.doesNotMatch(secondContext, /#### Pending outcomes/)
+  assert.doesNotMatch(secondContext, /Result: Useful result/)
+  assert.doesNotMatch(secondContext, /Other parent objective/)
 
   const refreshed = root.systemPrompt.refreshContext(first, assemblyContext)
   assert.equal(
@@ -138,9 +150,9 @@ test("DSH prompt has native instructions and one dynamic running/pending Board s
     1
   )
   assert.equal(occurrences(renderContextSnapshot(refreshed), "### Background Job Board"), 1)
-  assert.equal(board.revision, revision)
-  assert.equal(finished.notificationState, "pending")
-  assert.deepEqual(board.listPendingOutcomes("parent-1"), [finished])
+  assert.equal(board.revision, injectedRevision)
+  assert.equal(finished.notificationState, "injected")
+  assert.deepEqual(board.listPendingOutcomes("parent-1"), [])
   assert.equal(health.context.status, "ready")
   assert.equal(health.host.status, "ready")
 
@@ -252,4 +264,101 @@ test("context registrar activates late prompt service and never leaks registrati
   assert.equal(late.sections.size, 0)
   assert.equal(late.contexts.size, 0)
   assert.equal(health.host.status, "ready")
+})
+
+function completedSession(id) {
+  const session = Session.create(SessionId(id))
+  session.append("subagent/descriptor", {
+    version: SUBAGENT_DESCRIPTOR_VERSION,
+    mode: "continuable",
+    provider: "spawn",
+    label: `Recovered ${id}`,
+  })
+  session.append("turn/start", { turn: 1 })
+  session.append("step/start", { turn: 1, step: 1 })
+  session.append("turn/end", { turn: 1, reason: { kind: "completed" } })
+  return session
+}
+
+test("a recovered outcome is injected once and acknowledged at the real parent turn boundary", async (t) => {
+  const temporaryDirectory = await fs.mkdtemp(join(tmpdir(), "omagents-dsh-context-recovery-"))
+  const filePath = join(temporaryDirectory, "job-board.json")
+  const seed = createBoard()
+  const recovered = seed.registerLaunch(launch({ description: "Recovered parent outcome" }))
+  const otherParent = seed.registerLaunch(
+    launch({
+      hostTaskId: "context-child-other",
+      parentSessionId: "parent-2",
+      description: "Other recovered parent outcome",
+    })
+  )
+  const seedStore = new JsonJobStore({ filePath })
+  await seedStore.save({ version: 1, revision: seed.revision, jobs: seed.list() })
+  await seedStore.close()
+
+  const board = await JobBoard.open({ store: new JsonJobStore({ filePath }) })
+  const sessions = new Map([
+    [recovered.hostTaskId, completedSession(recovered.hostTaskId)],
+    [otherParent.hostTaskId, completedSession(otherParent.hostTaskId)],
+  ])
+  const root = new Context()
+  root.provide("tools", {})
+  root.provide("subagents", { interrupt() {} })
+  root.provide("agents", { get() {} })
+  root.provide("sessionQuery", {
+    async readSession(id) {
+      const session = sessions.get(id)
+      assert.ok(session, `missing recovered Session ${id}`)
+      return { session: session.header, events: session.snapshotEvents() }
+    },
+  })
+  await root.plugin(SystemPrompt, { includeHarnessIdentity: false })
+  const tracker = createSubagentTracker(root, board)
+  const disposeContext = registerDshContext(root, board, healthyRecords())
+  t.after(async () => {
+    disposeContext()
+    tracker.dispose()
+    await board.close()
+    await root.fiber.dispose()
+    await fs.rm(temporaryDirectory, { recursive: true, force: true })
+  })
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+
+  const restored = board.get(recovered.id)
+  const isolated = board.get(otherParent.id)
+  assert.equal(restored.executionState, "completed")
+  assert.equal(restored.notificationState, "pending")
+  assert.equal(isolated.executionState, "completed")
+  assert.equal(isolated.notificationState, "pending")
+
+  const parent = { id: "parent-1", session: { id: "parent-1" } }
+  const first = await root.systemPrompt.assemble({ agent: parent, scope: parent })
+  const firstText = renderContextSnapshot(first)
+  assert.match(firstText, /#### Pending outcomes/)
+  assert.match(firstText, /Recovered parent outcome/)
+  assert.doesNotMatch(firstText, /Other recovered parent outcome/)
+  assert.equal(restored.notificationState, "injected")
+  assert.equal(isolated.notificationState, "pending")
+
+  await root.serial("agent/turn-stopping", {
+    agent: parent,
+    turn: 1,
+    signal: new AbortController().signal,
+  })
+  assert.equal(restored.notificationState, "acknowledged")
+  assert.equal(isolated.notificationState, "pending")
+
+  const second = await root.systemPrompt.assemble({ agent: parent, scope: parent })
+  const secondText = renderContextSnapshot(second)
+  assert.doesNotMatch(secondText, /#### Pending outcomes/)
+  assert.doesNotMatch(secondText, /Recovered parent outcome/)
+  assert.equal(restored.notificationState, "acknowledged")
+  assert.equal(isolated.notificationState, "pending")
+
+  const other = { id: "parent-2", session: { id: "parent-2" } }
+  const otherAssembly = await root.systemPrompt.assemble({ agent: other, scope: other })
+  assert.match(renderContextSnapshot(otherAssembly), /Other recovered parent outcome/)
+  assert.equal(isolated.notificationState, "injected")
+  assert.equal(restored.notificationState, "acknowledged")
 })

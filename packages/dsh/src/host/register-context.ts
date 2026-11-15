@@ -144,6 +144,26 @@ export function registerDshContext(
         `Unable to register DSH Job Board context: ${errorMessage(error)}`
       )
     }
+
+    try {
+      disposers.push(
+        inner.on("agent/turn-stopping", ({ agent }) => {
+          try {
+            board.acknowledgeInjected(agent.session.id)
+          } catch (error) {
+            report(
+              "ERR_DSH_CONTEXT_ACKNOWLEDGEMENT",
+              `Unable to acknowledge DSH parent outcomes: ${errorMessage(error)}`
+            )
+          }
+        })
+      )
+    } catch (error) {
+      report(
+        "ERR_DSH_CONTEXT_REGISTRATION",
+        `Unable to observe DSH parent turn completion: ${errorMessage(error)}`
+      )
+    }
     return cleanup
   }
 

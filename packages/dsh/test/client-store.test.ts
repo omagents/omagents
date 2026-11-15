@@ -12,6 +12,7 @@ import type { HealthDto, JobDto, JobWatchFrame } from "../src/host/remote-types.
 const readyHealth: HealthDto = {
   host: { status: "ready", diagnostics: [] },
   persistence: { status: "ready", diagnostics: [] },
+  tracking: { status: "ready", diagnostics: [] },
   skills: { status: "ready", diagnostics: [] },
   mcp: { status: "ready", diagnostics: [] },
   python: { status: "ready", diagnostics: [] },

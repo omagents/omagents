@@ -23,6 +23,7 @@ export function createHealthRecords(readPersistenceDiagnostics) {
         skills: [],
         mcp: [],
         python: [],
+        tracking: [],
         tools: [],
         commands: [],
         context: [],
@@ -40,6 +41,9 @@ export function createHealthRecords(readPersistenceDiagnostics) {
         },
         get python() {
             return healthRecord(diagnostics.python);
+        },
+        get tracking() {
+            return healthRecord(diagnostics.tracking);
         },
         get tools() {
             return healthRecord(diagnostics.tools);

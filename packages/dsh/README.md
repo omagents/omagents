@@ -67,7 +67,9 @@ Recovery triggers are startup after live-Agent and Session-query capabilities ac
 - An observed active external run remains active on a cold session-not-found instead of being misclassified as `interrupted`.
 - Terminal jobs with pending parent outcomes remain eligible for delivery after restart.
 
-Repeated events do not duplicate parent notifications. Persistence and other capability failures appear as degraded health instead of being hidden behind an overall success claim.
+A recovered pending outcome becomes `injected` only when its ID and details are rendered into the owning parent's context. The parent's native `agent/turn-stopping` boundary then acknowledges the injected outcome, so the next parent turn does not repeat it. Direct native settlement retains its existing `injected` semantics, and one parent's delivery never acknowledges another parent's outcomes.
+
+Repeated events do not duplicate parent notifications. Persistence read/write/flush failures preserve the current in-memory Board, including Remote reconciliation and list/watch operations. That degraded runtime does not resume disk writes even if the path becomes writable again; reopen the runtime after repairing storage to restore durability. Persistence, tracking, and other capability failures appear as independent degraded health instead of being hidden behind an overall success claim.
 
 ## Authorization and Security
 
@@ -89,7 +91,7 @@ The browser keeps an ephemeral view, not an independent job database. Remote res
 | Panel is stale or disconnected | Use **Reconnect**. The Client opens a fresh baseline stream; the last authorized set remains visibly stale until synchronization resumes. |
 | A job is `interrupted` after restart | Inspect the recovery reason and native Session outcome. `interrupted` means the result could not be confirmed, not that the job succeeded. |
 | Cancellation stays `cancelling` | Wait for authoritative native settlement. Remember that local descendants continue and external one-shot runs cannot resume. |
-| A capability is degraded | Read the independent Host, persistence, skills, MCP, Python, tools, commands, and context diagnostics in the panel. One failed capability does not prove the others failed. |
+| A capability is degraded | Read the independent Host, persistence, tracking, skills, MCP, Python, tools, commands, and context diagnostics in the panel. One failed capability does not prove the others failed. In-memory operation after a persistence failure is not proof of durable writes. |
 | Python-backed skill cannot run | Verify Python 3.11+ on PATH and follow the `agents-python-tools` skill. Only `jinja2` is automatic; install optional tools through their skills on demand. |
 
 ## Development and Verification

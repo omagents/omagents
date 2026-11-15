@@ -48,6 +48,7 @@ const healthRecordSchema = z.object({
 const healthSchema = z.object({
   host: healthRecordSchema,
   persistence: healthRecordSchema,
+  tracking: healthRecordSchema,
   skills: healthRecordSchema,
   mcp: healthRecordSchema,
   python: healthRecordSchema,

@@ -71,8 +71,14 @@ to resume where you left off.
 If you had delegated jobs running, use parallel_status to inspect their durable state without changing their notification state.`;
 /** Build a fresh required runtime snapshot; no compactable message history is consulted. */
 export function buildDshStatePreservationContext(board, parentSessionId) {
+    const pending = parentSessionId === undefined ? [] : board.listPendingOutcomes(parentSessionId);
     const boardContext = parentSessionId === undefined ? "" : buildJobBoardContext(board, parentSessionId);
-    return boardContext
+    const text = boardContext
         ? `${DSH_STATE_PRESERVATION_NOTE}\n\n${boardContext}`
         : DSH_STATE_PRESERVATION_NOTE;
+    if (pending.length > 0) {
+        // Only outcomes actually rendered into this parent's context become injected.
+        board.markInjected(pending.map((job) => job.id));
+    }
+    return text;
 }

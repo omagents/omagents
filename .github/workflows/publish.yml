@@ -21,7 +21,20 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - run: npm ci
 
+      - name: Prepare isolated Python test environment
+        run: |
+          python -m venv .omagents/ci-venv
+          ${{ github.workspace }}/.omagents/ci-venv/bin/python -m pip install jinja2
+
       - name: Verify and publish the aligned four-package release
+        env:
+          OMAGENTS_TEST_PYTHON: ${{ github.workspace }}/.omagents/ci-venv/bin/python
+          OMAGENTS_PLAYWRIGHT_WITH_DEPS: "1"
         run: node scripts/publish-all.js --execute

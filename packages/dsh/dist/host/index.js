@@ -24,7 +24,7 @@ export async function apply(ctx) {
     const runtime = await createDshRuntime(ctx);
     const disposeSkills = registerDshSkills(ctx, runtime.health);
     const disposeMcp = registerDshMcp(ctx, process.env, runtime.health);
-    const tracker = createSubagentTracker(ctx, runtime.board);
+    const tracker = createSubagentTracker(ctx, runtime.board, runtime.health);
     new OmAgentsRemote(ctx, {
         board: runtime.board,
         tracker,

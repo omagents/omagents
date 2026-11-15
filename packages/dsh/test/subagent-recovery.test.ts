@@ -7,6 +7,7 @@ import { Session, SessionId } from "@deepseek-ai/dsh-session"
 import { SubagentRunId, SUBAGENT_DESCRIPTOR_VERSION } from "@deepseek-ai/dsh-subagent"
 import { JobBoard } from "@omagents/core"
 
+import { createHealthRecords } from "../dist/host/health.js"
 import { createSubagentTracker } from "../dist/host/subagent-tracker.js"
 
 function createBoard() {
@@ -362,4 +363,74 @@ test("startup recovery runs after delayed subagent/tools activation and preserve
   await board.reconcile({ query: (job) => tracker.query(job) })
   assert.equal(completed.notificationState, "injected")
   assert.equal(board.revision, revision)
+})
+
+test("tracking health degrades on listener activation failure and recovers on reactivation", async (t) => {
+  const root = new Context()
+  root.provide("subagents", { interrupt() {} })
+  t.after(() => root.fiber.dispose())
+  const board = createBoard()
+  const health = createHealthRecords(() => [])
+  const tracker = createSubagentTracker(root, board, health)
+  t.after(() => tracker.dispose())
+  let fail = true
+  const originalOn = root.on
+  Object.defineProperty(root, "on", {
+    configurable: true,
+    writable: true,
+    value(...args) {
+      if (fail) throw new Error("listener registry unavailable")
+      return originalOn.apply(this, args)
+    },
+  })
+
+  const removeFirstTools = root.provide("tools", {})
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+  assert.equal(health.tracking.status, "degraded")
+  assert.ok(
+    health.tracking.diagnostics.some(
+      (diagnostic) => diagnostic.code === "ERR_DSH_TRACKING_LISTENERS"
+    )
+  )
+
+  fail = false
+  await removeFirstTools()
+  root.provide("tools", {})
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+  assert.equal(health.tracking.status, "ready")
+  assert.deepEqual(health.tracking.diagnostics, [])
+})
+
+test("tracking health reports native recovery query failure and clears after a successful query", async (t) => {
+  const root = new Context()
+  let fail = true
+  root.provide("tools", {})
+  root.provide("subagents", { interrupt() {} })
+  root.provide("agents", {
+    get() {
+      if (fail) throw new Error("native Agent registry failed")
+      return { status: "running" }
+    },
+  })
+  t.after(() => root.fiber.dispose())
+  const board = createBoard()
+  const health = createHealthRecords(() => [])
+  const tracker = createSubagentTracker(root, board, health)
+  t.after(() => tracker.dispose())
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+  const job = launch(board, "tracking-health-child")
+
+  await assert.rejects(tracker.query(job), /native Agent registry failed/)
+  assert.equal(health.tracking.status, "degraded")
+  assert.ok(
+    health.tracking.diagnostics.some(
+      (diagnostic) => diagnostic.code === "ERR_DSH_TRACKING_RECOVERY"
+    )
+  )
+
+  fail = false
+  assert.deepEqual(await tracker.query(job), { kind: "active" })
+  assert.equal(health.tracking.status, "ready")
+  assert.deepEqual(health.tracking.diagnostics, [])
 })

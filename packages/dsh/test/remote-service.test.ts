@@ -201,6 +201,7 @@ test("getHealth returns an independent snapshot and invalid inputs use gateway/b
   assert.deepEqual(snapshot, health)
   assert.notStrictEqual(snapshot, health)
   assert.notStrictEqual(snapshot.host, health.host)
+  assert.deepEqual(snapshot.tracking, { status: "ready", diagnostics: [] })
 
   await assert.rejects(remote.listJobs(null), (error) =>
     assertRemoteError(error, "gateway/bad-request")

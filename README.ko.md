@@ -43,6 +43,8 @@ export GITHUB_TOKEN="your-github-token"
 - **`CONTEXT7_API_KEY`**: 로컬 `@upstash/context7-mcp` server의 rate limit을 완화하는 선택적 자격 증명입니다.
 - **`GITHUB_TOKEN`**: GitHub Copilot MCP를 활성화합니다. 설정하지 않으면 OmAgents가 `mcp.grep.app`으로 공개 코드를 검색합니다.
 
+Codex에서 GitHub 인증은 토큰 값 대신 `GITHUB_TOKEN` 환경 변수 참조(`bearer_token_env_var`)로 저장됩니다. Codex plugin `.mcp.json` 계약은 Exa의 `x-api-key` 또는 Context7의 stdio `env`에 해당하는 간접 참조를 제공하지 않으므로, 설정된 Exa 및 Context7 값은 이 파일에 기록됩니다. POSIX 모드를 지원하는 플랫폼에서 설치 프로그램은 비공개 디렉터리를 `0700`으로 만들고 `.mcp.json`을 `0600`으로 쓰거나 다시 씁니다.
+
 ## 지원 매트릭스
 
 | 호스트 또는 역할 | 패키지 | 설치 | Skills | 백그라운드 실행 및 복구 | 관리 화면 |

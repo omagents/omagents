@@ -7,13 +7,14 @@ export interface HealthRecord {
     status: HealthStatus;
     diagnostics: readonly HealthDiagnostic[];
 }
-export type DshCapability = "skills" | "mcp" | "python" | "tools" | "commands" | "context";
+export type DshCapability = "skills" | "mcp" | "python" | "tracking" | "tools" | "commands" | "context";
 export interface DshHealth {
     readonly host: HealthRecord;
     readonly persistence: HealthRecord;
     readonly skills: HealthRecord;
     readonly mcp: HealthRecord;
     readonly python: HealthRecord;
+    readonly tracking: HealthRecord;
     readonly tools: HealthRecord;
     readonly commands: HealthRecord;
     readonly context: HealthRecord;

@@ -1025,6 +1025,7 @@ const healthRecordSchema = zod.z.object({
 const healthSchema = zod.z.object({
 	host: healthRecordSchema,
 	persistence: healthRecordSchema,
+	tracking: healthRecordSchema,
 	skills: healthRecordSchema,
 	mcp: healthRecordSchema,
 	python: healthRecordSchema,

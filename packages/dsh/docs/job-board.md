@@ -22,7 +22,7 @@ Execution state and notification state are deliberately separate:
 - Execution: `running`, `cancelling`, `completed`, `failed`, `cancelled`, `interrupted`.
 - Notification: `pending`, `injected`, `acknowledged` when an outcome needs parent delivery.
 
-**Viewing details never acknowledges a model notification.** `injected` records that the outcome entered parent context; `acknowledged` records completion of the parent-facing delivery flow. Neither is a human read receipt.
+**Viewing details never acknowledges a model notification.** For recovered outcomes, `injected` records that the pending outcome ID and details actually entered the owning parent's context; the parent's native `agent/turn-stopping` boundary advances it to `acknowledged`, preventing a second parent turn from repeating the notice. Direct native settlement retains its existing `injected` semantics. Neither state is a human read receipt, and parent scopes acknowledge independently.
 
 ### Updates and reconnection
 
@@ -59,7 +59,7 @@ The Host stores the Board in the active DSH profile:
 $DSH_HOME/profiles/<active-profile>/omagents/job-board.json
 ```
 
-Writes are serialized and use atomic replacement. Running, cancelling, and outcome-pending jobs are not discarded by terminal-history retention. Persistence failure or corrupt state is surfaced through degraded health rather than silently reported as healthy.
+Writes are serialized and use atomic replacement. Running, cancelling, and outcome-pending jobs are not discarded by terminal-history retention. After a storage read/write/flush failure, DSH preserves the current in-memory Board and continues reconciliation plus Remote list/watch operations; current jobs are not discarded merely because persistence failed. This fallback is not durable, and the failure remains visible through degraded persistence health rather than being silently reported as healthy. The degraded runtime does not resume disk writes even if the path becomes writable again, preventing an unreadable startup store from being overwritten; reopen the runtime after repairing storage. Tracking lifecycle observation has an independent health record.
 
 Recovery triggers are startup after live-Agent and Session-query capabilities activate, manual refresh through `listJobs`, every new `watchJobs` stream (including reconnection), and authoritative lifecycle events. Startup reconciliation waits for those query capabilities; Remote refreshes and initial/reconnect baselines reconcile only authorized active jobs, while lifecycle events apply their native outcomes directly. Cold Remote queries also defer until the query capabilities are available. There is no periodic running-job poll:
 
@@ -108,7 +108,7 @@ Admission alone only produces `cancelling`. Inspect native settlement and capabi
 
 ### Degraded capability diagnostics
 
-Read the specific Host, persistence, skills, MCP, Python, tools, commands, or context diagnostic. Capabilities fail independently; a degraded Python or MCP record does not imply that Job Board execution state is invalid.
+Read the specific Host, persistence, tracking, skills, MCP, Python, tools, commands, or context diagnostic. Capabilities fail independently; a degraded Python or MCP record does not imply that Job Board execution state is invalid. A persistence diagnostic means the in-memory fallback is not durable; a tracking diagnostic means native lifecycle observation or recovery is degraded rather than an empty Board being healthy.
 
 ### Python-backed skills fail
 

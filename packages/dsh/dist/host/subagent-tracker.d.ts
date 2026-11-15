@@ -1,4 +1,5 @@
 import type { Context } from "@deepseek-ai/cordis";
+import { type DshHealth } from "./health.js";
 import { type DshRecoveryOutcome } from "./subagent-queries.js";
 import type { DshJobBoard, DshJobRecord } from "./runtime.js";
 export interface DshSubagentTracker {
@@ -7,4 +8,4 @@ export interface DshSubagentTracker {
     dispose(): void;
 }
 /** Adapt native DSH lifecycle events to the durable Core Board. */
-export declare function createSubagentTracker(ctx: Context, board: DshJobBoard): DshSubagentTracker;
+export declare function createSubagentTracker(ctx: Context, board: DshJobBoard, health?: DshHealth): DshSubagentTracker;

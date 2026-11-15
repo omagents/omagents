@@ -370,6 +370,18 @@ test("release workflow retains OIDC, requires the clean final gate, and has no p
   const workflow = fs.readFileSync(path.join(ROOT, ".github/workflows/publish.yml"), "utf8")
 
   assert.match(workflow, /id-token:\s*write/)
+  assert.match(workflow, /uses:\s*actions\/setup-python@v6/)
+  assert.match(workflow, /python-version:\s*["']3\.12["']/)
+  assert.match(workflow, /python -m venv \.omagents\/ci-venv/)
+  assert.match(
+    workflow,
+    /\$\{\{ github\.workspace \}\}\/\.omagents\/ci-venv\/bin\/python -m pip install jinja2/
+  )
+  assert.match(
+    workflow,
+    /OMAGENTS_TEST_PYTHON:\s*\$\{\{ github\.workspace \}\}\/\.omagents\/ci-venv\/bin\/python/
+  )
+  assert.match(workflow, /OMAGENTS_PLAYWRIGHT_WITH_DEPS:\s*["']1["']/)
   assert.match(workflow, /node scripts\/publish-all\.js --execute/)
   assert.doesNotMatch(workflow, /release:check[^\n]*--allow-dirty/)
   assert.doesNotMatch(workflow, /publish-all\.js[^\n]*--allow-dirty/)

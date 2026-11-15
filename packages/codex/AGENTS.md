@@ -13,7 +13,8 @@ The installer takes no positional argument. Only conventional `--help` and `--ve
 ## Implementation Contract
 
 - `bin/install.js` is the no-argument CLI and does not dispatch to another host.
-- `src/setup.js` exports `installCodex(options?)`, renders Core skills for the explicit `codex` host, serializes Core MCP resolution, and generates Codex configuration and SessionStart artifacts.
+- `src/setup.js` exports `installCodex(options?)` and `serializeTomlBasicString(value)`, renders Core skills for the explicit `codex` host, serializes Core MCP resolution, and generates Codex configuration and SessionStart artifacts. TOML basic strings must escape Windows backslashes, quotes, and control characters.
+- GitHub uses Codex's `bearer_token_env_var` indirection. The plugin `.mcp.json` contract has no arbitrary environment indirection for Exa headers or Context7 stdio `env`; those configured values are stored in `.mcp.json`. Create private directories with mode `0700` and write or rewrite `.mcp.json` with mode `0600` on platforms honoring POSIX modes.
 - Preserve Codex-native subagents. Do not install or emulate the OpenCode parallel engine, OpenCode Job Board tools, or DSH Web Job Board.
 - Core supplies 18 OmAgents skills and pinned Superpowers supplies 15, for 33 total. Host-specific skill files are full-content overrides; do not detect hosts at runtime.
 - User MCP configuration takes precedence. Resolve packaged hooks and assets through Core paths, never cwd or accidental npm hoisting.

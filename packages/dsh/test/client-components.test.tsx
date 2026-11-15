@@ -51,6 +51,7 @@ after(() => dom.window.close())
 const healthy: HealthDto = {
   host: { status: "ready", diagnostics: [] },
   persistence: { status: "ready", diagnostics: [] },
+  tracking: { status: "ready", diagnostics: [] },
   skills: { status: "ready", diagnostics: [] },
   mcp: { status: "ready", diagnostics: [] },
   python: { status: "ready", diagnostics: [] },

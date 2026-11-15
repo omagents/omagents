@@ -74,6 +74,71 @@ export interface DshRuntime {
   dispose(): Promise<void>
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * DSH keeps its current in-memory Board usable after storage failures. Core's
+ * stricter sticky-write contract remains unchanged for hosts that need it.
+ */
+function createDegradingJobStore(store: JsonJobStore) {
+  const failures: HealthDiagnostic[] = []
+  let degraded = false
+  const record = (code: string, operation: string, error: unknown) => {
+    const message = `DSH Job Board persistence ${operation} failed; continuing in memory: ${errorMessage(error)}`
+    if (failures.some((diagnostic) => diagnostic.code === code && diagnostic.message === message)) {
+      return
+    }
+    failures.push({ code, message })
+  }
+
+  return {
+    get diagnostics(): HealthDiagnostic[] {
+      return [
+        // Corrupt-load diagnostics originate in Core. Write failures are
+        // represented once by the host-local diagnostics below.
+        ...store.diagnostics.filter((diagnostic) => diagnostic.code !== "ERR_JOB_STORE_WRITE"),
+        ...failures,
+      ]
+    },
+    async load() {
+      try {
+        return await store.load()
+      } catch (error) {
+        degraded = true
+        record("ERR_DSH_JOB_STORE_LOAD", "read", error)
+        return { version: 1, revision: 0, jobs: [] }
+      }
+    },
+    async save(snapshot: unknown) {
+      if (degraded) return
+      try {
+        await store.save(snapshot)
+      } catch (error) {
+        degraded = true
+        record("ERR_DSH_JOB_STORE_SAVE", "write", error)
+      }
+    },
+    async flush() {
+      if (degraded) return
+      try {
+        await store.flush()
+      } catch (error) {
+        degraded = true
+        record("ERR_DSH_JOB_STORE_FLUSH", "flush", error)
+      }
+    },
+    async close() {
+      try {
+        await store.close()
+      } catch (error) {
+        record("ERR_DSH_JOB_STORE_CLOSE", "close", error)
+      }
+    },
+  }
+}
+
 function resolveActiveProfileDirectory(ctx: Context): string {
   if (!ctx.baseUrl) {
     throw new Error("OmAgents requires the DSH Loader baseUrl to resolve the active profile")
@@ -106,9 +171,11 @@ function resolveActiveProfileDirectory(ctx: Context): string {
 
 export async function createDshRuntime(ctx: Context): Promise<DshRuntime> {
   const profileDirectory = resolveActiveProfileDirectory(ctx)
-  const store = new JsonJobStore({
-    filePath: join(profileDirectory, "omagents", "job-board.json"),
-  })
+  const store = createDegradingJobStore(
+    new JsonJobStore({
+      filePath: join(profileDirectory, "omagents", "job-board.json"),
+    })
+  )
   const board = await JobBoard.open({ store })
   const health = createHealthRecords(() => board.diagnostics as readonly HealthDiagnostic[])
   let disposal: Promise<void> | undefined

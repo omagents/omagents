@@ -1,6 +1,11 @@
 import { carrierKeyOf } from "@deepseek-ai/dsh-scope";
 import { SessionId } from "@deepseek-ai/dsh-session";
+import { appendDshCapabilityDiagnostic, setDshCapabilityDiagnostics, } from "./health.js";
 import { outcomeFromSubagentEnd, queryDshSubagent, } from "./subagent-queries.js";
+const TRACKING_LISTENER_ERROR = "ERR_DSH_TRACKING_LISTENERS";
+const TRACKING_RECOVERY_ERROR = "ERR_DSH_TRACKING_RECOVERY";
+const TRACKING_SUBSCRIPTION_ERROR = "ERR_DSH_TRACKING_SUBSCRIPTION";
+const TRACKING_DISPOSAL_ERROR = "ERR_DSH_TRACKING_DISPOSAL";
 const TERMINAL_STATES = new Set(["completed", "failed", "cancelled", "interrupted"]);
 function correlationKey(parentSessionId, childId) {
     return JSON.stringify([parentSessionId, childId]);
@@ -29,7 +34,9 @@ function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
 }
 /** Adapt native DSH lifecycle events to the durable Core Board. */
-export function createSubagentTracker(ctx, board) {
+export function createSubagentTracker(ctx, board, health) {
+    if (health)
+        setDshCapabilityDiagnostics(health, "tracking", []);
     const pendingResults = new Map();
     const pendingStarts = new Map();
     const orphanEnds = new Map();
@@ -45,8 +52,21 @@ export function createSubagentTracker(ctx, board) {
     let recoveryFiber;
     let activeCleanup;
     let disposed = false;
-    const report = (message, error) => {
-        ctx.logger.warn(`omagents: ${message}: ${errorMessage(error)}`);
+    const clearFailure = (code) => {
+        if (!health)
+            return;
+        const remaining = health.tracking.diagnostics.filter((diagnostic) => diagnostic.code !== code);
+        if (remaining.length !== health.tracking.diagnostics.length) {
+            setDshCapabilityDiagnostics(health, "tracking", remaining);
+        }
+    };
+    const report = (code, message, error) => {
+        const detail = `${message}: ${errorMessage(error)}`;
+        ctx.logger.warn(`omagents: ${detail}`);
+        if (!health)
+            return;
+        clearFailure(code);
+        appendDshCapabilityDiagnostic(health, "tracking", { code, message: detail });
     };
     const hasActiveDescendants = (rootSessionId) => {
         for (const runId of activeRuns) {
@@ -64,7 +84,7 @@ export function createSubagentTracker(ctx, board) {
         }
         return false;
     };
-    const query = async (job) => {
+    const queryNative = async (job) => {
         if (disposed)
             return { kind: "active" };
         const run = runByJob.get(job.id);
@@ -87,6 +107,17 @@ export function createSubagentTracker(ctx, board) {
         const latestRun = runByJob.get(job.id);
         const latestTerminal = latestRun ? ends.get(latestRun.info.runId) : undefined;
         return latestTerminal ? { kind: "terminal", ...latestTerminal } : outcome;
+    };
+    const query = async (job) => {
+        try {
+            const outcome = await queryNative(job);
+            clearFailure(TRACKING_RECOVERY_ERROR);
+            return outcome;
+        }
+        catch (error) {
+            report(TRACKING_RECOVERY_ERROR, "Unable to query DSH subagent recovery state", error);
+            throw error;
+        }
     };
     const applyTerminal = (runId, outcome) => {
         const jobId = jobByRun.get(runId);
@@ -234,14 +265,21 @@ export function createSubagentTracker(ctx, board) {
                 dispose();
             }
             catch (error) {
-                report("Unable to remove a DSH subagent listener", error);
+                report(TRACKING_DISPOSAL_ERROR, "Unable to remove a DSH subagent listener", error);
             }
         }
     };
     const recover = () => {
-        void board.reconcile({ query }).catch((error) => {
+        void board
+            .reconcile({ query })
+            .then(() => {
             if (!disposed)
-                report("Unable to reconcile DSH subagent jobs", error);
+                clearFailure(TRACKING_RECOVERY_ERROR);
+        })
+            .catch((error) => {
+            if (!disposed) {
+                report(TRACKING_RECOVERY_ERROR, "Unable to reconcile DSH subagent jobs", error);
+            }
         });
     };
     const activate = (inner) => {
@@ -252,9 +290,11 @@ export function createSubagentTracker(ctx, board) {
         activeCleanup = cleanup;
         try {
             disposers.push(inner.on("tools/result", onToolResult), inner.on("subagent/start", onStart), inner.on("subagent/end", onEnd));
+            clearFailure(TRACKING_LISTENER_ERROR);
+            clearFailure(TRACKING_SUBSCRIPTION_ERROR);
         }
         catch (error) {
-            report("Unable to observe DSH subagent lifecycles", error);
+            report(TRACKING_LISTENER_ERROR, "Unable to observe DSH subagent lifecycles", error);
             cleanup();
         }
         return cleanup;
@@ -270,7 +310,7 @@ export function createSubagentTracker(ctx, board) {
         }
     }
     catch (error) {
-        report("Unable to subscribe to DSH subagent availability", error);
+        report(TRACKING_SUBSCRIPTION_ERROR, "Unable to subscribe to DSH subagent availability", error);
     }
     const activateRecovery = (_inner) => {
         if (!disposed)
@@ -288,7 +328,7 @@ export function createSubagentTracker(ctx, board) {
         }
     }
     catch (error) {
-        report("Unable to subscribe to DSH recovery availability", error);
+        report(TRACKING_SUBSCRIPTION_ERROR, "Unable to subscribe to DSH recovery availability", error);
     }
     return {
         query,
@@ -332,23 +372,23 @@ export function createSubagentTracker(ctx, board) {
                 const capabilityDisposal = capabilityFiber?.dispose();
                 if (capabilityDisposal) {
                     void capabilityDisposal.catch((error) => {
-                        report("Unable to dispose DSH subagent availability", error);
+                        report(TRACKING_DISPOSAL_ERROR, "Unable to dispose DSH subagent availability", error);
                     });
                 }
             }
             catch (error) {
-                report("Unable to dispose DSH subagent availability", error);
+                report(TRACKING_DISPOSAL_ERROR, "Unable to dispose DSH subagent availability", error);
             }
             try {
                 const recoveryDisposal = recoveryFiber?.dispose();
                 if (recoveryDisposal) {
                     void recoveryDisposal.catch((error) => {
-                        report("Unable to dispose DSH recovery availability", error);
+                        report(TRACKING_DISPOSAL_ERROR, "Unable to dispose DSH recovery availability", error);
                     });
                 }
             }
             catch (error) {
-                report("Unable to dispose DSH recovery availability", error);
+                report(TRACKING_DISPOSAL_ERROR, "Unable to dispose DSH recovery availability", error);
             }
             pendingResults.clear();
             pendingStarts.clear();
