@@ -38,7 +38,7 @@ for (const definition of definitions) {
   assert.doesNotMatch(rendered.content, /OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS/)
 }
 assert.equal(core.getVenvPython("C:\\release\\.venvs\\omagents", "win32"), "C:\\release\\.venvs\\omagents\\Scripts\\python.exe")
-assert.equal(core.getVenvPython("/opt/release", "linux"), "/opt/release/bin/python")
+assert.equal(core.getVenvPython("/opt/release", "linux"), path.join("/opt/release", "bin", "python"))
 
 const opencode = await import("@omagents/omagents")
 assert.equal(opencode.default.id, "omagents")

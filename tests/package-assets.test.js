@@ -171,6 +171,19 @@ test("packed Python and CLI path rules remain Windows-safe", () => {
   }
 })
 
+test("Windows checkouts preserve LF and platform-correct Unix Python expectations", () => {
+  const attributesPath = path.join(ROOT, ".gitattributes")
+  assert.equal(
+    fs.existsSync(attributesPath),
+    true,
+    ".gitattributes must normalize checkout line endings"
+  )
+  const attributes = fs.readFileSync(attributesPath, "utf8")
+  assert.match(attributes, /^\* text=auto eol=lf$/m)
+  const probe = fs.readFileSync(path.join(ROOT, "scripts", "test-packed-installs.js"), "utf8")
+  assert.match(probe, /path\.join\("\/opt\/release", "bin", "python"\)/)
+})
+
 test("DSH skill overrides never add an OpenCode background launch argument", () => {
   const overrideRoot = path.join(CORE_PATHS.skillsDir)
   const stack = [overrideRoot]
