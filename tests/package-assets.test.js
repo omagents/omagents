@@ -98,6 +98,7 @@ test("browser installation and packed probes have bounded process lifecycles", (
   assert.match(browser, /timeoutMs: installTimeoutMs/)
 
   const packed = fs.readFileSync(path.join(ROOT, "scripts", "test-packed-installs.js"), "utf8")
+  assert.match(packed, /OMAGENTS_PACKED_TEST_TIMEOUT_MS \?\? 1_800_000/)
   assert.match(packed, /OMAGENTS_PACKED_PROBE_TIMEOUT_MS \?\? 120_000/)
   assert.match(packed, /timeout: 30_000/)
   assert.match(packed, /finally \{/)

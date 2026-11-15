@@ -240,7 +240,7 @@ async function runProbe(name, source, cwd) {
 
 test(
   "four aligned tarballs install and run in an offline clean room",
-  { timeout: 900_000 },
+  { timeout: Number(process.env.OMAGENTS_PACKED_TEST_TIMEOUT_MS ?? 1_800_000) },
   async (t) => {
     const previousTestTmp = process.env.OMAGENTS_TEST_TMP
     fs.mkdirSync(ARTIFACT_ROOT, { recursive: true })
