@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert"
-import { spawnSync } from "node:child_process"
+import { runNpm } from "./npm-launcher.js"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -54,11 +54,10 @@ test("every workspace with tests is discovered exactly once, including Codex", (
     )
   }
 
-  const result = spawnSync(
-    process.platform === "win32" ? "npm.cmd" : "npm",
-    ["test", "--workspaces", "--if-present", "--dry-run"],
-    { cwd: ROOT, encoding: "utf8" }
-  )
+  const result = runNpm(["test", "--workspaces", "--if-present", "--dry-run"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  })
   assert.equal(result.status, 0, result.stderr || result.stdout)
   const output = `${result.stdout}\n${result.stderr}`
   assert.equal(output.match(/@omagents\/omagents-codex/g)?.length, 1, output)

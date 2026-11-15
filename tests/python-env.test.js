@@ -106,7 +106,7 @@ test("defaultRunner captures output and returns a non-zero exit code", async () 
 })
 
 test("getVenvPython uses platform-specific executable paths", () => {
-  assert.equal(getVenvPython("/tmp/base", "linux"), "/tmp/base/bin/python")
+  assert.equal(getVenvPython("/tmp/base", "linux"), path.join("/tmp/base", "bin", "python"))
   assert.equal(
     getVenvPython("C:\\Users\\A B\\base", "win32"),
     "C:\\Users\\A B\\base\\Scripts\\python.exe"

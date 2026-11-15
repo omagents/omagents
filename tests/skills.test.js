@@ -216,8 +216,11 @@ test("material DSH workflows use full overrides and native tool mappings", () =>
   assert.match(research, /web_fetch/)
   assert.match(research, /mcp__codegraph__codegraph_explore/)
   assert.match(research, /mcp__github__search_code/)
+  const normalizePath = (value) => value.replaceAll("\\", "/")
   assert.ok(
-    research.includes(path.join(byName["deep-research"].directory, "scripts", "deep_research.py")),
+    normalizePath(research).includes(
+      normalizePath(path.join(byName["deep-research"].directory, "scripts", "deep_research.py"))
+    ),
     "DSH research must render the absolute packaged CLI path"
   )
 

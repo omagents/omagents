@@ -2,6 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert"
 import fs from "fs"
 import path from "path"
+import { importModule } from "./import-module.js"
 import { spawnSync } from "node:child_process"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
@@ -25,7 +26,7 @@ test("OpenCode parallel execution delegates state and persistence to Core", () =
 })
 
 test("index.js exports dual V1/V2 entry point", async () => {
-  const mod = await import(path.join(PLUGINS_DIR, "index.js"))
+  const mod = await importModule(path.join(PLUGINS_DIR, "index.js"))
   // V1: named export scanned by older V1 hosts
   assert.strictEqual(typeof mod.OmagentsPlugin, "function")
   // Dual descriptor: V1 >= 1.18.29 calls default.server(), V2 reads id + setup()

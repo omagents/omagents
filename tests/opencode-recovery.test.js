@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { importModule } from "./import-module.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
 const PARALLEL_PATH = path.join(ROOT, "packages", "opencode", "src", "parallel.js")
@@ -217,7 +218,7 @@ async function statusV1(hooks) {
 
 test("V2 cancellation waits for authoritative lifecycle settlement", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const { ctx, captured, events, interruptions } = makeV2Context(filePath)
   const cleanup = await setupParallelV2(ctx)
   const child = "v2-cancel-child"
@@ -247,7 +248,7 @@ test("V2 cancellation waits for authoritative lifecycle settlement", async (t) =
 
 test("V1 cancellation waits for authoritative lifecycle settlement", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { createParallelHooks } = await import(PARALLEL_PATH)
+  const { createParallelHooks } = await importModule(PARALLEL_PATH)
   const { ctx, aborts } = makeV1Context(filePath)
   const hooks = createParallelHooks(ctx)
   const child = "v1-cancel-child"
@@ -265,7 +266,7 @@ test("V1 cancellation waits for authoritative lifecycle settlement", async (t) =
 
 test("V1 duplicate completion notices inject one outcome", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { createParallelHooks } = await import(PARALLEL_PATH)
+  const { createParallelHooks } = await importModule(PARALLEL_PATH)
   const { ctx } = makeV1Context(filePath)
   const hooks = createParallelHooks(ctx)
   const child = "v1-duplicate-child"
@@ -285,7 +286,7 @@ test("V1 duplicate completion notices inject one outcome", async (t) => {
 
 test("legacy error and reconciled labels are adapter serializations", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { createParallelHooks } = await import(PARALLEL_PATH)
+  const { createParallelHooks } = await importModule(PARALLEL_PATH)
   const { ctx } = makeV1Context(filePath)
   const hooks = createParallelHooks(ctx)
   const child = "v1-error-child"
@@ -314,7 +315,7 @@ test("legacy error and reconciled labels are adapter serializations", async (t) 
 
 test("V2 duplicate completion notices inject one outcome", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const { ctx, captured } = makeV2Context(filePath)
   const cleanup = await setupParallelV2(ctx)
   const child = "v2-duplicate-child"
@@ -338,7 +339,7 @@ test("V2 duplicate completion notices inject one outcome", async (t) => {
 
 test("restart reconciles running records through host queries", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const activeChild = "v2-restart-active"
   const missingChild = "v2-restart-missing"
   const unreadableChild = "v2-restart-unreadable"
@@ -391,7 +392,7 @@ test("restart reconciles running records through host queries", async (t) => {
 
 test("pending outcomes survive restart without duplicate injection", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const child = "v2-pending-restart"
   const first = makeV2Context(filePath)
   const firstCleanup = await setupParallelV2(first.ctx)
@@ -433,7 +434,7 @@ test("pending outcomes survive restart without duplicate injection", async (t) =
 
 test("restart reads actual V2 outcomes and rejects ambiguous Host responses", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const children = {
     active: "v2-outcome-active",
     succeeded: "v2-outcome-succeeded",
@@ -485,7 +486,7 @@ test("restart reads actual V2 outcomes and rejects ambiguous Host responses", as
 
 test("V2 declined interruption does not enter cancelling", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const { ctx, captured, interruptions } = makeV2Context(filePath, {
     interrupt: async () => ({ interrupted: false }),
   })
@@ -505,7 +506,7 @@ test("V2 declined interruption does not enter cancelling", async (t) => {
 
 test("independent Host contexts share one Board by storage identity", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const first = makeV2Context(filePath)
   const second = makeV2Context(filePath)
   const [firstCleanup, secondCleanup] = await Promise.all([
@@ -541,7 +542,7 @@ test("independent Host contexts share one Board by storage identity", async (t) 
 
 test("repeated setup reconciles once and reference-counts Board ownership", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const seed = makeV2Context(filePath)
   const seedCleanup = await setupParallelV2(seed.ctx)
   try {
@@ -572,7 +573,7 @@ test("repeated setup reconciles once and reference-counts Board ownership", asyn
 
 test("a new pending outcome replaces an old sentinel block before injection", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const { ctx, captured } = makeV2Context(filePath)
   const cleanup = await setupParallelV2(ctx)
   const firstChild = "v2-sentinel-first"
@@ -604,7 +605,7 @@ test("a new pending outcome replaces an old sentinel block before injection", as
 test("V1 store initialization failure degrades context injection independently", async (t) => {
   const filePath = useTemporaryStorage(t)
   fs.mkdirSync(filePath, { recursive: true })
-  const { createParallelHooks } = await import(PARALLEL_PATH)
+  const { createParallelHooks } = await importModule(PARALLEL_PATH)
   const { ctx } = makeV1Context(filePath)
   const hooks = createParallelHooks(ctx)
   const message = {
@@ -621,7 +622,7 @@ test("V1 store initialization failure degrades context injection independently",
 
 test("a completion notice backfills a result after lifecycle settlement", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const { ctx, captured, events } = makeV2Context(filePath)
   const cleanup = await setupParallelV2(ctx)
   const child = "v2-late-result"
@@ -643,8 +644,8 @@ test("a completion notice backfills a result after lifecycle settlement", async 
 
 test("setup overlapping final close waits before reopening the storage identity", async (t) => {
   const filePath = useTemporaryStorage(t)
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
-  const { JobBoard } = await import(path.join(ROOT, "packages", "core", "src", "index.js"))
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
+  const { JobBoard } = await importModule(path.join(ROOT, "packages", "core", "src", "index.js"))
   const originalOpen = JobBoard.open
   const originalClose = JobBoard.prototype.close
   let openCount = 0
@@ -713,7 +714,7 @@ test("corrupt stores are preserved and exposed through host diagnostics", async 
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   fs.writeFileSync(filePath, "{ definitely not json")
   t.mock.method(console, "warn", () => {})
-  const { setupParallelV2 } = await import(PARALLEL_PATH)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
   const { ctx, captured } = makeV2Context(filePath)
   const cleanup = await setupParallelV2(ctx)
   try {
