@@ -13,8 +13,8 @@ import {
   inspectPython,
   runProjectPip,
   runProjectPython,
-} from "../hooks/python-env.js"
-import { main as projectVenvMain } from "../hooks/project-venv.js"
+} from "../packages/core/hooks/python-env.js"
+import { main as projectVenvMain } from "../packages/core/hooks/project-venv.js"
 
 const IS_WIN = process.platform === "win32"
 const VENV_BIN = IS_WIN ? "Scripts" : "bin"
@@ -106,7 +106,7 @@ test("defaultRunner captures output and returns a non-zero exit code", async () 
 })
 
 test("getVenvPython uses platform-specific executable paths", () => {
-  assert.equal(getVenvPython("/tmp/base", "linux"), "/tmp/base/bin/python")
+  assert.equal(getVenvPython("/tmp/base", "linux"), path.join("/tmp/base", "bin", "python"))
   assert.equal(
     getVenvPython("C:\\Users\\A B\\base", "win32"),
     "C:\\Users\\A B\\base\\Scripts\\python.exe"

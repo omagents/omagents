@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Shared Core and explicit host packages**: the private npm workspaces root now contains `@omagents/core`, `@omagents/omagents`, `@omagents/omagents-codex`, and `@omagents/omagents-dsh`. Core owns host-neutral Job Board state, durable storage, skills, MCP resolution, Python environments, and research assets, and is installed automatically rather than as a separate user plugin.
+- **Standalone Codex product**: `@omagents/omagents-codex` provides the no-argument Codex installer, Core-rendered skills, MCP serialization, native subagent guidance, and shared Python provisioning.
+- **Complete DeepSeek Harness product**: `@omagents/omagents-dsh` includes all 33 skills (18 OmAgents + 15 Superpowers), native asynchronous subagent lifecycle tracking, `/ps`, `parallel_status`, `cancel_task`, durable restart recovery, and independent capability health.
+- **Native DSH Web Job Board**: an authorized Typert Remote `watchJobs` stream supplies revisioned whole-set frames to a native React Client with filters, details, notification state, confirmed cancellation, reconnect synchronization, permission handling, and degraded-health displays.
+
+### Changed
+
+- **Package architecture**: OpenCode remains `@omagents/omagents` with its V1/V2 descriptor and native background-subagent behavior, while shared implementation moves to Core. Host packages depend only on the exact aligned Core version, never on one another.
+- **Aligned release policy**: every release builds, tests, packs, and publishes all four packages at one version. Publication is Core first, then OpenCode, Codex, and DSH sequentially for deterministic failure handling; DSH publishes built Host and browser artifacts so users never compile source.
+- **Documentation and verification**: all four README languages, contributor guidance, package-scoped agent guides, packed-install checks, real Loader coverage, and native Web Job Board documentation now describe the multi-host product and its actual cancellation, recovery, authorization, and security behavior.
+
+### Removed
+
+- **Legacy monolithic installation and implementation layout**: the root CLI host dispatcher, old Codex installation path, duplicated host-neutral MCP/skill logic, and the monolithic root parallel implementation have no supported compatibility layer. Codex and DSH are selected only through their explicit packages.
+
 ## [0.13.1] - 2026-11-12
 
 ### Changed

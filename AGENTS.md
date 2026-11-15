@@ -5,7 +5,7 @@
 
 ## What Is This Project?
 
-OmAgents (`@omagents/omagents`) is an OpenCode plugin that bundles agent skills, MCP servers, parallel execution, and superpowers into a single npm package. Users install it by adding `@omagents/omagents` to their `opencode.json` plugin array.
+OmAgents is a multi-host agent toolkit with explicit OpenCode (`@omagents/omagents`), Codex (`@omagents/omagents-codex`), and DeepSeek Harness (`@omagents/omagents-dsh`) packages plus shared `@omagents/core` capabilities. Core is an automatic dependency, not a separate user install. The approved host installs are `npx @omagents/omagents`, `npx @omagents/omagents-codex`, and `dsh plugin --profile web add @omagents/omagents-dsh`; neither npm installer takes a host positional argument.
 
 ## Architecture (Layered)
 
@@ -22,7 +22,7 @@ OmAgents (`@omagents/omagents`) is an OpenCode plugin that bundles agent skills,
 │  MCP servers · Parallel execution ·              │
 │  Deep research · Python tooling · venv           │
 ├─────────────────────────────────────────────────┤
-│  OpenCode runtime                                │
+│  OpenCode · Codex · DeepSeek Harness runtimes    │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -36,40 +36,55 @@ OmAgents (`@omagents/omagents`) is an OpenCode plugin that bundles agent skills,
 omagents/
 ├── .opencode/
 │   ├── .gitignore              # Ignores host-generated artifacts (see note below)
-│   └── plugins/
-│       ├── index.js            # Plugin entry point (dual V1/V2; merges superpowers + omagents)
-│       └── parallel.js         # Parallel execution engine (V1 + V2 wiring, shared job board)
+│   └── plugins/index.js        # Development-only OpenCode package re-export
 ├── .github/
 │   ├── ISSUE_TEMPLATE/         # bug_report.md, feature_request.md
 │   └── workflows/
 │       ├── ci.yml              # Syntax checks + isolated Python/Node tests on push/PR
 │       └── publish.yml         # OIDC trusted publishing on tag push
-├── hooks/
-│   ├── python-env.js           # Shared persistent base + project overlay management
-│   ├── project-venv.js         # Project CLI: ensure/python/pip/run
-│   └── setup-venv.js           # Codex SessionStart base provisioning hook
-├── skills/                     # Bundled OpenCode skills
-│   ├── _shared/scripts/        # Shared scripts (loop_engine.py)
-│   ├── deep-research/          # Multi-source research workflow
-│   │   ├── SKILL.md
-│   │   ├── agents/
-│   │   ├── scripts/            # Pipeline scripts + layout.py canonical run paths
-│   │   └── templates/          # Jinja2 report templates (comparison, survey, technical)
-│   ├── parallel-execution/     # Background task dispatch guide
-│   │   └── SKILL.md
-│   ├── agents-python-tools/    # Python venv management
-│   │   └── SKILL.md
-│   ├── markitdown-converter/   # Document to Markdown conversion
-│   │   ├── SKILL.md
-│   │   └── scripts/
-│   ├── officecli/              # Create and edit Office documents (.docx, .xlsx, .pptx)
-│   │   └── SKILL.md
-│   └── playwright-web-scraping/# Web scraping with Playwright
-│       ├── SKILL.md
-│       └── scripts/
-├── setup/
-│   └── opencode.js             # OpenCode setup command (npx @omagents/omagents opencode)
-├── package.json                # superpowers as git dependency (pinned to commit)
+├── packages/
+│   ├── core/                   # @omagents/core: host-neutral assets and behavior
+│   │   ├── src/
+│   │   │   ├── paths.js        # import.meta.url-based packaged asset resolution
+│   │   │   ├── skills/         # Four-host discovery and full-content rendering
+│   │   │   ├── job-board/      # Shared execution state and presenters
+│   │   │   ├── storage/        # Durable JSON persistence
+│   │   │   └── mcp/            # Canonical MCP resolution
+│   │   ├── hooks/
+│   │   │   ├── python-env.js   # Persistent base + project overlay management
+│   │   │   ├── project-venv.js # Project CLI: ensure/python/pip/run
+│   │   │   └── setup-venv.js   # Codex SessionStart base provisioning hook
+│   │   ├── scripts/pack-superpowers.js # Deterministic ignored pre/postpack materialization
+│   │   ├── skills/             # OmAgents skills and shared scripts
+│   │   │   ├── _shared/scripts/
+│   │   │   └── deep-research/
+│   │   │       ├── scripts/    # Pipeline + layout.py canonical run paths
+│   │   │       └── templates/  # Jinja2 report templates
+│   │   └── mcp-servers/base.json
+│   ├── opencode/               # @omagents/omagents OpenCode adapter
+│   │   ├── src/index.js        # Dual V1/V2 entry; merges superpowers + OmAgents
+│   │   ├── src/parallel.js     # OpenCode lifecycle adapter
+│   │   └── bin/install.js      # No-argument installer
+│   ├── codex/                  # @omagents/omagents-codex standalone installer
+│   │   ├── src/setup.js        # Codex artifact generation through Core
+│   │   └── bin/install.js      # No-argument Codex CLI
+│   └── dsh/                    # @omagents/omagents-dsh Host + Web Client bundle
+│       ├── src/host/           # Typed named-export Host and profile-scoped runtime
+│       ├── src/client/         # Native React Job Board, Remote store, and slots
+│       ├── dist/host/          # Built Host ESM, Typert metadata, and declarations
+│       ├── dist/client.js      # Built DSH lazy-CJS Web Client (generated by tsdown)
+│       ├── test/               # Real Loader, React Client, and package-surface tests
+│       ├── tsdown.client.config.ts # External-package lazy-CJS Client build
+│       └── cordis.patch.yml    # Bare package-root Host/Client Loader row
+├── scripts/                    # Four-tarball, offline clean-room, and real-browser verification
+│   ├── pack-all.js             # Aligned pack output and process-tree watchdog support
+│   ├── python-command.js       # OMAGENTS_TEST_PYTHON precedence and Windows/Unix fallback
+│   ├── packed-harness.js       # Locked offline cache and isolated Host/DSH installs
+│   ├── test-packed-installs.js # Real Core/OpenCode/Codex/DSH packed probes
+│   ├── prepare-browser-clean-room.js # Reuse or rebuild before the browser watchdog
+│   ├── test-clean-room-freshness.test.js # Source/lockfile invalidation and unchanged-reuse regression
+│   └── test-browser.js         # Playwright launcher with bounded process-tree cleanup
+├── package.json                # Private npm-workspaces root
 ├── package-lock.json
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
@@ -77,9 +92,11 @@ omagents/
 └── LICENSE
 ```
 
-**IMPORTANT:** There is NO root-level `templates/` directory. Jinja2 templates live in `skills/deep-research/templates/`.
+**IMPORTANT:** There is NO root-level `templates/` directory. Jinja2 templates live in `packages/core/skills/deep-research/templates/`.
 
-## Plugin Entry Point (`.opencode/plugins/index.js`)
+## Plugin Entry Point (`packages/opencode/src/index.js`)
+
+The repository's `.opencode/plugins/index.js` is only a development re-export of this packaged implementation.
 
 The default export is a **dual V1/V2 descriptor** (same pattern as superpowers >= 6.4):
 
@@ -96,21 +113,44 @@ No `@opencode/plugin` import — the descriptor is a plain object, keeping the p
 
 On load the plugin:
 
-1. **Load superpowers** via `import("superpowers")` with graceful degradation; `loadSuperpowers()` resolves both halves (`server` for V1, `setup` for V2)
-2. **Register skills** from `skills/` (V1: `config.skills.paths`; V2: per-skill `ctx.skill.transform` with frontmatter parsing)
+1. **Load superpowers** through `getCorePaths().superpowersDir` with graceful degradation; `loadSuperpowers()` resolves both halves (`server` for V1, `setup` for V2) without relying on npm hoisting
+2. **Register skills** from `packages/core/skills/` (V1: `config.skills.paths`; V2: Core discovery/rendering plus per-skill `ctx.skill.transform`). Core supports exactly `opencode-v1`, `opencode-v2`, `codex`, and `dsh`; `SKILL.md` is the fallback and `SKILL.<host>.md` is a full-content override
 3. **Register MCP servers** (V1: `config.mcp` with `enabled`; V2: `ctx.mcp.transform` with the `enabled` key stripped). User config takes precedence (won't override existing)
 4. **Merge hooks** from superpowers + parallel execution engine (V1)
-5. **Provision the persistent Python base** at `~/.venvs/omagents` through `hooks/python-env.js`, auto-installing only missing core packages (`jinja2`). V1 runs on `session.created`; V2 runs at plugin setup, non-blocking. Uses `node:child_process`, runs once per process, and never auto-deletes the base. Project overlays are created separately on demand, never at plugin startup.
+5. **Provision the persistent Python base** at `~/.venvs/omagents` through `packages/core/hooks/python-env.js`, auto-installing only missing core packages (`jinja2`). V1 runs on `session.created`; V2 runs at plugin setup, non-blocking. Uses `node:child_process`, runs once per process, and never auto-deletes the base. Project overlays are created separately on demand, never at plugin startup.
 6. **Inject PATH** via shell hook: venv bin + skill script dirs + existing PATH (deduped)
 
 Key variables:
-- `OMAGENTS_DIR` = project root (parent of `.opencode/`)
-- `SKILLS_DIR` = `OMAGENTS_DIR/skills`
-- `AGENT_VENV` / `AGENT_VENV_BIN` = persistent base path and its platform-specific executable directory, defined in `hooks/python-env.js`
+- `getCorePaths()` = Core `root`, `skillsDir`, `superpowersDir`, `hooksDir`, and `mcpCatalogPath`, resolved from `import.meta.url` and Core's own dependency resolver. Superpowers explicitly prefers the real workspace/app-hoisted installation, falls back to Core's bundled nested dependency, and stays stable across prepack/postpack cleanup. Only `superpowersDir` is optional and becomes `null` when that dependency is absent; other asset failures remain visible
+- `SKILLS_DIR` = `getCorePaths().skillsDir` in the OpenCode adapter
+- `AGENT_VENV` / `AGENT_VENV_BIN` = persistent base path and its platform-specific executable directory, defined in `packages/core/hooks/python-env.js`
 - `getProjectVenvPath(projectRoot)` = `<project-root>/.omagents/venv`, the on-demand project overlay
-- `SKILL_SCRIPT_DIRS` = script directories from deep-research, markitdown-converter, playwright-web-scraping, _shared
+- `SKILL_SCRIPT_DIRS` = script directories from deep-research, markitdown-converter, playwright-web-scraping, _shared beneath Core's skill root
 
-## Parallel Execution Engine (`.opencode/plugins/parallel.js`)
+## Standalone Codex Installer (`packages/codex/`)
+
+- `npx @omagents/omagents-codex` installs Codex with no arguments; `--help` and `--version` are the only supported options, and unknown arguments fail.
+- `src/setup.js` exports `installCodex(options?)` and `serializeTomlBasicString(value)`. It resolves hooks and assets through `getCorePaths()`, renders skills through Core for the `codex` host, and serializes `resolveMcpServers()` without duplicating MCP selection or tool mappings. Marketplace paths are valid escaped TOML basic strings. GitHub uses `bearer_token_env_var`; Exa header and Context7 stdio environment values remain in `.mcp.json` because the plugin contract has no equivalent indirection, so private directories use mode `0700` and `.mcp.json` uses mode `0600` on POSIX-mode platforms.
+- Codex retains native subagents and does not load the OpenCode parallel engine. There is no root dispatcher, legacy `.codex/` implementation, or compatibility command.
+
+## DSH Host and Web Client Bundle (`packages/dsh/`)
+
+- The package-root Host module has named `name = "omagents"`, `inject = ["loader"]`, async `apply(ctx)`, `createDshRuntime(ctx)`, `createSubagentTracker(ctx, board, health?)`, `OmAgentsRemote`, `authorizeRemoteScope`, `registerDshSkills`, `registerDshMcp`, `provisionDshPython`, `registerDshTools`, `registerDshCommands`, and `registerDshContext` exports; it has no default or Client export. The React Client is available only through the separate `./client` export.
+- `createDshRuntime()` opens Core's `JsonJobStore` at `$DSH_HOME/profiles/<active-profile>/omagents/job-board.json`, using the Loader `baseUrl` to identify the active profile and `@deepseek-ai/dsh-home-paths` for home resolution. DSH's host-local degrading store preserves the current in-memory Board and Remote list/watch/reconciliation after read/write/flush failures while exposing persistence diagnostics. Save admission is serialized in the DSH adapter so every adapter-queued save re-checks degradation before entering Core's write queue; flush/close drain that adapter queue. Runtimes sharing a profile also share the write queue and latest revision, preventing an older overlapping runtime from replacing a newer Board snapshot. A degraded runtime stops current and future disk writes so an unreadable startup store or newer repaired snapshot cannot be overwritten; reopen it after repair to restore durability. Core's sticky failure contract is unchanged for other hosts. Host, persistence, tracking, skills, MCP, Python, tools, commands, and context health records remain independent; disposal flushes and closes the Board, unregisters capabilities, and prevents late Python completion from mutating health.
+- `registerDshSkills()` renders Core definitions for the explicit `dsh` host and registers exactly 18 OmAgents + 15 Superpowers skills through `ctx.skills.register()`. Registrations use the rendered instruction body, absolute selected paths, and directory `resourceBase` values resolved from Core rather than cwd; their composed disposer invalidates native discovery. If the registry is not yet available, a Cordis-injected capability fiber waits for it and activates/reactivates without blocking Host or Python; disposal prevents late registration. Full DSH overrides exist for `parallel-execution`, `deep-research`, `hyperplan`, `doctor`, and `lsp-guide`; every DSH skill uses native `subagent` semantics without OpenCode launch arguments or `OPENCODE_` variables. DSH tool rendering maps web tools to `web_search`/`web_fetch`, codegraph to `mcp__codegraph__codegraph_explore`, and GitHub calls to `mcp__github__*`, while shared skills retain their native OpenCode/Codex forms through explicit host rendering. All 33 DSH skills also receive absolute packaged script/Core-hook/base-Python resource resolution (including Superpowers script paths); they never assume cwd-relative `scripts/`, bare loop/research CLIs, or source-checkout paths. Bare packaged-script commands and sibling-skill script paths resolve to normalized absolute files only when those files exist, preserving command arguments, hypothetical examples, legitimate prose, and already absolute paths. Model-tool mappings are distinct from CLI text, so `officecli load_skill <name>` remains unchanged while the standalone model action maps to native `skill`.
+- `createSubagentTracker(ctx, board, health?)` observes typed native `tools/result`, `subagent/start`, and `subagent/end` events, correlating activation results and runs by parent session and durable child session ID. It maps `completed`/`aborted`/failure stop reasons idempotently, recovers native `interrupted` Session outcomes as `interrupted` rather than cancellation, treats native settlement delivery as injected without duplicate notices, backfills equivalent-terminal details, and reconciles active jobs from live Agents or readable Session outcomes without inferring success from inactivity. Cancellation uses DSH 0.2.2's `ctx.subagents.interrupt(childId, { kind: "user", parentSessionId })` admission API (there is no `interruptByUser` method in this release): acceptance alone enters `cancelling`, while only authoritative settlement marks `cancelled`. Local interruption preserves descendants; external one-shot runs cannot resume. Delayed tools/subagent activation, startup reconciliation deferred until live-Agent and Session-query capabilities are also available, orphan end-before-result correlation, racing native ends, missed starts, and repeat-safe listener disposal preserve durable Board state; observed active external runs remain active on cold session-not-found. Listener, subscription, and recovery failures degrade independent tracking health, and successful reactivation/query clears the corresponding diagnostic.
+- `registerDshTools(ctx, board, tracker, health?)` uses DSH `defineTool` for read-only `parallel_status` and idempotent `cancel_task` canonical JSON/output declarations. Unknown, terminal, and repeated cancellations return current job state without duplicate Host interrupts. `registerDshCommands()` registers direct human `/ps`, returning Core `buildPsText` without creating a model prompt/message. `registerDshContext()` contributes the automatic Superpowers `using-superpowers` bootstrap, DSH-native tool mapping, and native subagent instructions through `systemPrompt.section`, plus a required, freshly assembled state-preservation + scoped Board snapshot through `systemPrompt.context`. Only pending outcome IDs actually rendered into a parent's snapshot become `injected`; native `agent/turn-stopping` acknowledges that parent's injected outcomes so later turns do not repeat recovered notices. Native settlement retains direct `injected` semantics and per-parent isolation. Top-level sessions receive the controller bootstrap without per-session opt-in; sessions whose real `session.header.origin` is `subagent` retain native skills and parallel guidance without restarting controller workflows (there is no direct `session.origin` accessor). Native DSH `skill` tooling supplies the live 33-entry catalog, and the React-creation acceptance route must load `brainstorming` before product code. `refreshContext` restores required context after compactable history is removed. Tools, commands, and systemPrompt each use delayed-capability activation/reactivation with repeat-safe composed disposal, and projection failures degrade only context health without rejecting model assembly.
+- `new OmAgentsRemote(ctx, { board, tracker, health, authorizeScope })` extends `TypertRemoteService` as the `omagentsRemote` Cordis service with wire namespace `omagents` (distinct from `ctx.omagents`). Its Remote methods are `listJobs(scope)`, `cancelJob(jobId)`, `getHealth()`, and stream `watchJobs(scope, signal)`; `JobScope` accepts only an optional `parentSessionId`, and the active-profile Board remains the outer isolation boundary. `authorizeRemoteScope` evaluates DSH session resources through the invocation-derived Context and `ctx.remoteAccess.allows()`, while unscoped reads filter every job and denied explicit scopes/jobs throw structured `remote-access/denied` errors. Unknown jobs and failed cancellation admission use `omagents/job-not-found` and `omagents/cancel-failed`. Cancellation returns the current Board record after admission (normally `cancelling`) and never fabricates settlement. `listJobs` and each initial/reconnect watch baseline reconcile only authorized active jobs; cold Remote queries defer until live-Agent and Session-query capabilities are available. Every watch attaches the Core listener synchronously before reconciliation and its whole-set baseline, retains/coalesces later frames through the latest revision without further native polling, and starts a fresh baseline on reconnect. Its iterator wrapper closes/wakes/detaches synchronously on `return()`/`throw()` even during initial reconciliation or a pending `next()`; abort, iterator `finally`, and service disposal remain repeat-safe, with no periodic polling or use of DSH's application forwarded-event source.
+- The Web Client declares `dsh.client.platform = "web"` and named `inject = ["slots", "remote"]`. Its `apply(ctx)` mounts the OmAgents Typert Remote contribution, then registers an OmAgents `sidebar.panellist` entry and a keyed `main` panel with ID `omagents`; both registrations and the Remote mount are disposed when the bare package-root Loader row is disabled. The package also exposes `./typert` so DSH's real Typert Loader can register the Host invocations. Do not move the Client to a separate Loader row or add it to the Host's export surface.
+- `createJobBoardStore(remote)` consumes revisioned whole-set watch frames, replaces state from each fresh reconnect baseline, keeps the last authorized set stale during carrier loss, clears it on permission denial, and ticks elapsed time locally without network polling or independent persistence. `listJobs` is used only for explicit refresh. Viewing details never acknowledges a model notification. The React UI provides all/running/attention/finished filters, complete execution/notification/detail states, confirmed non-repeatable cancellation, and loading/empty/stale/permission/degraded presentations. Cancellation copy states that local descendants continue and external one-shot runs cannot resume.
+- Client UI uses DSH slots and plugin-owned React controls/CSS with `--dsw-alias-*` tokens for every color. Do not add an iframe, `document.body` mount, private UI primitives, or a second application root. The tsdown build externalizes DSH/React packages and emits DSH's `window.__ModuleLoader__.load({ id, factory })` lazy-CJS format; build-managed CSS registration follows the official Client factory lifecycle.
+- DSH 0.2.2-rc.1 provides `@deepseek-ai/dsh-mcp-client` as a one-server-per-plugin API, not a built-in manager. `registerDshMcp()` therefore uses the OmAgents-owned `ctx.mcpManager` adapter to check Loader-owned user server names and mount each Core entry with `ctx.plugin(McpClient, config)`, mapping local servers to `stdio` and remote servers to `streamable-http` without overriding existing names. MCP activation similarly waits for delayed `tools`; per-registration and aggregate disposers each cache and return the exact same in-flight Promise across concurrent/repeated teardown. Tests perform real handshakes only against local stdio and Streamable HTTP fixtures.
+- `provisionDshPython()` starts Core base provisioning without blocking plugin setup, resolves the base beneath the current home directory, and automatically installs only `jinja2`; project overlays stay on demand through Core. Tests inject `ctx.omagentsPython` and isolate home/temp paths so they never create or delete the user's real `~/.venvs/omagents`.
+- `cordis.patch.yml` contains only the bare `@omagents/omagents-dsh` row. `dsh.bundle.patch` points to that file, and `engines.dsh` is bounded to the DSH 0.2.2 line (`>=0.2.2-rc.1 <0.2.3-0`) and exercised with DSH 0.2.2-rc.1. Do not broaden the range without exercising the added DSH versions.
+- Host and Client source are TypeScript/TSX. `npm run build --workspace @omagents/omagents-dsh` runs `tsc` for Host/Client declarations and `tsdown --config tsdown.client.config.ts` for the browser's `dist/client.js` lazy-CJS artifact and source map; `prepack` runs that complete build. The `files` publish allowlist contains only `dist/` and `cordis.patch.yml`; npm also includes the mandatory `README.md` and `package.json` metadata. Never publish TypeScript/TSX source, tests, configs, or test tooling, and installed users never compile React.
+- Run `npm install` after dependency changes, then `npm run build --workspace @omagents/omagents-dsh && npm test --workspace @omagents/omagents-dsh`. Host tests use the real `@deepseek-ai/cordis-plugin-loader` with an isolated `DSH_HOME`, a profile-local package-root installation, and no model API key; do not replace those Host smoke tests with a direct `apply()` call. Client suites exercise the built lazy-CJS factory with a real Cordis fiber, plus source-level store and accessible React component tests; capability suites also cover native skill discovery/disposal, local MCP handshakes, and nonblocking Python provisioning.
+
+## Parallel Execution Engine (`packages/opencode/src/parallel.js`)
 
 The parallel execution engine:
 
@@ -137,7 +177,7 @@ Registered automatically (V1: `config` hook; V2: `ctx.mcp.transform`). User conf
 | `github` | remote | `https://api.githubcopilot.com/mcp/` (requires `GITHUB_TOKEN`) |
 | `grep_app` | remote | `https://mcp.grep.app` (fallback when no `GITHUB_TOKEN`) |
 
-On the V2 path, local servers are registered with `timeout: { startup: 180s }` (`toV2McpConfig` in `.opencode/plugins/index.js`) because `npx -y <pkg>` must download the package before the server can answer the MCP initialize handshake on a cold npx cache. The V1 path and `mcp-servers/base.json` keep the plain V1 shape.
+On the V2 path, local servers are registered with `timeout: { startup: 180s }` (`toV2McpConfig` in `packages/opencode/src/index.js`) because `npx -y <pkg>` must download the package before the server can answer the MCP initialize handshake on a cold npx cache. Core's `packages/core/mcp-servers/base.json` and `resolveMcpServers()` stay host-neutral; the OpenCode V1 adapter adds `enabled`.
 
 ## Skills
 
@@ -174,7 +214,7 @@ brainstorming, test-driven-development, systematic-debugging, writing-plans, exe
 
 - Agent tools base: `~/.venvs/omagents` (persistent; managed by plugin + agents-python-tools skill)
 - Project deps overlay: `<project-root>/.omagents/venv` (created on demand; existing `.venv` directories are untouched)
-- Project overlay CLI: `hooks/project-venv.js` with `ensure`, `python`, `pip`, and `run` commands
+- Project overlay CLI: `packages/core/hooks/project-venv.js` with `ensure`, `python`, `pip`, and `run` commands
 
 The project overlay uses `omagents-base.pth`, not `--system-site-packages`. Internal inspection/venv/pip commands use Python `-I` to prevent cwd module shadowing. Project ensure removes inherited `OMAGENTS_PROJECT_ONLY` for its internal normal-mode verification; only `project-venv.js pip` sets it again so project dependencies always install locally even when base contains them. Normal `run` does not use `-I` and enables base imports with project packages taking precedence. Project/base Python `majorMinor` must match. Neither environment is automatically deleted.
 
@@ -182,7 +222,7 @@ The `agents-python-tools` skill has full documentation on venv paths, cross-plat
 
 ## How to Add a New Skill
 
-1. Create `skills/<skill-name>/SKILL.md` with YAML frontmatter:
+1. Create `packages/core/skills/<skill-name>/SKILL.md` with YAML frontmatter:
    ```yaml
    ---
    name: <skill-name>
@@ -192,12 +232,13 @@ The `agents-python-tools` skill has full documentation on venv paths, cross-plat
 2. Optionally add:
    - `scripts/` directory for helper scripts (Python, shell)
    - `agents/openai.yaml` for agent display name
-3. If the skill has scripts, add the script directory to `SKILL_SCRIPT_DIRS` in `.opencode/plugins/index.js`
-4. The skill is auto-discovered via `config.skills.paths` - no other registration needed
+   - `SKILL.<host>.md` as a complete override for one of `opencode-v1`, `opencode-v2`, `codex`, or `dsh`; never add runtime host detection
+3. If the skill has scripts, add the script directory to `SKILL_SCRIPT_DIRS` in `packages/opencode/src/index.js`
+4. Core discovers OmAgents and Superpowers file-based skills; OpenCode V1 uses Core's skill path and V2 uses Core discovery/rendering
 
 ## Loop Engine
 
-Skills that process items iteratively (deep-research, remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit) use a shared loop engine at `skills/_shared/scripts/loop_engine.py`.
+Skills that process items iteratively (deep-research, remove-ai-slops, remove-deadcode, github-triage, tech-debt-audit) use a shared loop engine at `packages/core/skills/_shared/scripts/loop_engine.py`.
 
 The loop engine provides a durable task queue stored in `.omagents/loops/<skill>/tasks.json` within the project directory. State survives context clearing and can be resumed.
 
@@ -218,46 +259,47 @@ The loop engine provides a durable task queue stored in `.omagents/loops/<skill>
 
 ### Deep Research Storage
 
-`skills/deep-research/scripts/layout.py` is the single path resolver for all deep-research commands. For new runs, `--workspace` contains only public deliverables; internal plans, raw evidence, derived artifacts, checkpoints, and provenance live under `.omagents/deep-research/<run-id>/`. Main and pre-research loop keys are suffixed with the same run ID (`deep-research-<run-id>` and `deep-research-pre-<run-id>`), while the shared loop engine itself is unchanged.
+`packages/core/skills/deep-research/scripts/layout.py` is the single path resolver for all deep-research commands. For new runs, `--workspace` contains only public deliverables; internal plans, raw evidence, derived artifacts, checkpoints, and provenance live under `.omagents/deep-research/<run-id>/`. Main and pre-research loop keys are suffixed with the same run ID (`deep-research-<run-id>` and `deep-research-pre-<run-id>`), while the shared loop engine itself is unchanged.
 
 Raw evidence and state are durable. Derived `artifacts/` are rebuildable but retained by default. New provenance always goes to `<run-dir>/logs/provenance.jsonl`; legacy root/`artifacts/` logs are combined on read. Reject new runs whose public workspace would contain the internal run or loop store (including the default project root) before any writes; require a separate child workspace. Existing legacy workspaces retain their original paths and unnamespaced loop keys—never migrate or delete them automatically.
 
+Research pauses emit host-neutral `{ action: "dispatch_subagent", description, prompt, name, cwd }` objects; batches wrap those singular objects in `dispatches`. Prompts carry the query, complete item details, every requested field's complete definition (name/description/requirements), the absolute plan path, current-date instructions, absolute evidence/validation paths, and the complete findings schema so fresh children never need to infer field IDs. The canonical structured `resume_command` uses the absolute Python and CLI paths; the former bare command is retained separately as `legacy_resume_command`. DSH translates each action to native asynchronous `subagent(description, prompt, cwd?)` without passing `name` as a tool argument; OpenCode V1/V2 and Codex retain their own native delegation forms through host rendering. Pending batches contain distinct queue rows, and gap analysis resumes the same run-scoped queue rather than creating a new run. Missing, unreadable, or malformed queues fail before gap/report stages, including corrupt task rows that are not objects or lack non-empty string `task_id`/`status`; only a valid queue with no pending tasks is drained. `layout.py` also resolves the queue state path so orchestration does not duplicate loop-store paths.
+
 ## Development
 
-- **No build step.** Plugin code is plain JavaScript (ESM). Skills are plain Markdown + optional Python.
-- **Syntax check:** `node --check .opencode/plugins/index.js`
-- **Python check:** `python3 -m py_compile skills/deep-research/scripts/*.py`
-- **Unit tests:** `node --test tests/*.test.js` (plugin structure, skills frontmatter, loop engine, deep-research storage/legacy/pipeline integration). Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
-- **Local testing:** Point OpenCode config to local clone:
-  ```json
-  { "plugin": ["omagents@git+file:///path/to/omagents"] }
-  ```
+- **Build:** Core, OpenCode, and Codex are plain JavaScript (ESM) with no product build step; skills are plain Markdown + optional Python. DSH Host/Client source is TypeScript/TSX and builds with `npm run build --workspace @omagents/omagents-dsh` (Host ESM/declarations plus the tsdown lazy-CJS Client).
+- **Syntax check:** `node --check packages/opencode/src/index.js`
+- **DSH typecheck:** `npm run typecheck --workspace @omagents/omagents-dsh`
+- **Python check:** `python -m compileall -q packages/core/skills/deep-research/scripts && python -m compileall -q packages/core/skills/_shared/scripts` (directory-based and Windows-safe).
+- **Unit tests:** `npm test` first runs root tests (`tests/*.test.js`), then `npm test --workspaces --if-present` exactly once (Core, Codex installation, and all DSH suites). Every test-bearing workspace declares its own `test` script so suites cannot be skipped silently. Deep-research tests also run Python unittest through `OMAGENTS_TEST_PYTHON` when an isolated Jinja2-enabled interpreter is supplied.
+- **DSH tests:** `npm run build --workspace @omagents/omagents-dsh && npm test --workspace @omagents/omagents-dsh` (real Loader smoke, already-available and delayed capability activation/reactivation, 33 native skills and wrong-host scans, automatic Superpowers bootstrap/native catalog/React-to-brainstorming acceptance routing, two concurrent structured research lanes, gap-loop resume, three-critic completion/cancellation, local stdio/Streamable HTTP MCP handshakes, repeat-safe async disposal, isolated nonblocking Python setup, native subagent lifecycle/cancellation/recovery, canonical status and cancellation tools/direct `/ps`, authorized Remote calls and structured errors, empty/racing/coalesced/reconnecting watch streams and abort/disposal cleanup, required compaction-safe Board context and failure health, Client baseline/reconnect/elapsed stores, accessible React filters/details/cancellation and all UI states, actual Typert validation, root-fiber slot disposal, lazy-CJS artifacts, theme tokens, exports, compatibility, and publish contents).
+- **Packed verification:** `npm run pack:all` creates four aligned tarballs under ignored `.omagents/release-artifacts/tarballs/`, each manifest carrying content and lockfile fingerprints. `npm run test:packed` seeds a lockfile-derived cache under `.omagents/release-artifacts/offline-npm-cache/`, then uses `npm ci --offline --ignore-scripts` into OS-temporary homes outside repository module resolution. Source/dist/manifest or lockfile changes invalidate reuse and force repack/reinstall; unchanged packed-first state is reused. Probes have explicit process-tree timeouts and failure-path Loader/server disposal. It checks Core/Superpowers assets, OpenCode V1/V2, no-arg CLIs, Windows paths, real DSH Loader, and the served built Client.
+- **Browser verification:** `npm run test:browser` first runs `scripts/prepare-browser-clean-room.js` with a separate 900-second process-tree bound, reusing a valid packed-first install or rebuilding stale/missing pack state. Playwright installation is independently bounded with `OMAGENTS_BROWSER_INSTALL_TIMEOUT_MS` (defaulting to the preparation bound). The browser spec runs against that prepared profile with an independent 120-second watchdog covering the runner, Chromium, tsx/esbuild, and local MCP children. It checks startup/sidebar/main panel, Host `/ps`/`parallel_status`/Web agreement, completion, local/external cancellation, Loader restart/reconnect, themes, and non-owner Gateway authorization with no external model credentials. Research/hyperplan recovery resumes the original local hostTaskIds/run IDs and run-scoped queue tasks without creating replacement jobs; external one-shots remain interrupted. `OMAGENTS_PLAYWRIGHT_EXECUTABLE` may select an existing browser; `OMAGENTS_BROWSER_PREPARE_TIMEOUT_MS`, `OMAGENTS_BROWSER_TEST_TIMEOUT_MS`, and `OMAGENTS_BROWSER_STARTUP_TIMEOUT_MS` bound the respective phases.
+- **Local testing:** Run OpenCode in this repository to auto-discover the development-only `.opencode/plugins/index.js` re-export; do not install the private workspace root as a plugin. Use `npm run pack:all`, `npm run test:packed`, and `npm run test:browser` to exercise isolated host installations from real tarballs.
+- **Current verification scope:** Release-candidate verification has run locally on macOS arm64 with the `chromium_headless_shell-1228` override. Linux, Windows, and the default pinned Chromium still require first CI confirmation; never describe those runs as already passed.
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Syntax check JS + Python and run Node/Python tests on push/PR to main. Node 24; Jinja2 is installed only into `.omagents/ci-venv` for deep-research integration tests.
+- **CI** (`ci.yml`): Node 24 unit/package checks run on Linux, macOS, and Windows, including real offline tarball installs. A second three-OS job runs the packed DSH Web composition with Playwright, deterministic native events, and local MCP fixtures only. Both jobs create an isolated `.omagents/ci-venv` containing only Jinja2 and pass its absolute interpreter (`bin/python` on Unix, `Scripts/python.exe` on Windows); the browser helper falls back to `python3` on Unix and `python` on Windows when no override is set.
 - **Publish** (`publish.yml`): OIDC trusted publishing on `v*` tag push. No npm token needed.
 
 ## Publishing
 
-Follow these steps **in order** to publish a new release:
+All four package manifests and every host's exact `@omagents/core` dependency must remain aligned. Every release must **build, test, pack, and publish all four packages together**, even when only one host changed. Inspect all tarballs and install them in isolated environments before publishing.
 
-1. **Bump version** in `package.json` (e.g. `"version": "0.4.2"`).
-2. **Update CHANGELOG.md** — add a new `## [x.y.z] - YYYY-MM-DD` section at the top with the changes.
-3. **Commit and tag**:
-   ```bash
-   git add package.json CHANGELOG.md
-   git commit -m "release: vX.Y.Z"
-   git tag vX.Y.Z
-   ```
-4. **Push and create GitHub release**:
-   ```bash
-   git push && git push --tags
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <(awk 'f&&/^## \[/{exit} /^## \[X\.Y\.Z\]/{f=1} f' CHANGELOG.md) --verify-tag
-   ```
-   The release notes are extracted from the corresponding CHANGELOG.md section for this version (replace `X.Y.Z` with the actual version numbers, escaping `.` as needed).
+Release automation:
 
-The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub release must be created manually (it is NOT automated in the workflow).
+- `node scripts/set-release-version.js <exact-version>` aligns the private root, all four packages, every host's exact Core dependency, and the workspace lockfile; it requires a clean working tree.
+- `npm run release:check` runs the complete gate on a clean checkout. Local development may use `npm run release:check -- --allow-dirty`; the publish workflow never uses that override.
+- `node scripts/publish-all.js` prints a side-effect-free plan. `node scripts/publish-all.js --execute` reruns the clean full gate, rechecks the inspected artifacts, verifies registry state, and performs the release; never use `--execute` without explicit user authorization.
+
+Publish in this exact order:
+
+`@omagents/core → @omagents/omagents → @omagents/omagents-codex → @omagents/omagents-dsh`
+
+Confirm that the exact Core version is available in npm before publishing any host. The three hosts are sequential only for deterministic logs and failure handling; none depends on another host. DSH Host and Client artifacts must be built before packing, and its declared compatibility range must match tested DSH versions.
+
+Use the aligned release automation and final gate when implementing a release; do not invent a version or publish packages independently from this guidance. Actual versioning, Git mutation, tagging, pushing, npm publishing, GitHub releases, and community announcements each require explicit user authorization. npm publication uses OIDC Trusted Publishing for all four package names, without a placeholder npm authentication token.
 
 ## Dependencies
 
@@ -266,7 +308,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 | `superpowers` | git (pinned to commit) | 6.4.2 (`8ca22dba`) |
 | `prettier` | dev | ^3.9.9 |
 
-**superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. To update, change the commit SHA in `package.json`, run `npm install`, and verify. Note: superpowers >= 6.4 exports a V2 descriptor object as `default`; the V1 plugin function is `default.server` (also the named export `SuperpowersPlugin`). `loadSuperpowers()` in `.opencode/plugins/index.js` handles both shapes.
+**superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. Core owns both the dependency and `bundledDependencies` entry in `packages/core/package.json`; host packages resolve its plugin and skills through `getCorePaths()`. Core's `prepack` script materializes that pinned installed dependency into ignored `packages/core/node_modules/` so workspace `npm pack` includes it, and `postpack` removes only the marked materialized copy; never commit a duplicate Superpowers source tree. To update, change the commit SHA there, run `npm install`, and verify. Note: superpowers >= 6.4 exports a V2 descriptor object as `default`; the V1 plugin function is `default.server` (also the named export `SuperpowersPlugin`). `loadSuperpowers()` in `packages/opencode/src/index.js` handles both shapes.
 
 ## Version History
 
@@ -307,7 +349,7 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 
 ## Common Mistakes to Avoid
 
-1. **Don't reference `templates/` as a root-level directory.** Templates are in `skills/deep-research/templates/`.
+1. **Don't reference `templates/` as a root-level directory.** Templates are in `packages/core/skills/deep-research/templates/`.
 2. **Don't claim tools are "pre-installed".** Only `jinja2` is auto-installed. Others are on-demand.
 3. **Don't duplicate venv path info.** The `agents-python-tools` skill covers this. Reference it.
 4. **Don't unpin superpowers.** It's pinned to a commit for stability.
@@ -316,8 +358,8 @@ The tag push triggers `publish.yml` which auto-publishes to npm via OIDC. GitHub
 7. **Don't confuse bundled skills with superpowers skills.** OmAgents has 18; superpowers has 15. They're registered separately.
 8. **Don't change README.md without updating all language versions.** README exists in 4 languages (EN, ZH-CN, JA, KO). All must be updated in the same commit.
 9. **Don't commit without checking README impact.** If your change adds a skill, changes a feature, or modifies installation steps, update README first.
-10. **Don't put non-plugin scripts in `.opencode/plugins/`.** OpenCode auto-discovers and loads EVERY `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions. A CLI script there (this broke startup when developing in this repo — see v0.9.1) crashes plugin init. CLI entry scripts live in `setup/` instead; only true plugin files belong in `.opencode/plugins/`.
-11. **Don't point package `main` at the CLI wrapper.** OpenCode imports the plugin via `main`; module-level `process.argv` dispatch (plus `process.exit`) in that file kills the host process (this broke `opencode run` for npm installs of 0.7.0–0.9.1 — see v0.9.2). `main` must be the plugin entry (`.opencode/plugins/index.js`); only `bin` may point at the CLI wrapper.
+10. **Don't put non-plugin scripts in `.opencode/plugins/`.** OpenCode auto-discovers and loads EVERY `.js` file in the project's `.opencode/plugins/` directory as a plugin, calling exported functions. A CLI script there (this broke startup when developing in this repo — see v0.9.1) crashes plugin init. CLI entry scripts live in each host package's `bin/` directory; only true plugin files belong in `.opencode/plugins/`.
+11. **Don't point package `main` at the CLI wrapper.** OpenCode imports the plugin via `main`; module-level `process.argv` dispatch (plus `process.exit`) in that file kills the host process (this broke `opencode run` for npm installs of 0.7.0–0.9.1 — see v0.9.2). `main` must be the plugin entry (`packages/opencode/src/index.js`); only `bin` may point at the CLI wrapper.
 12. **Don't export a bare function as `default` from `.opencode/plugins/*.js`.** OpenCode V2 requires the default export to be a `{ id, setup }` descriptor object and hard-fails the plugin otherwise (`PluginModule.LoadError`). Keep the dual shape `{ id, server, setup }`: `server` is the V1 plugin function, `setup` the V2 one. V1 hosts may invoke exported functions (including `setup`) with a V1-shaped ctx — guard V2 entry points by checking V2-only domains (e.g. `typeof ctx.session?.hook === "function"`) and return quietly.
 13. **Don't import `@opencode/plugin` (V2 SDK) or `@opencode-ai/plugin` (V1 SDK) in plugin code.** The dual entry point is a plain object; importing a host SDK package breaks the other runtime. superpowers does the same.
 14. **Don't run project pip with the base overlay enabled or auto-delete either venv.** Project dependencies must use `project-venv.js pip` (`OMAGENTS_PROJECT_ONLY=1`). Do not use `--system-site-packages` as a base-venv inheritance mechanism. Existing base/project environments are repaired only with explicit user confirmation.

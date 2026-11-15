@@ -2,15 +2,102 @@ import { test } from "node:test"
 import assert from "node:assert"
 import fs from "fs"
 import path from "path"
+import { getCorePaths } from "../packages/core/src/paths.js"
+import { listSkillDefinitions } from "../packages/core/src/skills/catalog.js"
+import { renderSkillForHost } from "../packages/core/src/skills/render.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
-const SKILLS_DIR = path.join(ROOT, "skills")
+const CORE_PATHS = getCorePaths()
+const SKILLS_DIR = CORE_PATHS.skillsDir
+const HOSTS = ["opencode-v1", "opencode-v2", "codex", "dsh"]
 
 function getSkillDirs() {
   return fs
     .readdirSync(SKILLS_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory() && !d.name.startsWith("_") && !d.name.startsWith("."))
     .map((d) => d.name)
+}
+
+const PACKAGED_SCRIPT_TOKEN = /(?<![\w/.-])(?:\.\.\/[a-z0-9-]+\/scripts\/|scripts\/)[a-z0-9_.-]+/g
+
+function packagedScriptCommandLines(lines, index) {
+  const line = lines[index]
+  const previous = index > 0 ? lines[index - 1] : ""
+  return (
+    /\b(?:run|invoke|execute)\b/i.test(line) ||
+    (/\b(?:run|invoke|execute)\b/i.test(previous) && /^\s*[`"']/.test(line)) ||
+    /^\s*[`"']?\s*(?:scripts\/|\.\.\/[a-z0-9-]+\/scripts\/)/i.test(line)
+  )
+}
+
+function assertDshResourceCommands(content, definition) {
+  const lines = content.split("\n")
+  for (const [index, line] of lines.entries()) {
+    if (!packagedScriptCommandLines(lines, index)) continue
+    for (const match of line.matchAll(PACKAGED_SCRIPT_TOKEN)) {
+      const absolute = path.resolve(definition.directory, match[0])
+      if (fs.existsSync(absolute)) {
+        assert.fail(`${definition.name} has a bare packaged-script invocation: ${match[0]}`)
+      }
+    }
+  }
+  assert.ok(
+    !content.includes(`${CORE_PATHS.root}${path.sep}${CORE_PATHS.root}`),
+    `${definition.name} duplicated an absolute Core resource path`
+  )
+  const scriptCommands = {
+    "loop_engine.py": ["init", "next", "complete", "fail", "status", "summary", "reset", "add"],
+    "deep_research.py": [
+      "plan",
+      "add-items",
+      "add-fields",
+      "run-all",
+      "validate",
+      "gaps",
+      "merge",
+      "report",
+      "polish",
+      "audit",
+      "package",
+      "provenance",
+      "status",
+      "<subcommand>",
+    ],
+    "pre_research.py": ["init", "next", "complete", "evaluate", "finalize"],
+  }
+  for (const [script, commands] of Object.entries(scriptCommands)) {
+    const pattern = new RegExp(`\\b${script.replace(".", "\\.")}\\s+(${commands.join("|")})`, "g")
+    for (const match of content.matchAll(pattern)) {
+      assert.ok(
+        match.index > 0 && /[\\/]/.test(content[match.index - 1]),
+        `${definition.name} has a bare script invocation: ${match[0]}`
+      )
+    }
+  }
+  for (const match of content.matchAll(
+    /\b(?:bash|node|python|python3)\s+((?:\.\/)?scripts\/[a-z0-9_.-]+)/g
+  )) {
+    if (fs.existsSync(path.resolve(definition.directory, match[1]))) {
+      assert.fail(
+        `${definition.name} resolves a bundled script through cwd instead of its absolute resourceBase: ${match[0]}`
+      )
+    }
+  }
+  assert.doesNotMatch(
+    content,
+    /\bpython3?\s+-m\s+py_compile\s+packages\/core\//,
+    `${definition.name} assumes a source-checkout relative Core path`
+  )
+  assert.doesNotMatch(
+    content,
+    /(?:^|\n)\s*markitdown\s+/,
+    `${definition.name} uses bare markitdown`
+  )
+  assert.doesNotMatch(
+    content,
+    /\|\s*markitdown\s+/,
+    `${definition.name} pipes into bare markitdown`
+  )
 }
 
 function parseFrontmatter(content) {
@@ -31,8 +118,211 @@ function parseFrontmatter(content) {
   return fm
 }
 
-test("skills directory exists", () => {
+test("Core resolves every packaged asset without repository-relative paths", () => {
+  assert.equal(CORE_PATHS.root, path.join(ROOT, "packages", "core"))
+  for (const value of Object.values(CORE_PATHS)) {
+    assert.ok(path.isAbsolute(value), `Core asset path should be absolute: ${value}`)
+  }
+  assert.ok(fs.existsSync(path.join(CORE_PATHS.skillsDir, "deep-research", "SKILL.md")))
+  assert.ok(
+    fs.existsSync(path.join(CORE_PATHS.superpowersDir, "skills", "brainstorming", "SKILL.md"))
+  )
+  assert.ok(fs.existsSync(path.join(CORE_PATHS.hooksDir, "python-env.js")))
+  assert.ok(fs.existsSync(path.join(CORE_PATHS.hooksDir, "project-venv.js")))
+  assert.ok(fs.existsSync(path.join(CORE_PATHS.hooksDir, "setup-venv.js")))
+  assert.ok(fs.existsSync(CORE_PATHS.mcpCatalogPath))
+})
+
+test("skills directory exists in Core", () => {
   assert.ok(fs.existsSync(SKILLS_DIR))
+})
+
+test("skill discovery and rendering support exactly the four explicit hosts", () => {
+  for (const host of HOSTS) {
+    const definitions = listSkillDefinitions({ host })
+    assert.ok(definitions.some((skill) => skill.name === "parallel-execution"))
+    assert.ok(definitions.some((skill) => skill.name === "brainstorming"))
+    assert.equal(renderSkillForHost(definitions[0], host).host, host)
+  }
+  assert.throws(() => listSkillDefinitions({ host: "unknown" }), /Unsupported skill host/)
+  const definition = listSkillDefinitions({ host: "dsh" })[0]
+  assert.throws(() => renderSkillForHost(definition, "unknown"), /Unsupported skill host/)
+})
+
+test("shared skills fall back to SKILL.md and host overrides replace the full content", () => {
+  const definition = listSkillDefinitions({ host: "dsh" }).find(
+    (skill) => skill.name === "parallel-execution"
+  )
+  const sharedPath = path.join(definition.directory, "SKILL.md")
+  const overridePath = path.join(definition.directory, "SKILL.dsh.md")
+  const shared = renderSkillForHost(definition, "opencode-v1")
+  const overridden = renderSkillForHost(definition, "dsh")
+
+  assert.equal(shared.path, sharedPath)
+  assert.equal(shared.content, fs.readFileSync(sharedPath, "utf8"))
+  assert.equal(overridden.path, overridePath)
+  assert.equal(overridden.content, fs.readFileSync(overridePath, "utf8"))
+  assert.notEqual(overridden.content, shared.content)
+  assert.ok(!overridden.body.startsWith("---"), "rendering also exposes a frontmatter-free body")
+})
+
+test("DSH parallel skill never contains the OpenCode background argument", () => {
+  const definition = listSkillDefinitions({ host: "dsh" }).find(
+    (skill) => skill.name === "parallel-execution"
+  )
+  assert.doesNotMatch(renderSkillForHost(definition, "dsh").content, /background:\s*true/)
+})
+
+test("DSH discovers all 33 skills and renders every skill without wrong-host control flow", () => {
+  const definitions = listSkillDefinitions({ host: "dsh" })
+  assert.equal(definitions.length, 33)
+  assert.equal(definitions.filter((skill) => skill.source === "omagents").length, 18)
+  assert.equal(definitions.filter((skill) => skill.source === "superpowers").length, 15)
+
+  for (const definition of definitions) {
+    const rendered = renderSkillForHost(definition, "dsh")
+    assert.ok(rendered.body.trim(), `${definition.name} must have DSH instructions`)
+    assert.doesNotMatch(
+      rendered.content,
+      /\btask\s*\(\s*background|background\s*[:=]\s*true|OPENCODE_/,
+      `${definition.name} leaked OpenCode orchestration into DSH`
+    )
+    assert.doesNotMatch(
+      rendered.content,
+      /websearch_web_search_exa|websearch_web_fetch_exa|\bwebfetch\b|codegraph_codegraph_explore|\bgithub_[a-z_]+/,
+      `${definition.name} leaked OpenCode tool names into DSH`
+    )
+    assertDshResourceCommands(rendered.content, definition)
+  }
+})
+
+test("material DSH workflows use full overrides and native tool mappings", () => {
+  const definitions = listSkillDefinitions({ host: "dsh" })
+  for (const name of ["parallel-execution", "deep-research", "hyperplan", "doctor", "lsp-guide"]) {
+    const definition = definitions.find((skill) => skill.name === name)
+    assert.ok(definition, `missing ${name}`)
+    assert.equal(
+      renderSkillForHost(definition, "dsh").path,
+      path.join(definition.directory, "SKILL.dsh.md"),
+      `${name} must use a full DSH override`
+    )
+  }
+
+  const byName = Object.fromEntries(definitions.map((definition) => [definition.name, definition]))
+  const research = renderSkillForHost(byName["deep-research"], "dsh").content
+  assert.match(research, /`subagent`/)
+  assert.match(research, /dispatch_subagent/)
+  assert.match(research, /web_search/)
+  assert.match(research, /web_fetch/)
+  assert.match(research, /mcp__codegraph__codegraph_explore/)
+  assert.match(research, /mcp__github__search_code/)
+  const normalizePath = (value) => value.replaceAll("\\", "/")
+  assert.ok(
+    normalizePath(research).includes(
+      normalizePath(path.join(byName["deep-research"].directory, "scripts", "deep_research.py"))
+    ),
+    "DSH research must render the absolute packaged CLI path"
+  )
+
+  const hyperplan = renderSkillForHost(byName.hyperplan, "dsh").content
+  assert.equal(
+    (hyperplan.match(/description:\s*["'](?:Security|Architecture|Edge cases) critic/g) || [])
+      .length,
+    3
+  )
+  assert.match(hyperplan, /cancel_task/)
+  assert.match(hyperplan, /loop_engine\.py/)
+
+  const doctor = renderSkillForHost(byName.doctor, "dsh").content
+  assert.match(doctor, /@omagents\/omagents-dsh/)
+  assert.match(doctor, /33/)
+  assert.match(doctor, /native `subagent`|native DSH `subagent`/)
+  const normalizeDoctorPath = (value) => value.replaceAll("\\", "/")
+  assert.ok(
+    normalizeDoctorPath(doctor).includes(
+      normalizeDoctorPath(
+        path.join(CORE_PATHS.root, "skills", "deep-research", "scripts", "deep_research.py")
+      )
+    ),
+    "doctor must diagnose the deep-research package, not its own scripts directory"
+  )
+  assert.ok(
+    !normalizeDoctorPath(doctor).includes(
+      normalizeDoctorPath(path.join(byName.doctor.directory, "scripts", "deep_research.py"))
+    )
+  )
+
+  const lsp = renderSkillForHost(byName["lsp-guide"], "dsh").content
+  assert.match(lsp, /mcp__codegraph__codegraph_explore/)
+  assert.doesNotMatch(lsp, /opencode\.json|EXPERIMENTAL_LSP/)
+
+  const office = renderSkillForHost(byName.officecli, "dsh").content
+  assert.match(office, /`skill` once/)
+  assert.ok(office.includes("`officecli load_skill <name>`"))
+  assert.ok(office.includes("`officecli load_skill pitch-deck`"))
+  assert.doesNotMatch(office, /officecli\s+skill(?:\s|$)/)
+})
+
+test("DSH resolves bare Superpowers packaged scripts with normalized absolute paths and exact arguments", () => {
+  const definitions = listSkillDefinitions({ host: "dsh" })
+  const executing = definitions.find((skill) => skill.name === "executing-plans")
+  assert.ok(executing)
+  const content = renderSkillForHost(executing, "dsh").content
+  const siblingDirectory = path.resolve(executing.directory, "..", "subagent-driven-development")
+  const expectedCommands = [
+    [path.join(executing.directory, "scripts", "task-start"), "PLAN_FILE N"],
+    [path.join(executing.directory, "scripts", "task-done"), "PLAN_FILE N BASE -- <test command>"],
+    [path.join(siblingDirectory, "scripts", "sdd-workspace"), "PLAN_FILE"],
+    [path.join(siblingDirectory, "scripts", "review-package"), "PLAN_FILE MERGE_BASE HEAD"],
+  ]
+  for (const [script, args] of expectedCommands) {
+    assert.ok(path.isAbsolute(script), `${script} must be absolute`)
+    assert.ok(!script.includes(`${path.sep}..${path.sep}`), `${script} must be normalized`)
+    assert.ok(fs.existsSync(script), `${script} must identify a packaged file`)
+    assert.ok(
+      content.includes(`${script} ${args}`),
+      `rendered command must preserve script and arguments exactly: ${script} ${args}`
+    )
+  }
+  assert.doesNotMatch(
+    content,
+    /`(?:scripts\/task-(?:start|done)|\.\.\/subagent-driven-development\/scripts\/)/,
+    "bare executing-plans script tokens must not survive"
+  )
+
+  const writing = definitions.find((skill) => skill.name === "writing-skills")
+  const writingContent = renderSkillForHost(writing, "dsh").content
+  assert.ok(
+    writingContent.includes("`bash scripts/tool.sh`") &&
+      writingContent.includes("`node scripts/tool.js`"),
+    "hypothetical script examples in legitimate prose must remain unchanged"
+  )
+  assert.ok(
+    content.includes("[code-reviewer.md](../requesting-code-review/code-reviewer.md)"),
+    "legitimate Markdown resource prose must remain unchanged"
+  )
+})
+
+test("OpenCode and Codex keep their own native subagent rendering", () => {
+  const definitions = listSkillDefinitions({ host: "opencode-v2" })
+  const research = definitions.find((skill) => skill.name === "deep-research")
+  const hyperplan = definitions.find((skill) => skill.name === "hyperplan")
+
+  const v1Research = renderSkillForHost(research, "opencode-v1").content
+  assert.match(v1Research, /task\(background:\s*true\)/)
+  const v2Research = renderSkillForHost(research, "opencode-v2").content
+  assert.match(v2Research, /subagent\([^)]*background:\s*true/)
+  assert.doesNotMatch(v2Research, /\btask\s*\(/)
+  const codexResearch = renderSkillForHost(research, "codex").content
+  assert.match(codexResearch, /spawn_agent/)
+  assert.doesNotMatch(codexResearch, /\btask\s*\(|background\s*[:=]\s*true/)
+
+  const v2Hyperplan = renderSkillForHost(hyperplan, "opencode-v2").content
+  assert.match(v2Hyperplan, /subagent\(background\s*=\s*true/)
+  assert.doesNotMatch(v2Hyperplan, /\btask\s*\(/)
+  const codexHyperplan = renderSkillForHost(hyperplan, "codex").content
+  assert.match(codexHyperplan, /spawn_agent/)
+  assert.doesNotMatch(codexHyperplan, /\btask\s*\(|background\s*[:=]\s*true/)
 })
 
 test("all skill directories have SKILL.md", () => {

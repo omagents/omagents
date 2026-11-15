@@ -1,0 +1,33 @@
+{
+  "name": "@omagents/omagents-codex",
+  "version": "0.13.1",
+  "description": "Codex agent toolkit: bundled skills, MCP servers, native subagents, and superpowers",
+  "type": "module",
+  "main": "src/setup.js",
+  "bin": {
+    "omagents-codex": "bin/install.js"
+  },
+  "files": [
+    "bin/",
+    "src/"
+  ],
+  "keywords": [
+    "codex",
+    "plugin",
+    "skills",
+    "mcp",
+    "agents"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omagents/omagents"
+  },
+  "dependencies": {
+    "@omagents/core": "0.13.1"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

@@ -1,0 +1,36 @@
+/** Stable, plugin-owned CSS-module keys shared by source tests and the Client build. */
+export declare const styles: {
+    readonly page: "omagents-job-board";
+    readonly header: "omagents-job-board__header";
+    readonly title: "omagents-job-board__title";
+    readonly actions: "omagents-job-board__actions";
+    readonly filters: "omagents-job-board__filters";
+    readonly filterButton: "omagents-job-board__filter";
+    readonly filterButtonActive: "omagents-job-board__filter--active";
+    readonly notice: "omagents-job-board__notice";
+    readonly error: "omagents-job-board__error";
+    readonly stale: "omagents-job-board__stale";
+    readonly degraded: "omagents-job-board__degraded";
+    readonly tableWrapper: "omagents-job-board__table-wrapper";
+    readonly table: "omagents-job-board__table";
+    readonly taskButton: "omagents-job-board__task";
+    readonly badge: "omagents-job-board__badge";
+    readonly badgeRunning: "omagents-job-board__badge--running";
+    readonly badgeCancelling: "omagents-job-board__badge--cancelling";
+    readonly badgeCompleted: "omagents-job-board__badge--completed";
+    readonly badgeFailed: "omagents-job-board__badge--failed";
+    readonly badgeCancelled: "omagents-job-board__badge--cancelled";
+    readonly badgeInterrupted: "omagents-job-board__badge--interrupted";
+    readonly details: "omagents-job-board__details";
+    readonly detailsGrid: "omagents-job-board__details-grid";
+    readonly detailValue: "omagents-job-board__detail-value";
+    readonly dialogBackdrop: "omagents-job-board__dialog-backdrop";
+    readonly dialog: "omagents-job-board__dialog";
+    readonly dialogActions: "omagents-job-board__dialog-actions";
+    readonly button: "omagents-job-board__button";
+    readonly primaryButton: "omagents-job-board__button--primary";
+    readonly dangerButton: "omagents-job-board__button--danger";
+    readonly icon: "omagents-job-board__icon";
+    readonly empty: "omagents-job-board__empty";
+    readonly muted: "omagents-job-board__muted";
+};

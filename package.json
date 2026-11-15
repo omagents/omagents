@@ -1,12 +1,12 @@
 {
   "name": "@omagents/omagents",
   "version": "0.13.1",
+  "private": true,
   "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
   "type": "module",
-  "main": ".opencode/plugins/index.js",
-  "bin": {
-    "omagents": "index.js"
-  },
+  "workspaces": [
+    "packages/*"
+  ],
   "keywords": [
     "opencode",
     "codex",
@@ -21,19 +21,18 @@
     "type": "git",
     "url": "https://github.com/omagents/omagents"
   },
-  "dependencies": {
-    "superpowers": "git+https://github.com/obra/superpowers.git#8ca22dba9a94f28898bbce59f2537ff4d87c747d"
-  },
-  "bundledDependencies": [
-    "superpowers"
-  ],
   "scripts": {
-    "build:pack": "npm pack",
-    "test": "node --test tests/*.test.js",
-    "format": "prettier --write .opencode/plugins/*.js setup/*.js tests/*.js index.js .codex/plugins/*.js hooks/*.js",
-    "format:check": "prettier --check .opencode/plugins/*.js setup/*.js tests/*.js index.js .codex/plugins/*.js hooks/*.js"
+    "build:pack": "npm pack --workspace @omagents/omagents",
+    "pack:all": "node scripts/pack-all.js",
+    "test:packed": "node --test scripts/test-packed-installs.js",
+    "test:browser": "node scripts/test-browser.js",
+    "release:check": "node scripts/check-release.js",
+    "test": "node --test tests/*.test.js && npm test --workspaces --if-present",
+    "format": "prettier --write packages/core/src/*.js packages/core/src/*/*.js packages/core/hooks/*.js packages/core/scripts/*.js packages/opencode/src/*.js packages/opencode/bin/*.js packages/codex/src/*.js packages/codex/bin/*.js packages/codex/test/*.js tests/*.js scripts/*.js",
+    "format:check": "prettier --check packages/core/src/*.js packages/core/src/*/*.js packages/core/hooks/*.js packages/core/scripts/*.js packages/opencode/src/*.js packages/opencode/bin/*.js packages/codex/src/*.js packages/codex/bin/*.js packages/codex/test/*.js tests/*.js scripts/*.js"
   },
   "devDependencies": {
+    "playwright": "^1.65.0",
     "prettier": "^3.9.9"
   }
 }

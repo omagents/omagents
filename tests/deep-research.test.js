@@ -11,21 +11,46 @@ const PYTHON =
   PYTHON_SETTING.includes("/") || PYTHON_SETTING.includes("\\")
     ? path.resolve(ROOT, PYTHON_SETTING)
     : PYTHON_SETTING
-const SCRIPTS = path.join(ROOT, "skills", "deep-research", "scripts")
+const SCRIPTS = path.join(ROOT, "packages", "core", "skills", "deep-research", "scripts")
+const LEGACY_CONSOLE = {
+  PYTHONIOENCODING: "cp1252",
+  ...(process.platform === "win32"
+    ? { PYTHONUTF8: "0", PYTHONCOERCECLOCALE: "0", LC_ALL: "C" }
+    : {}),
+}
 const PRE_RESEARCH = path.join(SCRIPTS, "pre_research.py")
 const DEEP_RESEARCH = path.join(SCRIPTS, "deep_research.py")
-const LOOP_ENGINE = path.join(ROOT, "skills", "_shared", "scripts", "loop_engine.py")
+const LOOP_ENGINE = path.join(
+  ROOT,
+  "packages",
+  "core",
+  "skills",
+  "_shared",
+  "scripts",
+  "loop_engine.py"
+)
 
 function makeProject(t) {
-  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "omagents-research-")))
+  const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "omagents-research-")))
+  let project = temporary
+  if (process.platform === "win32") {
+    const resolved = spawnSync(
+      PYTHON,
+      ["-c", "import os, sys; print(os.path.realpath(sys.argv[1]))", temporary],
+      { encoding: "utf-8" }
+    )
+    assert.strictEqual(resolved.status, 0, resolved.stderr)
+    project = resolved.stdout.trim()
+  }
   t.after(() => fs.rmSync(project, { recursive: true, force: true }))
   return project
 }
 
-function runPython(script, args, cwd, expectedStatus = 0) {
+function runPython(script, args, cwd, expectedStatus = 0, environment = {}) {
   const result = spawnSync(PYTHON, [script, ...args], {
     cwd,
     encoding: "utf-8",
+    env: { ...process.env, ...environment },
   })
   assert.strictEqual(
     result.status,
@@ -62,10 +87,34 @@ function preFinding() {
 }
 
 function dispatchFrom(output) {
-  const start = output.lastIndexOf('{\n  "action"')
+  const normalized = output.replaceAll("\r\n", "\n")
+  const start = normalized.lastIndexOf('{\n  "action"')
   assert.notStrictEqual(start, -1, `No dispatch JSON in output:\n${output}`)
-  return JSON.parse(output.slice(start))
+  return JSON.parse(normalized.slice(start))
 }
+
+function shellRoundTrip(quoted) {
+  if (process.platform === "win32") {
+    return spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::Out.Write(${quoted})`,
+      ],
+      { encoding: "utf-8" }
+    )
+  }
+  return spawnSync("/bin/sh", ["-c", `printf '%s' ${quoted}`], { encoding: "utf-8" })
+}
+
+test("dispatch parser accepts Windows CRLF output", () => {
+  const dispatch = dispatchFrom(
+    'Phase 1: Creating research plan...\r\n{\r\n  "action": "dispatch_subagent",\r\n  "run_id": "windows-crlf",\r\n  "tasks": []\r\n}\r\n'
+  )
+  assert.equal(dispatch.action, "dispatch_subagent")
+  assert.equal(dispatch.run_id, "windows-crlf")
+})
 
 test("Python research layout resolver", () => {
   const result = spawnSync(
@@ -141,15 +190,16 @@ test("test_pre_research_supports_unicode_workspace_with_spaces", (t) => {
   const project = makeProject(t)
   const workspace = "研究 topic with spaces"
   const query = "边缘计算 2026"
+  const runWithLegacyConsole = (args) => runPython(PRE_RESEARCH, args, project, 0, LEGACY_CONSOLE)
 
-  runPython(PRE_RESEARCH, ["init", "--query", query, "--workspace", workspace], project)
-  const next = JSON.parse(runPython(PRE_RESEARCH, ["next", "-w", workspace], project).stdout)
+  runWithLegacyConsole(["init", "--query", query, "--workspace", workspace])
+  const next = JSON.parse(runWithLegacyConsole(["next", "-w", workspace]).stdout)
   assert.match(next.description, /边缘计算 2026/)
 
   const internal = runDir(project)
   writeJson(path.join(internal, "pre_findings", "pre-1.json"), preFinding())
-  runPython(PRE_RESEARCH, ["complete", "pre-1", "-w", workspace], project)
-  runPython(PRE_RESEARCH, ["finalize", "-w", workspace], project)
+  runWithLegacyConsole(["complete", "pre-1", "-w", workspace])
+  runWithLegacyConsole(["finalize", "-w", workspace])
   const consolidated = JSON.parse(
     fs.readFileSync(path.join(internal, "pre_research.json"), "utf-8")
   )
@@ -471,24 +521,343 @@ test("test_default_and_ancestor_workspaces_are_rejected_before_writes", (t) => {
   assert.ok(!fs.existsSync(path.join(nested, ".omagents")))
 })
 
+test("structured subagent dispatch is host-neutral and complete", (t) => {
+  const project = makeProject(t)
+  const plan = {
+    query: "Compare Alpha and Beta agent frameworks in 2026",
+    items: [
+      {
+        id: "item-1",
+        name: "Alpha Framework",
+        type: "framework",
+        description: "Alpha's orchestration runtime and maintainer",
+      },
+      {
+        id: "item-2",
+        name: "Beta Framework",
+        type: "framework",
+        description: "Beta's graph runtime and maintainer",
+      },
+    ],
+    fields: [
+      {
+        id: "field-1",
+        name: "Latest Version",
+        category: "Version",
+        description: "Most recent stable upstream release with its release date",
+        required: true,
+      },
+      {
+        id: "field-2",
+        name: "Strengths",
+        category: "Assessment",
+        description: "Evidence-backed architectural and developer-experience advantages",
+        required: false,
+      },
+    ],
+  }
+  const source = `
+import json
+import sys
+sys.path.insert(0, ${JSON.stringify(SCRIPTS)})
+from layout import ResearchLayout
+from orchestrate import output_dispatch_instructions
+layout = ResearchLayout.resolve("structured", ${JSON.stringify(project)})
+plan = json.loads(r'''${JSON.stringify(plan)}''')
+layout.plan_path.parent.mkdir(parents=True, exist_ok=True)
+layout.plan_path.write_text(json.dumps(plan), encoding="utf-8")
+tasks = [
+    {"task_id": "task-a", "type": "web", "item_id": "item-1", "field_ids": ["field-1", "field-2"], "focus": "Research Alpha", "description": "Research Alpha"},
+    {"task_id": "task-b", "type": "github", "item_id": "item-2", "field_ids": ["field-2"], "focus": "Research Beta", "description": "Research Beta"},
+]
+output_dispatch_instructions(tasks[:1], layout.workspace, layout)
+print("---BATCH---")
+output_dispatch_instructions(tasks, layout.workspace, layout)
+`
+  const result = runPython("-c", [source], project)
+  const [singleOutput, batchOutput] = result.stdout.split("---BATCH---")
+  const single = dispatchFrom(singleOutput)
+  const batch = dispatchFrom(batchOutput)
+
+  for (const key of ["action", "description", "prompt", "name", "cwd"]) {
+    assert.ok(single[key], `single dispatch is missing ${key}`)
+  }
+  assert.strictEqual(single.action, "dispatch_subagent")
+  assert.strictEqual(single.name, "task-a")
+  assert.strictEqual(single.cwd, project)
+  assert.match(single.prompt, /Research Alpha/)
+  assert.match(single.prompt, /task-a\.json/)
+  assert.match(single.prompt, /deep_research\.py/)
+  for (const expected of [
+    "Compare Alpha and Beta agent frameworks in 2026",
+    "Alpha Framework",
+    "Alpha's orchestration runtime and maintainer",
+    "Latest Version",
+    "Most recent stable upstream release with its release date",
+    '"required": true',
+    "Strengths",
+    "Evidence-backed architectural and developer-experience advantages",
+    '"required": false',
+    path.join(project, ".omagents", "deep-research", single.run_id, "plan.json"),
+  ]) {
+    assert.ok(
+      single.prompt.includes(expected),
+      `fresh child prompt is missing research context: ${expected}\n${single.prompt}`
+    )
+  }
+  assert.ok(path.isAbsolute(single.resume_command.executable))
+  assert.strictEqual(single.resume_command.args[0], path.join(SCRIPTS, "deep_research.py"))
+  assert.deepStrictEqual(single.resume_command.args.slice(1), [
+    "run-all",
+    "--resume",
+    "--workspace",
+    path.join(project, "structured"),
+  ])
+  assert.strictEqual(single.legacy_resume_command.executable, "deep_research.py")
+  assert.deepStrictEqual(single.legacy_resume_command.args, [
+    "run-all",
+    "--resume",
+    "--workspace",
+    path.join(project, "structured"),
+  ])
+  assert.doesNotMatch(result.stdout, /\btask\s*\(\s*background|background\s*[:=]\s*true|OPENCODE_/)
+
+  assert.strictEqual(batch.action, "dispatch_subagents_batch")
+  assert.strictEqual(batch.dispatches.length, 2)
+  for (const [index, dispatch] of batch.dispatches.entries()) {
+    assert.strictEqual(dispatch.action, "dispatch_subagent")
+    assert.strictEqual(dispatch.name, `task-${index === 0 ? "a" : "b"}`)
+    assert.strictEqual(dispatch.cwd, project)
+    assert.ok(dispatch.description)
+    assert.match(dispatch.prompt, new RegExp(`task-${index === 0 ? "a" : "b"}\\.json`))
+    assert.match(dispatch.prompt, /Compare Alpha and Beta agent frameworks in 2026/)
+    assert.match(dispatch.prompt, new RegExp(index === 0 ? "Alpha Framework" : "Beta Framework"))
+    assert.match(dispatch.prompt, /Strengths/)
+    assert.match(
+      dispatch.prompt,
+      /Evidence-backed architectural and developer-experience advantages/
+    )
+    assert.match(dispatch.prompt, /"required": false/)
+  }
+})
+
+test("gap analysis adds a run-scoped task and resumes the same research lane", (t) => {
+  const project = makeProject(t)
+  const first = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      ["run-all", "--query", "Gap resume", "--workspace", "gap-resume", "--skip-pre-research"],
+      project
+    ).stdout
+  )
+  const runId = first.run_id
+  const internal = path.join(project, ".omagents", "deep-research", runId)
+  const planPath = path.join(internal, "plan.json")
+  const plan = JSON.parse(fs.readFileSync(planPath, "utf-8"))
+  plan.fields.push({
+    id: "field-gap",
+    name: "Missing dimension",
+    category: "General",
+    description: "A required field with no initial research task",
+    required: true,
+  })
+  writeJson(planPath, plan)
+
+  let resumed = first
+  for (let batch = 0; batch < 5; batch += 1) {
+    for (const task of resumed.tasks) {
+      writeJson(task.output_path, {
+        type: task.type,
+        task_id: task.task_id,
+        item_id: task.item_id,
+        field_ids: task.field_ids,
+        focus: task.focus,
+        iteration: 0,
+        findings: [
+          {
+            source: `https://example.com/${task.task_id}`,
+            title: task.focus,
+            published_date: "2026-01-01",
+            field_data: Object.fromEntries(task.field_ids.map((field) => [field, "covered"])),
+            summary: "Covered initial fields",
+            key_quotes: [],
+            relevance: "high",
+            uncertain: false,
+          },
+        ],
+        gaps: [],
+      })
+      runPython(
+        LOOP_ENGINE,
+        ["complete", `deep-research-${runId}`, task.task_id, "initial findings written"],
+        project
+      )
+    }
+    resumed = dispatchFrom(
+      runPython(DEEP_RESEARCH, ["run-all", "--resume", "--workspace", "gap-resume"], project).stdout
+    )
+    if (resumed.action === "dispatch_subagent" && resumed.name?.startsWith("task-r1-")) break
+    assert.ok(batch < 4, "gap dispatch was not reached after draining initial tasks")
+  }
+
+  assert.strictEqual(resumed.run_id, runId)
+  assert.strictEqual(resumed.action, "dispatch_subagent")
+  assert.match(resumed.name, /^task-r1-/)
+  assert.match(resumed.prompt, /field-gap|Missing dimension/)
+  const checkpoint = JSON.parse(
+    fs.readFileSync(path.join(internal, "state", "orchestration_state.json"), "utf-8")
+  )
+  assert.strictEqual(checkpoint.phase, "dispatch")
+  assert.strictEqual(checkpoint.loop, 1)
+  const queue = JSON.parse(
+    fs.readFileSync(
+      path.join(project, ".omagents", "loops", `deep-research-${runId}`, "tasks.json"),
+      "utf-8"
+    )
+  )
+  assert.ok(queue.tasks.some((task) => task.task_id === resumed.name && task.status === "pending"))
+  assert.ok(!fs.existsSync(path.join(project, "gap-resume", "plan.json")))
+})
+
+test("missing and corrupt loop queues fail resume before gap or report stages", (t) => {
+  for (const mode of ["missing", "corrupt", "null-row", "empty-row"]) {
+    const project = makeProject(t)
+    const first = dispatchFrom(
+      runPython(
+        DEEP_RESEARCH,
+        [
+          "run-all",
+          "--query",
+          `Queue ${mode}`,
+          "--workspace",
+          "queue-failure",
+          "--skip-pre-research",
+        ],
+        project
+      ).stdout
+    )
+    const queuePath = path.join(
+      project,
+      ".omagents",
+      "loops",
+      `deep-research-${first.run_id}`,
+      "tasks.json"
+    )
+    if (mode === "missing") {
+      fs.rmSync(queuePath)
+    } else if (mode === "corrupt") {
+      fs.writeFileSync(queuePath, "{not-json", "utf-8")
+    } else {
+      const queue = JSON.parse(fs.readFileSync(queuePath, "utf-8"))
+      writeJson(queuePath, {
+        ...queue,
+        tasks: [mode === "null-row" ? null : {}],
+      })
+    }
+
+    const resumed = runPython(
+      DEEP_RESEARCH,
+      ["run-all", "--resume", "--workspace", "queue-failure"],
+      project,
+      1
+    )
+    const output = `${resumed.stdout}\n${resumed.stderr}`
+    assert.match(output, /loop queue.*(missing|unreadable|invalid)/i)
+    assert.doesNotMatch(output, /Phase 3|Phase 4|Phase 5|Research complete/)
+    assert.ok(!fs.existsSync(path.join(project, "queue-failure", "report.md")))
+    assert.ok(
+      !fs.existsSync(
+        path.join(
+          project,
+          ".omagents",
+          "deep-research",
+          first.run_id,
+          "artifacts",
+          "gap_report.json"
+        )
+      )
+    )
+    const checkpoint = JSON.parse(
+      fs.readFileSync(
+        path.join(
+          project,
+          ".omagents",
+          "deep-research",
+          first.run_id,
+          "state",
+          "orchestration_state.json"
+        ),
+        "utf-8"
+      )
+    )
+    assert.strictEqual(checkpoint.phase, "dispatch")
+  }
+
+  const project = makeProject(t)
+  const first = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      [
+        "run-all",
+        "--query",
+        "Valid empty queue",
+        "--workspace",
+        "valid-empty",
+        "--skip-pre-research",
+      ],
+      project
+    ).stdout
+  )
+  const queuePath = path.join(
+    project,
+    ".omagents",
+    "loops",
+    `deep-research-${first.run_id}`,
+    "tasks.json"
+  )
+  const queue = JSON.parse(fs.readFileSync(queuePath, "utf-8"))
+  writeJson(queuePath, { ...queue, tasks: [] })
+  const resumed = runPython(
+    DEEP_RESEARCH,
+    ["run-all", "--resume", "--workspace", "valid-empty"],
+    project
+  )
+  assert.match(resumed.stdout, /Phase 3: Running gap analysis/)
+  assert.ok(
+    fs.existsSync(
+      path.join(project, ".omagents", "deep-research", first.run_id, "artifacts", "gap_report.json")
+    )
+  )
+})
+
 test("test_agent_output_paths_shell_round_trip", (t) => {
   const project = makeProject(t)
   const preWorkspace = "研究 topic's & spaces"
   const preResult = runPython(
     DEEP_RESEARCH,
-    ["run-all", "--query", "Shell paths", "--workspace", preWorkspace],
-    project
+    ["run-all", "--query", "Shell paths 研究", "--workspace", preWorkspace],
+    project,
+    0,
+    LEGACY_CONSOLE
   )
   const pre = dispatchFrom(preResult.stdout)
-  assert.strictEqual(pre.shell, "posix")
+  assert.ok(pre.task.description.includes("Shell paths 研究"))
+  assert.strictEqual(pre.shell, process.platform === "win32" ? "powershell" : "posix")
   assert.strictEqual(path.basename(pre.output_path), "pre-1.json")
   assert.ok(pre.output_path.includes(".omagents"))
-  const preRoundTrip = spawnSync("/bin/sh", ["-c", `printf '%s' ${pre.output_path_quoted}`], {
-    encoding: "utf-8",
-  })
+  const preRoundTrip = shellRoundTrip(pre.output_path_quoted)
   assert.strictEqual(preRoundTrip.status, 0, preRoundTrip.stderr)
   assert.strictEqual(preRoundTrip.stdout, pre.output_path)
+  assert.ok(path.isAbsolute(pre.resume_command.executable))
   assert.deepStrictEqual(pre.resume_command.args, [
+    path.join(SCRIPTS, "deep_research.py"),
+    "run-all",
+    "--resume",
+    "--workspace",
+    path.join(project, preWorkspace),
+  ])
+  assert.strictEqual(pre.legacy_resume_command.executable, "deep_research.py")
+  assert.deepStrictEqual(pre.legacy_resume_command.args, [
     "run-all",
     "--resume",
     "--workspace",
@@ -499,16 +868,16 @@ test("test_agent_output_paths_shell_round_trip", (t) => {
   const mainResult = runPython(
     DEEP_RESEARCH,
     ["run-all", "--query", "Main shell paths", "--workspace", mainWorkspace, "--skip-pre-research"],
-    project
+    project,
+    0,
+    LEGACY_CONSOLE
   )
   const main = dispatchFrom(mainResult.stdout)
-  assert.strictEqual(main.shell, "posix")
+  assert.strictEqual(main.shell, process.platform === "win32" ? "powershell" : "posix")
   assert.ok(main.tasks.length > 0)
   for (const task of main.tasks) {
     assert.strictEqual(path.basename(task.output_path), `${task.task_id}.json`)
-    const roundTrip = spawnSync("/bin/sh", ["-c", `printf '%s' ${task.output_path_quoted}`], {
-      encoding: "utf-8",
-    })
+    const roundTrip = shellRoundTrip(task.output_path_quoted)
     assert.strictEqual(roundTrip.status, 0, roundTrip.stderr)
     assert.strictEqual(roundTrip.stdout, task.output_path)
   }

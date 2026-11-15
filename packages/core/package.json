@@ -1,0 +1,23 @@
+{
+  "name": "@omagents/core",
+  "version": "0.13.1",
+  "description": "Host-neutral state and shared capabilities for OmAgents",
+  "type": "module",
+  "main": "src/index.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omagents/omagents"
+  },
+  "dependencies": {
+    "superpowers": "git+https://github.com/obra/superpowers.git#8ca22dba9a94f28898bbce59f2537ff4d87c747d"
+  },
+  "bundledDependencies": [
+    "superpowers"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "prepack": "node scripts/pack-superpowers.js",
+    "postpack": "node scripts/pack-superpowers.js --cleanup"
+  }
+}
