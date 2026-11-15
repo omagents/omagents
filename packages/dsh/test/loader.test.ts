@@ -497,3 +497,92 @@ test("later write failures preserve in-memory reconciliation and Remote list/wat
   assert.deepEqual((await remote.listJobs({})).map((candidate) => candidate.id), [job.id])
   await runtime.dispose()
 })
+
+test("queued writes cannot overwrite a repaired snapshot after persistence degrades", async (t) => {
+  const isolated = await createIsolatedProfile(t)
+  const storePath = join(isolated.profileDir, "omagents", "job-board.json")
+  const { createDshRuntime } = await import("../dist/host/runtime.js")
+  const context = new Context()
+  context.baseUrl = isolated.baseUrl
+  const runtime = await createDshRuntime(context)
+  t.after(() => runtime.dispose())
+  t.after(() => context.fiber.dispose())
+
+  const originalRename = fs.rename
+  const firstRename = deferred()
+  const secondRename = deferred()
+  const releaseSecondRename = deferred()
+  let renameCount = 0
+  let secondRenameStarted = false
+  t.mock.method(fs, "rename", async (...args) => {
+    renameCount += 1
+    if (renameCount === 1) {
+      firstRename.resolve()
+      throw new Error("injected first replacement failure")
+    }
+    if (renameCount === 2) {
+      secondRenameStarted = true
+      secondRename.resolve()
+      await releaseSecondRename.promise
+    }
+    return originalRename(...args)
+  })
+
+  const first = runtime.board.registerLaunch(launch)
+  const second = runtime.board.registerLaunch({
+    ...launch,
+    hostTaskId: "loader-race-second",
+    description: "Queued before the first write fails",
+  })
+  await within(firstRename.promise, "first atomic replacement")
+  await within(
+    (async () => {
+      while (runtime.health.persistence.status !== "degraded") {
+        await new Promise((resolveTurn) => setImmediate(resolveTurn))
+      }
+    })(),
+    "degraded persistence health"
+  )
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+
+  // This save happens after degradation and must remain memory-only. The second
+  // launch above was already admitted before degradation and is the race case.
+  const third = runtime.board.registerLaunch({
+    ...launch,
+    hostTaskId: "loader-race-third",
+    description: "Admitted after persistence degraded",
+  })
+  const repairedSnapshot = { version: 1, revision: 77, jobs: [] }
+  await fs.writeFile(storePath, `${JSON.stringify(repairedSnapshot, null, 2)}\n`, "utf8")
+  releaseSecondRename.resolve()
+
+  await within(runtime.board.flush(), "flush after repaired snapshot")
+  const disposal = runtime.dispose()
+  assert.strictEqual(runtime.dispose(), disposal)
+  await within(disposal, "repeated degraded runtime disposal")
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
+
+  const persisted = JSON.parse(await fs.readFile(storePath, "utf8"))
+  assert.equal(
+    persisted.revision,
+    77,
+    `stale write replaced repaired storage (second rename held: ${secondRenameStarted})`
+  )
+  assert.deepEqual(persisted.jobs, [])
+  assert.deepEqual(
+    runtime.board.list().map((job) => job.id),
+    [first.id, second.id, third.id],
+    "degraded operation must retain every in-memory launch"
+  )
+  assert.equal(runtime.health.persistence.status, "degraded")
+  assert.ok(
+    runtime.health.persistence.diagnostics.some((diagnostic) =>
+      diagnostic.message.includes("injected first replacement failure")
+    )
+  )
+  const temporaryFiles = (await fs.readdir(join(isolated.profileDir, "omagents"))).filter((name) =>
+    name.endsWith(".tmp")
+  )
+  assert.deepEqual(temporaryFiles, [])
+})

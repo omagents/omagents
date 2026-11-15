@@ -85,12 +85,22 @@ function errorMessage(error: unknown): string {
 function createDegradingJobStore(store: JsonJobStore) {
   const failures: HealthDiagnostic[] = []
   let degraded = false
+  let saveTail: Promise<void> = Promise.resolve()
   const record = (code: string, operation: string, error: unknown) => {
     const message = `DSH Job Board persistence ${operation} failed; continuing in memory: ${errorMessage(error)}`
     if (failures.some((diagnostic) => diagnostic.code === code && diagnostic.message === message)) {
       return
     }
     failures.push({ code, message })
+  }
+  const settleSaves = async () => {
+    // A flush/close must include saves admitted at its boundary, including
+    // adapter-queued saves that have not entered Core's own write queue yet.
+    while (true) {
+      const pending = saveTail
+      await pending
+      if (pending === saveTail) return
+    }
   }
 
   return {
@@ -111,16 +121,24 @@ function createDegradingJobStore(store: JsonJobStore) {
         return { version: 1, revision: 0, jobs: [] }
       }
     },
-    async save(snapshot: unknown) {
-      if (degraded) return
-      try {
-        await store.save(snapshot)
-      } catch (error) {
-        degraded = true
-        record("ERR_DSH_JOB_STORE_SAVE", "write", error)
-      }
+    save(snapshot: unknown) {
+      if (degraded) return saveTail
+      const admitted = saveTail.then(async () => {
+        // Earlier failure settles every adapter-queued save before this check.
+        // Once degraded, no later admission reaches Core's disk-write queue.
+        if (degraded) return
+        try {
+          await store.save(snapshot)
+        } catch (error) {
+          degraded = true
+          record("ERR_DSH_JOB_STORE_SAVE", "write", error)
+        }
+      })
+      saveTail = admitted
+      return admitted
     },
     async flush() {
+      await settleSaves()
       if (degraded) return
       try {
         await store.flush()
@@ -130,6 +148,7 @@ function createDegradingJobStore(store: JsonJobStore) {
       }
     },
     async close() {
+      await settleSaves()
       try {
         await store.close()
       } catch (error) {

@@ -13,12 +13,23 @@ function errorMessage(error) {
 function createDegradingJobStore(store) {
     const failures = [];
     let degraded = false;
+    let saveTail = Promise.resolve();
     const record = (code, operation, error) => {
         const message = `DSH Job Board persistence ${operation} failed; continuing in memory: ${errorMessage(error)}`;
         if (failures.some((diagnostic) => diagnostic.code === code && diagnostic.message === message)) {
             return;
         }
         failures.push({ code, message });
+    };
+    const settleSaves = async () => {
+        // A flush/close must include saves admitted at its boundary, including
+        // adapter-queued saves that have not entered Core's own write queue yet.
+        while (true) {
+            const pending = saveTail;
+            await pending;
+            if (pending === saveTail)
+                return;
+        }
     };
     return {
         get diagnostics() {
@@ -39,18 +50,27 @@ function createDegradingJobStore(store) {
                 return { version: 1, revision: 0, jobs: [] };
             }
         },
-        async save(snapshot) {
+        save(snapshot) {
             if (degraded)
-                return;
-            try {
-                await store.save(snapshot);
-            }
-            catch (error) {
-                degraded = true;
-                record("ERR_DSH_JOB_STORE_SAVE", "write", error);
-            }
+                return saveTail;
+            const admitted = saveTail.then(async () => {
+                // Earlier failure settles every adapter-queued save before this check.
+                // Once degraded, no later admission reaches Core's disk-write queue.
+                if (degraded)
+                    return;
+                try {
+                    await store.save(snapshot);
+                }
+                catch (error) {
+                    degraded = true;
+                    record("ERR_DSH_JOB_STORE_SAVE", "write", error);
+                }
+            });
+            saveTail = admitted;
+            return admitted;
         },
         async flush() {
+            await settleSaves();
             if (degraded)
                 return;
             try {
@@ -62,6 +82,7 @@ function createDegradingJobStore(store) {
             }
         },
         async close() {
+            await settleSaves();
             try {
                 await store.close();
             }
