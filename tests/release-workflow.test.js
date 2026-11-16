@@ -261,7 +261,8 @@ test("publisher completes the full clean preflight and artifact inspection befor
 })
 
 test("publisher confirms the exact Core registry version before publishing hosts", async () => {
-  const { publishAll, REGISTRY_CONFIRM_ATTEMPTS, REGISTRY_CONFIRM_INTERVAL_MS } = await releasePublisher()
+  const { publishAll, REGISTRY_CONFIRM_ATTEMPTS, REGISTRY_CONFIRM_INTERVAL_MS } =
+    await releasePublisher()
   const registry = new Map()
   const events = []
   let coreConfirmationAttempts = 0

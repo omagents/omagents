@@ -33,7 +33,10 @@ export async function publishArtifact(pkg, artifact, { root = ROOT, echo = true 
 export const REGISTRY_CONFIRM_ATTEMPTS = 30
 export const REGISTRY_CONFIRM_INTERVAL_MS = 10_000
 
-async function confirmRegistryVersion(pkg, { getPublishedVersion, delay, attempts = REGISTRY_CONFIRM_ATTEMPTS }) {
+async function confirmRegistryVersion(
+  pkg,
+  { getPublishedVersion, delay, attempts = REGISTRY_CONFIRM_ATTEMPTS }
+) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const published = await getPublishedVersion(pkg)
     if (published === pkg.version) return
