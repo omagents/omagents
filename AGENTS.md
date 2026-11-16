@@ -331,6 +331,7 @@ Use the aligned release automation and final gate when implementing a release; d
 | 0.13.0 | v0.13.0 | Deep Research deliverable/state separation, run-scoped queues, legacy compatibility, path/input hardening |
 | 0.13.1 | v0.13.1 | Websearch always hosted Exa MCP; anonymous by default, `x-api-key` authentication when configured |
 | 0.14.0 | v0.14.0 | Shared Core, standalone Codex installer, complete DSH Host/Web Client, coordinated four-host release automation |
+| 0.14.1 | v0.14.1 | DSH 0.2.2-rc.3 compatibility: aligned rc.3 dependencies, root-insert bundle row, native `mcpManager` waiting, activation name resolution and parent-scoped cancellation |
 
 ## Design Principles
 

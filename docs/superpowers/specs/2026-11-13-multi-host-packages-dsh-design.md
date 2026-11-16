@@ -1,7 +1,7 @@
 # Multi-Host Packages and Full DeepSeek Harness Support Design
 
 Date: 2026-11-13
-Status: Implementation verified locally and in main CI on Linux, macOS, and Windows; release candidate 0.14.0
+Status: Implementation verified locally and in main CI on Linux, macOS, and Windows; release candidate 0.14.1
 
 ## Purpose
 

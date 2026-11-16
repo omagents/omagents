@@ -1,6 +1,6 @@
 {
   "name": "@omagents/omagents",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "private": true,
   "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
   "type": "module",
@@ -33,6 +33,10 @@
   },
   "devDependencies": {
     "playwright": "^1.65.0",
-    "prettier": "^3.9.9"
+    "prettier": "^3.9.9",
+    "zod": "4.6.6"
+  },
+  "overrides": {
+    "zod": "4.6.6"
   }
 }

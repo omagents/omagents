@@ -1,6 +1,6 @@
 {
   "name": "@omagents/omagents-dsh",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "DeepSeek Harness host integration for OmAgents",
   "type": "module",
   "main": "./dist/host/index.js",
@@ -69,7 +69,7 @@
     "@deepseek-ai/dsh-subagent": "0.2.2-rc.3",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
     "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.3",
-    "@omagents/core": "0.14.0",
+    "@omagents/core": "0.14.1",
     "zod": "4.6.6"
   },
   "devDependencies": {

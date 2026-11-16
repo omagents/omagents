@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - 2026-11-16
+
+### Fixed
+
+- **DeepSeek Harness 0.2.2-rc.3 compatibility**: every `@deepseek-ai/*` dependency is pinned to `0.2.2-rc.3` and `zod` is aligned at `4.6.6`, so a profile copy no longer shadows the host's newer core plugins and the Host keeps its core services. `engines.dsh` is narrowed to `>=0.2.2-rc.3 <0.2.3-0`, the only release line exercised.
+- **DSH bundle row insertion**: `cordis.patch.yml` now declares the bare `@omagents/omagents-dsh` row as a root `insert`. rc.3 treats a patch without `insert` as an id-targeted override, so the previous bare row was skipped with `patch: entry "omagents" not found` and neither the Host nor its Web Client loaded.
+- **Built-in MCP manager**: when the composed profile contains an enabled `@deepseek-ai/dsh-mcp-manager` row, MCP registration waits for both `tools` and the native `mcpManager` service instead of providing a conflicting fallback; profiles without that row keep the OmAgents-owned adapter.
+- **Native subagent tracking on rc.3**: activation results are correlated to the durable child session through `ctx.subagents.resolveName`, lifecycle events use the required `parentSessionId`, and cancellation passes `{ kind: "user" }` authority without a parent id.
+
 ## [0.14.0] - 2026-11-15
 
 ### Added
