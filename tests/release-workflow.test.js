@@ -261,7 +261,7 @@ test("publisher completes the full clean preflight and artifact inspection befor
 })
 
 test("publisher confirms the exact Core registry version before publishing hosts", async () => {
-  const { publishAll } = await releasePublisher()
+  const { publishAll, REGISTRY_CONFIRM_ATTEMPTS, REGISTRY_CONFIRM_INTERVAL_MS } = await releasePublisher()
   const registry = new Map()
   const events = []
   let coreConfirmationAttempts = 0
@@ -288,7 +288,7 @@ test("publisher confirms the exact Core registry version before publishing hosts
       events.push(`publish:${pkg.id}`)
       registry.set(pkg.id, pkg.version)
     },
-    delay: async () => events.push("wait"),
+    delay: async (milliseconds) => events.push(`wait:${milliseconds}`),
   })
 
   assert.deepEqual(
@@ -298,7 +298,12 @@ test("publisher confirms the exact Core registry version before publishing hosts
   const corePublish = events.indexOf("publish:core")
   const firstHostPublish = events.indexOf("publish:opencode")
   assert.equal(events[corePublish + 1], "view:core")
-  assert.equal(events[corePublish + 2], "wait")
+  assert.equal(events[corePublish + 2], `wait:${REGISTRY_CONFIRM_INTERVAL_MS}`)
+  // npm propagation can lag minutes: the default budget must cover at least 4 minutes.
+  assert.ok(
+    REGISTRY_CONFIRM_INTERVAL_MS * (REGISTRY_CONFIRM_ATTEMPTS - 1) >= 4 * 60 * 1000,
+    "registry confirmation must allow at least four minutes of propagation"
+  )
   assert.equal(events[corePublish + 3], "view:core")
   assert.ok(corePublish < firstHostPublish)
   assert.ok(events.lastIndexOf("view:core", firstHostPublish) > corePublish)

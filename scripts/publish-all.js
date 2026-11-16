@@ -27,14 +27,20 @@ export async function publishArtifact(pkg, artifact, { root = ROOT, echo = true 
   await runNpm(["publish", artifact.tarball, "--access", "public"], { cwd: root, echo })
 }
 
-async function confirmRegistryVersion(pkg, { getPublishedVersion, delay, attempts = 30 }) {
+// npm returns "+ pkg@version" immediately after `npm publish`, but registry
+// propagation routinely takes a minute or more, so the confirmation budget is
+// ~5 minutes (29 waits × 10s) instead of the old 60s that forced manual reruns.
+export const REGISTRY_CONFIRM_ATTEMPTS = 30
+export const REGISTRY_CONFIRM_INTERVAL_MS = 10_000
+
+async function confirmRegistryVersion(pkg, { getPublishedVersion, delay, attempts = REGISTRY_CONFIRM_ATTEMPTS }) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const published = await getPublishedVersion(pkg)
     if (published === pkg.version) return
     if (published !== null) {
       throw new Error(`Registry confirmation failed for ${pkg.name}@${pkg.version}`)
     }
-    if (attempt < attempts) await delay(2_000)
+    if (attempt < attempts) await delay(REGISTRY_CONFIRM_INTERVAL_MS)
   }
   throw new Error(`Timed out waiting for ${pkg.name}@${pkg.version} in npm`)
 }
