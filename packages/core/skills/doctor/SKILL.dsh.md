@@ -9,15 +9,16 @@ Verify the installed `@omagents/omagents-dsh` composition using DSH 0.2.2 contra
 
 ## 1. Host and Loader Registration
 
-Check that the active DSH profile has the bare package-root Loader row:
+Check that the active DSH profile inserts the bare package-root Loader row:
 
 ```yaml
-- id: omagents
-  name: "@omagents/omagents-dsh"
+- insert:
+    - id: omagents
+      name: "@omagents/omagents-dsh"
 ```
 
-- **PASS:** the row is enabled and the Host starts without a required-service error.
-- **FAIL:** restore the row through the DSH bundle/plugin mechanism and reload the profile. Do not point it at `/dist/host` or add a separate Client Loader row.
+- **PASS:** the row is enabled and the Host starts without a required-service error or `patch: entry "omagents" not found` warning.
+- **FAIL:** restore the row through the DSH bundle/plugin mechanism and reload the profile. A patch without `insert` only overrides an existing entry, so it never adds the Host. Do not point the row at `/dist/host` or add a separate Client Loader row.
 - Inspect Host health through the OmAgents Remote `getHealth()` surface or the Web Job Board health presentation when available. Host, persistence, skills, MCP, Python, tools, commands, and context health are independent; one degraded capability must not be reported as total failure.
 
 ## 2. Native Skill Discovery and Superpowers

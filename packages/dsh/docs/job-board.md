@@ -88,7 +88,7 @@ The Client retains only the latest authorized ephemeral set. Carrier loss can ma
 
 ### Loading never completes
 
-Confirm that the bare `@omagents/omagents-dsh` Loader row is enabled and restart DSH. Check that the installed DSH version is within `>=0.2.2-rc.1 <0.2.3-0` and that the Remote contribution mounted with the Host. Do not register a separate Client Loader row.
+Confirm that the bare `@omagents/omagents-dsh` Loader row is enabled and restart DSH. Check that the installed DSH version is within `>=0.2.2-rc.3 <0.2.3-0` and that the Remote contribution mounted with the Host. Do not register a separate Client Loader row.
 
 ### Permission denied
 

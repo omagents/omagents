@@ -53,17 +53,21 @@ test("Host module has only named plugin exports and no default or Client export"
   assert.equal(host.client, undefined)
 })
 
-test("bundle patch is a bare package-root row and DSH engine range is release-tested", async () => {
+test("bundle patch inserts a bare package-root row and DSH engine range is release-tested", async () => {
   const manifest = await readManifest()
   assert.equal(manifest.dsh.bundle.patch, "./cordis.patch.yml")
   const patch = yaml.load(await readFile(resolve(packageDir, "cordis.patch.yml"), "utf8"))
-  assert.deepEqual(patch, [{ id: "omagents", name: "@omagents/omagents-dsh" }])
-  assert.equal(patch[0].name.includes("/dist/"), false)
-  assert.equal(patch[0].name.endsWith("/host"), false)
+  assert.deepEqual(patch, [
+    { insert: [{ id: "omagents", name: "@omagents/omagents-dsh" }] },
+  ])
+  assert.equal(patch[0].id, undefined, "a root insert must not target an existing entry")
+  const [row] = patch[0].insert
+  assert.equal(row.name.includes("/dist/"), false)
+  assert.equal(row.name.endsWith("/host"), false)
 
   const dshManifestPath = fileURLToPath(import.meta.resolve("@deepseek-ai/dsh/package.json"))
   const dshManifest = JSON.parse(await readFile(dshManifestPath, "utf8"))
-  assert.equal(dshManifest.version, "0.2.2-rc.1")
+  assert.equal(dshManifest.version, "0.2.2-rc.3")
   assert.equal(evaluatePluginCompatibility(manifest, {}, dshManifest.version), undefined)
   for (const untested of ["0.2.1-rc.5", "0.2.3-alpha.1", "0.3.0-alpha.1"]) {
     const issue = evaluatePluginCompatibility(manifest, {}, untested)

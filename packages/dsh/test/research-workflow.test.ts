@@ -77,6 +77,7 @@ async function nativeSubagentComposition(t) {
   t.after(() => root.fiber.dispose())
   const definitions = new Map()
   const activations = []
+  const names = new Map()
   const interrupts = []
   let nextChild = 0
   let activeStarts = 0
@@ -114,7 +115,15 @@ async function nativeSubagentComposition(t) {
       activations.push(spec)
       await new Promise((resolveTurn) => setImmediate(resolveTurn))
       activeStarts -= 1
-      return { childId: `research-child-${++nextChild}` }
+      const childId = SessionId(`research-child-${++nextChild}`)
+      const name = `worker-${nextChild}`
+      names.set(name, childId)
+      return { childId, name }
+    },
+    async resolveName(_caller, name) {
+      const childId = names.get(name)
+      if (!childId) throw new Error(`unknown subagent name "${name}"`)
+      return childId
     },
     interrupt(targetSessionId, authority) {
       interrupts.push({ targetSessionId, authority })
@@ -192,19 +201,22 @@ async function startNativeLane(composition, owner, dispatch) {
     token: Symbol(dispatch.name),
   }
   const value = await composition.subagent.execute(args, exec)
+  const childId = await composition.subagents.resolveName(owner, value.name, exec.signal)
   const result = {
     isError: false,
     value,
-    content: [{ type: "text", text: `started subagent ${value.subagentId}` }],
+    content: [{ type: "text", text: `started subagent ${value.name}` }],
   }
   const start = {
-    runId: SubagentRunId(`run-${value.subagentId}`),
+    runId: SubagentRunId(`run-${childId}`),
     provider: "spawn",
-    id: SessionId(value.subagentId),
+    parentSessionId: owner.session.id,
+    id: childId,
     local: true,
   }
   composition.root.emit(scopeTarget(composition.root.subagents, owner), "subagent/start", start)
   composition.root.emit(scopeTarget(composition.root.tools, owner), "tools/result", exec, result)
+  await new Promise((resolveTurn) => setImmediate(resolveTurn))
   return { start, result }
 }
 

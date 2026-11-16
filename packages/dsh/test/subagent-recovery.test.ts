@@ -233,6 +233,7 @@ test("a native end racing a slow recovery read wins without a missing-state regr
   root.emit(scopeTarget(root.subagents, owner), "subagent/end", {
     runId: SubagentRunId("racing-run"),
     provider: "spawn",
+    parentSessionId: SessionId("parent-1"),
     id: SessionId("racing-child"),
     local: true,
     stopReason: "completed",
@@ -296,6 +297,7 @@ test("an observed active external run stays active when its cold Session read is
   const start = {
     runId: SubagentRunId("active-external-run"),
     provider: "external",
+    parentSessionId: SessionId("parent-1"),
     id: SessionId("active-external-child"),
     local: false,
   }

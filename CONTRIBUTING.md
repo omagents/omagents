@@ -46,7 +46,7 @@ omagents/
 │       ├── src/host/               # Typed Host, lifecycle, Remote, and adapters
 │       ├── src/client/             # Native React Web Job Board
 │       ├── dist/                   # Built publish artifacts
-│       └── cordis.patch.yml        # Bare package-root Loader row
+│       └── cordis.patch.yml        # Inserted package-root Loader row
 ├── scripts/                        # Pack, clean-room, and browser verification
 ├── tests/                          # Root and cross-package tests
 ├── package.json                    # Private npm-workspaces root

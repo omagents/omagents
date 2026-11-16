@@ -67,7 +67,9 @@ test("the bare root Loader row declares the Web Client and built public exports"
     default: "./dist/host/typert.js",
   })
   const patch = yaml.load(await readFile(resolve(packageDir, "cordis.patch.yml"), "utf8"))
-  assert.deepEqual(patch, [{ id: "omagents", name: "@omagents/omagents-dsh" }])
+  assert.deepEqual(patch, [
+    { insert: [{ id: "omagents", name: "@omagents/omagents-dsh" }] },
+  ])
   assert.deepEqual(pkg.files, ["dist/", "cordis.patch.yml"])
   assert.equal(pkg.scripts.prepare, undefined)
 })

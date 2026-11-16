@@ -20,7 +20,7 @@ import {
 export const CLEAN_ROOM_SUMMARY = path.join(ARTIFACT_ROOT, "clean-room.json")
 export const OFFLINE_CACHE = path.join(ARTIFACT_ROOT, "offline-npm-cache")
 const CACHE_SEAL = path.join(OFFLINE_CACHE, "omagents-seed.json")
-const DSH_VERSION = "0.2.2-rc.1"
+const DSH_VERSION = "0.2.2-rc.3"
 const MCP_NAMES = ["agentmemory", "codegraph", "context7", "websearch", "grep_app"]
 
 function hash(value) {

@@ -43,10 +43,17 @@ function toolRegistry() {
 
 function subagentService() {
   const interrupts = []
+  const names = new Map()
   return {
     interrupts,
+    names,
     interrupt(targetSessionId, authority) {
       interrupts.push({ targetSessionId, authority })
+    },
+    async resolveName(_caller, name) {
+      const childId = names.get(name)
+      if (!childId) throw new Error(`unknown subagent name "${name}"`)
+      return SessionId(childId)
     },
   }
 }
@@ -67,7 +74,13 @@ async function setup(t, { withTools = false } = {}) {
 }
 
 function emitStart(root, owner, { id, runId = `run-${id}`, local = true, provider = "spawn" }) {
-  const info = { runId: SubagentRunId(runId), provider, id: SessionId(id), local }
+  const info = {
+    runId: SubagentRunId(runId),
+    provider,
+    parentSessionId: SessionId(owner.session.id),
+    id: SessionId(id),
+    local,
+  }
   root.emit(scopeTarget(root.subagents, owner), "subagent/start", info)
   return info
 }
@@ -82,12 +95,17 @@ function emitResult(root, owner, id, description = `Work on ${id}`) {
     signal: new AbortController().signal,
     token: Symbol(id),
   }
+  // DSH 0.2.2-rc.2+ activation results carry the model-facing name only.
+  const name = `worker-${id}`
+  root.get("subagents").names.set(name, id)
   const result = {
     isError: false,
-    value: { kind: "activation", subagentId: id },
-    content: [{ type: "text", text: `started subagent ${id}` }],
+    value: { kind: "activation", name },
+    content: [{ type: "text", text: `started subagent ${name}` }],
   }
   root.emit(scopeTarget(root.tools, owner), "tools/result", exec, result)
+  // Child-name resolution is asynchronous, like the native catalog lookup.
+  return new Promise((resolveTurn) => setImmediate(resolveTurn))
 }
 
 function emitEnd(root, owner, start, stopReason, lastAssistantMessage) {
@@ -102,7 +120,7 @@ test("native result/start correlation records the durable child and maps complet
   const { root, board } = await setup(t)
   const owner = parent()
   const start = emitStart(root, owner, { id: "child-complete" })
-  emitResult(root, owner, "child-complete", "Inspect lifecycle")
+  await emitResult(root, owner, "child-complete", "Inspect lifecycle")
 
   const [job] = board.list()
   assert.ok(job)
@@ -168,13 +186,14 @@ test("a missed start followed by end-before-result creates exactly one terminal 
   const end = {
     runId: SubagentRunId("orphan-end-run"),
     provider: "external",
+    parentSessionId: SessionId(owner.session.id),
     id: SessionId("orphan-end-child"),
     local: false,
   }
 
   emitEnd(root, owner, end, "completed", [{ type: "text", text: "Orphan result" }])
   assert.equal(board.list().length, 0)
-  emitResult(root, owner, "orphan-end-child", "Correlate an orphan end")
+  await emitResult(root, owner, "orphan-end-child", "Correlate an orphan end")
 
   assert.equal(board.list().length, 1)
   const [job] = board.list()
@@ -185,7 +204,7 @@ test("a missed start followed by end-before-result creates exactly one terminal 
   assert.equal(job.notificationState, "injected")
 
   const revision = board.revision
-  emitResult(root, owner, "orphan-end-child", "Duplicate activation result")
+  await emitResult(root, owner, "orphan-end-child", "Duplicate activation result")
   emitEnd(root, owner, end, "completed", [{ type: "text", text: "Orphan result" }])
   assert.equal(board.list().length, 1)
   assert.equal(board.revision, revision)
@@ -196,8 +215,8 @@ test("result-first correlation is parent-scoped and error/aborted outcomes stay 
   const { root, board } = await setup(t)
   const firstParent = parent("parent-a")
   const secondParent = parent("parent-b")
-  emitResult(root, firstParent, "first-child", "First parent's work")
-  emitResult(root, secondParent, "second-child", "Second parent's work")
+  await emitResult(root, firstParent, "first-child", "First parent's work")
+  await emitResult(root, secondParent, "second-child", "Second parent's work")
   assert.equal(board.list().length, 0, "activation results wait for their matching lifecycle start")
 
   const second = emitStart(root, secondParent, {
@@ -227,7 +246,7 @@ test("accepted interruption enters cancelling, repeated tool calls do not interr
   const { root, board, tools, subagents, tracker } = await setup(t, { withTools: true })
   const owner = parent()
   const start = emitStart(root, owner, { id: "child-cancel", local: false })
-  emitResult(root, owner, "child-cancel")
+  await emitResult(root, owner, "child-cancel")
   const [job] = board.list()
   const cancel = tools.definitions.get("cancel_task")
 
@@ -238,7 +257,7 @@ test("accepted interruption enters cancelling, repeated tool calls do not interr
   assert.deepEqual(subagents.interrupts, [
     {
       targetSessionId: "child-cancel",
-      authority: { kind: "user", parentSessionId: "parent-1" },
+      authority: { kind: "user" },
     },
   ])
   assert.deepEqual(validateJsonSchemaValue(cancel.output.schema, first), [])
@@ -274,7 +293,7 @@ test("a rejected Host interruption leaves the job running", async (t) => {
   }
   const owner = parent()
   emitStart(root, owner, { id: "child-rejected" })
-  emitResult(root, owner, "child-rejected")
+  await emitResult(root, owner, "child-rejected")
   const [job] = board.list()
 
   await assert.rejects(tracker.cancel(job), /unauthorized parent/)
@@ -286,11 +305,11 @@ test("local interruption does not cancel descendants and query waits for their s
   const { root, board, tracker, subagents } = await setup(t)
   const owner = parent()
   const local = emitStart(root, owner, { id: "local-parent", local: true })
-  emitResult(root, owner, "local-parent")
+  await emitResult(root, owner, "local-parent")
   const [job] = board.list()
   const childParent = parent("local-parent")
   const descendant = emitStart(root, childParent, { id: "local-grandchild", local: true })
-  emitResult(root, childParent, "local-grandchild")
+  await emitResult(root, childParent, "local-grandchild")
 
   await tracker.cancel(job)
   assert.equal(job.executionState, "cancelling")
@@ -309,7 +328,7 @@ test("external one-shot cancellation settles only on subagent/end and cannot be 
   const { root, board, tracker } = await setup(t)
   const owner = parent()
   const start = emitStart(root, owner, { id: "external-one-shot", local: false })
-  emitResult(root, owner, "external-one-shot")
+  await emitResult(root, owner, "external-one-shot")
   const [job] = board.list()
   await tracker.cancel(job)
   assert.equal(job.executionState, "cancelling")
@@ -352,7 +371,7 @@ test("delayed capabilities activate once and disposal drops pending correlation 
   const start = emitStart(root, owner, { id: "pending-at-disposal" })
   tracker.dispose()
   tracker.dispose()
-  emitResult(root, owner, "pending-at-disposal")
+  await emitResult(root, owner, "pending-at-disposal")
   assert.equal(board.list().length, 0)
   emitEnd(root, owner, start, "completed")
   assert.equal(board.list().length, 0)

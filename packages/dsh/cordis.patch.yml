@@ -1,2 +1,6 @@
-- id: omagents
-  name: "@omagents/omagents-dsh"
+# Insert the bare @omagents/omagents-dsh package-root row into the composed
+# profile tree. DSH treats a patch without `insert` as an id-targeted override
+# of an existing entry, so the bundle row must be declared as an insertion.
+- insert:
+    - id: omagents
+      name: "@omagents/omagents-dsh"

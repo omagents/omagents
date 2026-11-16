@@ -11,7 +11,7 @@ dsh plugin --profile web add @omagents/omagents-dsh
 Requirements:
 
 - Node.js 24.9 or newer.
-- DSH `>=0.2.2-rc.1 <0.2.3-0`.
+- DSH `>=0.2.2-rc.3 <0.2.3-0`.
 - Python 3.11+ on PATH for Python-backed skills.
 
 Restart DSH after installation. The bare package-root Loader row enables the Host and its attached Web Client together. `@omagents/core` is installed automatically as a dependency; do not install it separately. Users receive built Host and browser artifacts and never need to compile TypeScript or React source.

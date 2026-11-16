@@ -167,7 +167,7 @@ function owner(id = PARENT) {
 
 function startJob(host, { id, description, local = true, provider = "spawn", parent = PARENT }) {
   const agent = owner(parent)
-  const run = { runId: `run-${id}`, provider, id, local }
+  const run = { runId: `run-${id}`, provider, parentSessionId: parent, id, local }
   host.ctx.emit(host.scopeTarget(host.ctx.subagents, agent), "subagent/start", run)
   const exec = {
     callId: `call-${id}`,
@@ -920,7 +920,7 @@ test(
         cleanRoom: summary.cleanRoot,
         profileDirectory: summary.profileDirectory,
         clientArtifact: summary.clientArtifact,
-        dshEngine: "0.2.2-rc.1",
+        dshEngine: "0.2.2-rc.3",
         localMcpServers: host.mcpRows,
         externalModelCredentials: false,
         prepareScriptsRun: summary.prepareScriptsRun,

@@ -27,10 +27,31 @@ export interface DshMcpManager {
   register(name: string, config: McpClient.Config): DshMcpRegistration
 }
 
-declare module "@deepseek-ai/cordis" {
-  interface Context {
-    mcpManager?: DshMcpManager
-  }
+/** Structural subset of DSH 0.2.2-rc.2+ `@deepseek-ai/dsh-mcp-manager`. */
+interface NativeMcpManagerView {
+  readonly name: string
+}
+
+interface NativeMcpManager {
+  list(): Iterable<NativeMcpManagerView>
+  register(name: string, entry: NativeMcpRegistration): () => void
+}
+
+/** Server entry accepted by the built-in manager; all endpoint fields are optional. */
+export interface NativeMcpRegistration {
+  transport: "stdio" | "streamable-http"
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  cwd?: string
+  url?: string
+  headers?: Record<string, string>
+}
+
+function isNativeMcpManager(value: unknown): value is NativeMcpManager {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as Partial<NativeMcpManager>
+  return typeof candidate.list === "function" && typeof candidate.register === "function"
 }
 
 function errorMessage(error: unknown): string {
@@ -69,15 +90,56 @@ export function toDshMcpConfig(
   throw new TypeError(`Unsupported MCP transport for "${serverName}"`)
 }
 
+/** Translate a validated `McpClient.Config` into the built-in manager's server entry. */
+export function toDshMcpEntry(config: McpClient.Config): NativeMcpRegistration {
+  if (config.transport === "stdio") {
+    return {
+      transport: "stdio",
+      command: config.command,
+      args: config.args,
+      env: config.env,
+    }
+  }
+  return {
+    transport: "streamable-http",
+    url: config.url,
+    headers: config.headers,
+  }
+}
+
 interface LoaderEntryTree {
   entries(): Iterable<{
-    options: { name: string; config?: { serverName?: unknown } }
+    options: { name: string; disabled?: unknown; config?: { serverName?: unknown } }
   }>
+}
+
+const NATIVE_MCP_MANAGER_ROW = "@deepseek-ai/dsh-mcp-manager"
+
+function loaderOf(ctx: Context): LoaderEntryTree | undefined {
+  return (ctx as Context & { loader?: LoaderEntryTree }).loader
+}
+
+/**
+ * True when the composed profile contains an enabled built-in manager row. Such
+ * a runtime provides `ctx.mcpManager` itself, so the OmAgents adapter must wait
+ * for that service instead of providing a conflicting one.
+ */
+function compositionProvidesNativeMcpManager(ctx: Context): boolean {
+  const loader = loaderOf(ctx)
+  if (!loader || typeof loader.entries !== "function") return false
+
+  for (const entry of loader.entries()) {
+    if (entry.options.name !== NATIVE_MCP_MANAGER_ROW) continue
+    const disabled = (entry as { disabled?: unknown }).disabled
+    if (disabled === true) continue
+    return true
+  }
+  return false
 }
 
 function configuredUserServerNames(ctx: Context): Set<string> {
   const names = new Set<string>()
-  const loader = (ctx as Context & { loader?: LoaderEntryTree }).loader
+  const loader = loaderOf(ctx)
   if (!loader) return names
 
   for (const entry of loader.entries()) {
@@ -94,8 +156,10 @@ function configuredUserServerNames(ctx: Context): Set<string> {
 
 /**
  * Small OmAgents-owned manager over DSH's one-server-per-plugin API.
- * DSH 0.2.2-rc.1 has no built-in ctx.mcpManager service; this adapter keeps
- * registration, user-name precedence, readiness, and disposal in one seam.
+ * Compositions without the built-in `ctx.mcpManager` manager row (a minimal
+ * profile on a supported DSH release) use this adapter; runtimes that compose
+ * `@deepseek-ai/dsh-mcp-manager` use the native manager through
+ * `adaptNativeMcpManager` below.
  */
 export function createDshMcpManager(ctx: Context): DshMcpManager {
   const owned = new Map<string, DshMcpRegistration>()
@@ -149,6 +213,60 @@ export function createDshMcpManager(ctx: Context): DshMcpManager {
   }
 }
 
+/**
+ * Adapt the native `@deepseek-ai/dsh-mcp-manager` service to this module's
+ * registration seam. The manager owns instance lifecycle and readiness, so
+ * `ready` resolves immediately and `dispose` removes the contribution.
+ */
+export function adaptNativeMcpManager(manager: NativeMcpManager): DshMcpManager {
+  return {
+    has(name) {
+      for (const view of manager.list()) {
+        if (view.name === name) return true
+      }
+      return false
+    },
+
+    register(name, config) {
+      let disposed = false
+      const remove = manager.register(name, toDshMcpEntry(config))
+      return {
+        ready: Promise.resolve(),
+        async dispose() {
+          if (disposed) return
+          disposed = true
+          remove()
+        },
+      }
+    },
+  }
+}
+
+function isLegacyMcpManager(value: unknown): value is DshMcpManager {
+  if (!value || typeof value !== "object") return false
+  const candidate = value as Partial<DshMcpManager>
+  return typeof candidate.has === "function" && typeof candidate.register === "function"
+}
+
+/**
+ * Prefer the runtime's built-in `ctx.mcpManager` (DSH 0.2.2-rc.2+), adapting
+ * its fleet API to this module's registration seam. An already-provided
+ * registration-shaped manager is used as-is, and a composition without either
+ * falls back to the OmAgents-owned adapter. The adapter never provides the
+ * `mcpManager` service itself: the built-in manager owns that name, and
+ * providing it first would make the native row fail to activate.
+ */
+function resolveMcpManager(ctx: Context): DshMcpManager {
+  const raw =
+    typeof ctx.get === "function"
+      ? ctx.get("mcpManager")
+      : (ctx as { mcpManager?: unknown }).mcpManager
+  if (isNativeMcpManager(raw)) return adaptNativeMcpManager(raw)
+  if (isLegacyMcpManager(raw)) return raw
+
+  return createDshMcpManager(ctx)
+}
+
 /** Register the canonical Core catalog when DSH tools are available, preserving user names. */
 export function registerDshMcp(
   ctx: Context,
@@ -195,11 +313,7 @@ export function registerDshMcp(
     setDshCapabilityDiagnostics(health, "mcp", [])
 
     try {
-      const currentManager =
-        typeof inner.get === "function" ? inner.get("mcpManager") : inner.mcpManager
-      const manager = currentManager ?? createDshMcpManager(inner)
-      if (!currentManager && typeof inner.provide === "function")
-        inner.provide("mcpManager", manager)
+      const manager = resolveMcpManager(inner)
 
       for (const [name, definition] of Object.entries(resolveMcpServers({ env }))) {
         try {
@@ -233,8 +347,16 @@ export function registerDshMcp(
   }
 
   try {
-    if (typeof ctx.inject === "function" && typeof ctx.get === "function" && !ctx.get("tools")) {
-      capabilityFiber = ctx.inject(["tools"], activate)
+    if (typeof ctx.inject === "function" && typeof ctx.get === "function") {
+      if (compositionProvidesNativeMcpManager(ctx)) {
+        // The built-in manager owns `ctx.mcpManager`; wait for both the tool
+        // registry and that service so the native fleet is never preempted.
+        capabilityFiber = ctx.inject(["tools", "mcpManager"], activate)
+      } else if (!ctx.get("tools")) {
+        capabilityFiber = ctx.inject(["tools"], activate)
+      } else {
+        activate(ctx)
+      }
     } else {
       activate(ctx)
     }

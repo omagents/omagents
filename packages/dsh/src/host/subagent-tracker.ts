@@ -1,6 +1,4 @@
 import type { Context } from "@deepseek-ai/cordis"
-import type { Agent } from "@deepseek-ai/dsh-agent"
-import { carrierKeyOf } from "@deepseek-ai/dsh-scope"
 import { SessionId } from "@deepseek-ai/dsh-session"
 import type {
   SubagentRunEndInfo,
@@ -25,6 +23,7 @@ import {
 import type { DshJobBoard, DshJobRecord } from "./runtime.js"
 
 const TRACKING_LISTENER_ERROR = "ERR_DSH_TRACKING_LISTENERS"
+const TRACKING_ACTIVATION_ERROR = "ERR_DSH_TRACKING_ACTIVATION"
 const TRACKING_RECOVERY_ERROR = "ERR_DSH_TRACKING_RECOVERY"
 const TRACKING_SUBSCRIPTION_ERROR = "ERR_DSH_TRACKING_SUBSCRIPTION"
 const TRACKING_DISPOSAL_ERROR = "ERR_DSH_TRACKING_DISPOSAL"
@@ -50,15 +49,27 @@ function correlationKey(parentSessionId: string, childId: string): string {
   return JSON.stringify([parentSessionId, childId])
 }
 
-function activationId(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): string | undefined {
+interface ActivationReference {
+  readonly childId?: string
+  readonly name?: string
+}
+
+function activationReference(
+  exec: Readonly<ToolExecution>,
+  result: Readonly<ToolExecutionResult>
+): ActivationReference | undefined {
   if (exec.name !== "subagent" || result.isError) return undefined
   const value = result.value
-  if (typeof value !== "object" || value === null || !("kind" in value) || !("subagentId" in value)) {
-    return undefined
+  if (typeof value !== "object" || value === null) return undefined
+  if (!("kind" in value) || value.kind !== "activation") return undefined
+  for (const field of ["subagentId", "childId"]) {
+    const id = (value as Record<string, unknown>)[field]
+    if (typeof id === "string" && id) return { childId: id }
   }
-  return value.kind === "activation" && typeof value.subagentId === "string" && value.subagentId
-    ? value.subagentId
-    : undefined
+  // DSH 0.2.2-rc.2+ reports only the model-facing child name; it is resolved
+  // back to the durable child Session id that lifecycle events carry.
+  const name = (value as Record<string, unknown>).name
+  return typeof name === "string" && name ? { name } : undefined
 }
 
 function activationDescription(exec: Readonly<ToolExecution>, childId: string): string {
@@ -196,14 +207,11 @@ export function createSubagentTracker(
     if (results?.length === 0) pendingResults.delete(key)
   }
 
-  const onToolResult = (
+  const recordActivationResult = (
     exec: Readonly<ToolExecution>,
-    result: Readonly<ToolExecutionResult>
-  ): undefined => {
-    if (disposed) return
-    const childId = activationId(exec, result)
-    const parentSessionId = exec.agent?.session.id
-    if (!childId || !parentSessionId) return
+    parentSessionId: string,
+    childId: string
+  ) => {
     const key = correlationKey(parentSessionId, childId)
     const pending = pendingResults.get(key) ?? []
     pending.push({ exec, parentSessionId })
@@ -216,6 +224,34 @@ export function createSubagentTracker(
       if (orphans?.length === 0) orphanEnds.delete(key)
     }
     correlate(key)
+  }
+
+  const onToolResult = (
+    exec: Readonly<ToolExecution>,
+    result: Readonly<ToolExecutionResult>
+  ): undefined => {
+    if (disposed) return
+    const reference = activationReference(exec, result)
+    const caller = exec.agent
+    const parentSessionId = caller?.session.id
+    if (!reference || !caller || !parentSessionId) return
+    if (reference.childId) {
+      recordActivationResult(exec, parentSessionId, reference.childId)
+      return
+    }
+    const subagents = ctx.get("subagents") as SubagentRuntime | undefined
+    const name = reference.name
+    if (!name || typeof subagents?.resolveName !== "function") return
+    void subagents
+      .resolveName(caller, name, exec.signal)
+      .then((childId) => {
+        if (!disposed) recordActivationResult(exec, parentSessionId, childId)
+      })
+      .catch((error) => {
+        if (!disposed) {
+          report(TRACKING_ACTIVATION_ERROR, `Unable to resolve subagent "${name}"`, error)
+        }
+      })
   }
 
   const recordEnd = (info: SubagentRunEndInfo) => {
@@ -256,18 +292,15 @@ export function createSubagentTracker(
     correlate(key)
   }
 
-  const onStart = function (this: unknown, info: SubagentRunInfo) {
+  const onStart = (info: SubagentRunInfo) => {
     if (disposed) return
-    const parentAgent = carrierKeyOf(this) as Agent | undefined
-    const parentSessionId = parentAgent?.session.id
-    if (parentSessionId) observeStart(info, parentSessionId)
+    if (info.parentSessionId) observeStart(info, info.parentSessionId)
   }
 
-  const onEnd = function (this: unknown, info: SubagentRunEndInfo) {
+  const onEnd = (info: SubagentRunEndInfo) => {
     if (disposed) return
     if (!jobByRun.has(info.runId)) {
-      const parentAgent = carrierKeyOf(this) as Agent | undefined
-      const parentSessionId = parentAgent?.session.id
+      const parentSessionId = info.parentSessionId
       const existing = board.list().find(
         (job) =>
           job.host === "dsh" &&
@@ -279,6 +312,7 @@ export function createSubagentTracker(
           info: {
             runId: info.runId,
             provider: info.provider,
+            parentSessionId: info.parentSessionId,
             id: info.id,
             local: info.local,
           },
@@ -395,10 +429,7 @@ export function createSubagentTracker(
           throw new Error("DSH subagent interruption is unavailable")
         }
         // DSH 0.2.2's user-authority interrupt returns after admission, not settlement.
-        subagents.interrupt(SessionId(current.hostTaskId), {
-          kind: "user",
-          parentSessionId: SessionId(current.parentSessionId),
-        })
+        subagents.interrupt(SessionId(current.hostTaskId), { kind: "user" })
         if (!disposed) board.requestCancellation(job.id)
       })()
       pendingCancels.set(job.id, cancellation)

@@ -183,6 +183,98 @@ test("canonical MCP entries use DSH transports and never override existing names
   assert.equal(health.mcp.status, "ready")
 })
 
+test("the built-in DSH mcp manager registers Core entries through its fleet API", async () => {
+  const registered = []
+  const removed = []
+  const native = {
+    list: () => [{ name: "context7" }],
+    register(name, entry) {
+      registered.push({ name, entry })
+      return () => removed.push(name)
+    },
+  }
+  const health = healthyRecords()
+  const ctx = {
+    mcpManager: native,
+    get(name) {
+      if (name === "tools") return {}
+      if (name === "mcpManager") return native
+      return undefined
+    },
+  }
+
+  const dispose = registerDshMcp(
+    ctx,
+    { CONTEXT7_API_KEY: "context", EXA_API_KEY: "exa", GITHUB_TOKEN: "github" },
+    health
+  )
+
+  assert.deepEqual(
+    registered.map((entry) => entry.name),
+    ["agentmemory", "codegraph", "websearch", "github"]
+  )
+
+  const stdio = registered.find((entry) => entry.name === "agentmemory").entry
+  assert.equal(stdio.transport, "stdio")
+  assert.equal(stdio.command, "npx")
+  assert.deepEqual(stdio.args, ["-y", "@agentmemory/mcp"])
+
+  const github = registered.find((entry) => entry.name === "github").entry
+  assert.equal(github.transport, "streamable-http")
+  assert.equal(github.headers.Authorization, "Bearer github")
+
+  await dispose()
+  assert.deepEqual(removed.sort(), ["agentmemory", "codegraph", "github", "websearch"])
+  assert.equal(health.mcp.status, "ready")
+})
+
+test("a composition with the built-in manager row waits for its service before registering", async (t) => {
+  const root = new Context()
+  root.provide("loader", {
+    entries: () => [{ options: { name: "@deepseek-ai/dsh-mcp-manager" } }],
+  })
+  root.provide("tools", {})
+  t.after(() => root.fiber.dispose())
+  const health = healthyRecords()
+  const registered = []
+  const removed = []
+  const native = {
+    list: () => [],
+    register(name, entry) {
+      registered.push({ name, entry })
+      return () => removed.push(name)
+    },
+  }
+  let dispose = () => Promise.resolve()
+
+  await root.plugin({
+    name: "mcp-native-manager-probe",
+    inject: ["loader"],
+    apply(ctx) {
+      dispose = registerDshMcp(ctx, {}, health)
+    },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(registered, [])
+  assert.equal(root.get("mcpManager"), undefined)
+
+  root.provide("mcpManager", native)
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(
+    registered.map((entry) => entry.name),
+    ["agentmemory", "codegraph", "context7", "websearch", "grep_app"]
+  )
+  assert.equal(health.mcp.status, "ready", health.mcp.diagnostics[0]?.message)
+
+  await dispose()
+  assert.deepEqual(
+    removed.sort(),
+    ["agentmemory", "codegraph", "context7", "grep_app", "websearch"]
+  )
+})
+
 test("already available tools and an absent manager use safe lookup without external processes", async (t) => {
   const root = new Context()
   root.provide("loader", {
