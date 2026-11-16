@@ -2,6 +2,8 @@
   "name": "@omagents/omagents-dsh",
   "version": "0.14.1",
   "description": "DeepSeek Harness host integration for OmAgents",
+  "author": "OmAgents",
+  "homepage": "https://github.com/omagents/omagents/tree/main/packages/dsh#readme",
   "type": "module",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
@@ -57,7 +59,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/omagents/omagents"
+    "url": "https://github.com/omagents/omagents",
+    "directory": "packages/dsh"
   },
   "dependencies": {
     "@deepseek-ai/dsh-agent": "0.2.2-rc.3",

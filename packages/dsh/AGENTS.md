@@ -16,6 +16,7 @@ The package supports Node.js `>=24.9.0` and DSH `>=0.2.2-rc.3 <0.2.3-0`. Do not 
 - `./client` is the built lazy-CJS React Client, and `./typert` exposes Host invocation metadata to the real Typert Loader.
 - `cordis.patch.yml` inserts only the bare `@omagents/omagents-dsh` row at the profile root (DSH skips a patch without `insert` with `patch: entry "omagents" not found`). The Client attaches to that row and must dispose with it; never add a separate Loader row or second application root.
 - The `files` allowlist contains only `dist/` and `cordis.patch.yml`; npm also includes the mandatory `README.md` and `package.json` metadata. Never publish TypeScript/TSX source, tests, configs, or test tooling.
+- Plugin-index discovery metadata includes `author`, a `homepage` pointing to this package's README, and `repository.directory = "packages/dsh"`; keep these links package-specific rather than letting generated cards point only to the monorepo root.
 
 ## Runtime and Job Board
 

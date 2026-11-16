@@ -33,6 +33,18 @@ test("package identity, built ESM entry, and exact Core dependency are aligned",
   assert.equal(manifest.dsh.client.platform, "web")
 })
 
+test("DSH plugin index metadata links to the package guide and monorepo directory", async () => {
+  const manifest = await readManifest()
+  assert.equal(manifest.author, "OmAgents")
+  assert.equal(
+    manifest.homepage,
+    "https://github.com/omagents/omagents/tree/main/packages/dsh#readme"
+  )
+  assert.equal(manifest.repository.type, "git")
+  assert.equal(manifest.repository.url, "https://github.com/omagents/omagents")
+  assert.equal(manifest.repository.directory, "packages/dsh")
+})
+
 test("Host module has only named plugin exports and no default or Client export", async () => {
   const host = await import("@omagents/omagents-dsh")
   assert.equal(Object.hasOwn(host, "default"), false)

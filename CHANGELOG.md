@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **DSH plugin discovery metadata**: `@omagents/omagents-dsh` now publishes its package-specific homepage, author, and monorepo directory so custom plugin indexes can link users to the correct guide and source directory.
+
 ### Fixed
 
 - **Release registry confirmation**: `scripts/publish-all.js` now waits about five minutes for a just-published version to appear in npm instead of 60 seconds, so ordinary registry propagation no longer fails the four-package publish gate and forces manual reruns.
