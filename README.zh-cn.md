@@ -27,7 +27,7 @@ npx @omagents/omagents-codex
 dsh plugin --profile web add @omagents/omagents-dsh
 ```
 
-安装后重启宿主。`@omagents/core` 会作为依赖自动安装；**不要将它作为 plugin 单独安装**。当前发布候选版本将四个软件包统一为 **0.14.1**。
+安装后重启宿主。`@omagents/core` 会作为依赖自动安装；**不要将它作为 plugin 单独安装**。当前发布候选版本将四个软件包统一为 **0.14.2**。
 
 Python 驱动的 skills 要求 PATH 中可使用 Python 3.11+。DSH 要求 Node.js 24.9 或更高版本，并要求 DSH 版本位于软件包声明的已测试兼容范围内。
 

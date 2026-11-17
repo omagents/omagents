@@ -1,6 +1,6 @@
 {
   "name": "@omagents/omagents",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "private": true,
   "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
   "type": "module",
