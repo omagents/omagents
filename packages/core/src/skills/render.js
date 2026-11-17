@@ -34,9 +34,11 @@ const CODEX_TOOL_MAPPING = {
 }
 
 const OPENCODE_V2_TOOL_MAPPING = {
-  "`task(background: true)`": "`subagent(..., background: true)`",
-  "task(background=true,": "subagent(background=true,",
+  "`task(background: true)`": "`subagent`",
+  "task(background=true,": 'subagent(agent="general",',
   "Multiple `task` calls": "Multiple `subagent` calls",
+  "- Background subagents are auto-enabled by the plugin.":
+    "- OpenCode V2 subagents always run in the background.",
 }
 
 const DSH_TOOL_MAPPING = {

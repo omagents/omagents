@@ -223,19 +223,12 @@ test("V2 parallel engine tracks a background subagent end to end", async (t) => 
     const after = captured.toolHooks["execute.after"]?.[0]
     assert.ok(before && after, "tool hooks registered")
 
-    // Foreground subagent calls are not tracked
-    await before({
-      tool: "subagent",
-      sessionID: "ses_parent_t1",
-      id: "call_fg",
-      input: { agent: "explore", description: "sync call" },
-    })
-    // Background launch
+    // OpenCode 2.3+ subagents are always background and have no background argument.
     await before({
       tool: "subagent",
       sessionID: "ses_parent_t1",
       id: "call_bg",
-      input: { agent: "explore", description: "bg job", background: true, prompt: "do it" },
+      input: { agent: "explore", description: "bg job", prompt: "do it" },
     })
     await after({
       tool: "subagent",
@@ -291,6 +284,12 @@ test("V2 parallel engine tracks a background subagent end to end", async (t) => 
           p.text.includes("subagent(")
       ),
       "V2 parallel system prompt references the subagent tool"
+    )
+    assert.ok(
+      event.system.every(
+        (p) => !p.text?.includes("<Parallel_Execution>") || !p.text.includes("background: true")
+      ),
+      "V2 parallel system prompt must not require the removed background argument"
     )
     // Job board injected into the last user message
     const lastUser = event.messages.at(-1)

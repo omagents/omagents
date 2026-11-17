@@ -49,7 +49,7 @@ Codexでは、GitHub認証はトークン値ではなく`GITHUB_TOKEN`環境変�
 
 | ホストまたは役割 | パッケージ | インストール | Skills | バックグラウンド実行と復旧 | 管理サーフェス |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **OpenCode 1.xおよびOpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**：OmAgents 18 + Superpowers 15 | V1は`task(background: true)`、V2はネイティブ`subagent(..., background: true)`を使用。永続Core Job Board、完了配信、復旧。 | `/ps`、`parallel_status`、`cancel_task`、親コンテキストへの結果、OpenCode TUI状態 |
+| **OpenCode 1.xおよびOpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**：OmAgents 18 + Superpowers 15 | V1は`task(background: true)`、V2は常にバックグラウンドで実行されるネイティブ`subagent(...)`を使用。永続Core Job Board、完了配信、復旧。 | `/ps`、`parallel_status`、`cancel_task`、親コンテキストへの結果、OpenCode TUI状態 |
 | **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **33**：OmAgents 18 + Superpowers 15 | Codexネイティブsubagents。OpenCode並列エンジンとDSH Web Job Boardはインストールされません。 | Codexネイティブインターフェースとskills |
 | **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **33**：OmAgents 18 + Superpowers 15 | ネイティブ非同期`subagent`ライフサイクル、永続`job-board.json`、キャンセル、復旧、`/ps`、`parallel_status`、`cancel_task` | 認可されたRemote `watchJobs`ストリームとネイティブReact Web Job Board |
 | **共有ライブラリ（ホストpluginではない）** | `@omagents/core` | 自動依存関係。ユーザーによる個別インストール不要 | 共有skill定義とSuperpowersアセット | ホスト非依存の実行状態、永続化、MCP解決、researchアセット、Python環境 | スタンドアロンUIなし |
@@ -89,7 +89,7 @@ Deep Researchでは、`--workspace <dir>`を公開成果物だけに使用しま
 
 `deep-research`、`parallel-execution`、`agents-python-tools`、`markitdown-converter`、`officecli`、`playwright-web-scraping`、`init-deep`、`doctor`、`remove-ai-slops`、`remove-deadcode`、`github-triage`、`tech-debt-audit`、`lsp-guide`、`ast-grep`、`work-with-pr`、`pre-publish-review`、`hyperplan`、`refactor`。
 
-Superpowersはさらに15個のプロセスskillsを提供します。Coreは`opencode-v1`、`opencode-v2`、`codex`、`dsh`向けに共有skillsをレンダリングし、制御フローが異なる場合は完全なホスト別overrideを使用します。DSHはOpenCodeの`background`引数を付けないネイティブ`subagent`セマンティクスを使用します。
+Superpowersはさらに15個のプロセスskillsを提供します。Coreは`opencode-v1`、`opencode-v2`、`codex`、`dsh`向けに共有skillsをレンダリングし、制御フローが異なる場合は完全なホスト別overrideを使用します。OpenCode V2とDSHは、いずれも`background`引数を付けないネイティブ`subagent`セマンティクスを使用します。
 
 | MCP | 種類 | 動作 |
 | :--- | :--- | :--- |

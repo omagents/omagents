@@ -85,13 +85,18 @@ function makeV2Context(filePath, { getSession, interrupt } = {}) {
 
 async function launchV2(
   captured,
-  { child, parent = "parent-v2", agent = "explore", description = child }
+  { child, parent = "parent-v2", agent = "explore", description = child, followUp = false }
 ) {
   await captured.toolHooks["execute.before"][0]({
     tool: "subagent",
     sessionID: parent,
     id: `call-${child}`,
-    input: { agent, description, background: true, prompt: description },
+    input: {
+      agent,
+      description,
+      prompt: description,
+      ...(followUp ? { sessionID: child } : {}),
+    },
   })
   await captured.toolHooks["execute.after"][0]({
     tool: "subagent",
@@ -332,6 +337,39 @@ test("V2 duplicate completion notices inject one outcome", async (t) => {
     assert.equal(count(first), 1)
     assert.equal(count(second), 0)
     assert.equal(jobByHostId(await statusV2(captured), child).result, "first result")
+  } finally {
+    await cleanup?.()
+  }
+})
+
+test("V2 follow-up rounds stay native-only and never regress the initial outcome", async (t) => {
+  const filePath = useTemporaryStorage(t)
+  const { setupParallelV2 } = await importModule(PARALLEL_PATH)
+  const { ctx, captured } = makeV2Context(filePath)
+  const cleanup = await setupParallelV2(ctx)
+  const child = "v2-follow-up-child"
+  try {
+    await launchV2(captured, { child })
+    await contextV2(captured, "parent-v2", "first round", [
+      completionNotice(child, "completed", "first result"),
+    ])
+    const initial = await statusV2(captured)
+    assert.equal(jobByHostId(initial, child).result, "first result")
+
+    await launchV2(captured, { child, followUp: true, description: "follow up" })
+    await contextV2(captured, "parent-v2", "second round", [
+      completionNotice(child, "completed", "first result"),
+      completionNotice(child, "completed", "second result"),
+    ])
+    const current = await statusV2(captured)
+    assert.equal(current.total, 1, "follow-ups must not duplicate the child job")
+    assert.equal(
+      current.revision,
+      initial.revision,
+      "native-only follow-ups must not rewrite the Board"
+    )
+    assert.equal(jobByHostId(current, child).state, "completed")
+    assert.equal(jobByHostId(current, child).result, "first result")
   } finally {
     await cleanup?.()
   }

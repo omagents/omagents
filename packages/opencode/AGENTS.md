@@ -13,7 +13,7 @@ The installer takes no positional argument. Only conventional `--help` and `--ve
 ## Plugin Contract
 
 - `src/index.js` exports the plain dual descriptor `{ id, server, setup }` plus the named V1 plugin export. Do not import either OpenCode SDK package.
-- V1 preserves `task(background: true)`; V2 preserves native `subagent(..., background: true)` and structured child-session metadata.
+- V1 preserves `task(background: true)`; V2 uses native `subagent(...)` without a `background` argument, preserves structured child-session metadata, and keeps `sessionID` follow-up rounds native-only so historical notices never reactivate terminal Board records.
 - `src/parallel.js` is the OpenCode lifecycle adapter over Core, not a host-neutral storage implementation.
 - Skills and MCP entries come from Core. User MCP configuration takes precedence, and local V2 servers retain their cold-cache startup timeout.
 - Preserve parent-context completion delivery, compaction state, `/ps`, `parallel_status`, `cancel_task`, TUI state, PATH injection, and the established OpenCode storage location.

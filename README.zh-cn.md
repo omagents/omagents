@@ -49,7 +49,7 @@ export GITHUB_TOKEN="your-github-token"
 
 | 宿主或角色 | 软件包 | 安装 | Skills | 后台执行与恢复 | 管理界面 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **OpenCode 1.x 和 OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**：18 个 OmAgents + 15 个 Superpowers | V1 使用 `task(background: true)`；V2 使用原生 `subagent(..., background: true)`。持久化 Core Job Board、结果投递和恢复。 | `/ps`、`parallel_status`、`cancel_task`、父上下文结果和 OpenCode TUI 状态 |
+| **OpenCode 1.x 和 OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**：18 个 OmAgents + 15 个 Superpowers | V1 使用 `task(background: true)`；V2 使用原生 `subagent(...)`，始终在后台运行。持久化 Core Job Board、结果投递和恢复。 | `/ps`、`parallel_status`、`cancel_task`、父上下文结果和 OpenCode TUI 状态 |
 | **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **33**：18 个 OmAgents + 15 个 Superpowers | Codex 原生 subagents。不安装 OpenCode 并行引擎或 DSH Web Job Board。 | Codex 原生界面和 skills |
 | **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **33**：18 个 OmAgents + 15 个 Superpowers | 原生异步 `subagent` 生命周期、持久化 `job-board.json`、取消、恢复、`/ps`、`parallel_status` 和 `cancel_task` | 经授权的 Remote `watchJobs` 流和原生 React Web Job Board |
 | **共享库，不是宿主 plugin** | `@omagents/core` | 作为依赖自动安装，无需用户单独安装 | 共享 skill 定义和 Superpowers 资源 | 宿主无关的执行状态、持久化、MCP 解析、研究资源和 Python 环境 | 无独立 UI |
@@ -89,7 +89,7 @@ Deep Research 的 `--workspace <dir>` 只用于公开交付物。计划、原始
 
 `deep-research`、`parallel-execution`、`agents-python-tools`、`markitdown-converter`、`officecli`、`playwright-web-scraping`、`init-deep`、`doctor`、`remove-ai-slops`、`remove-deadcode`、`github-triage`、`tech-debt-audit`、`lsp-guide`、`ast-grep`、`work-with-pr`、`pre-publish-review`、`hyperplan` 和 `refactor`。
 
-Superpowers 另外提供 15 个流程 skills。Core 为 `opencode-v1`、`opencode-v2`、`codex` 和 `dsh` 渲染共享 skills；控制流程不同时使用完整的宿主专用覆盖版本。DSH 使用原生 `subagent` 语义，不带 OpenCode 的 `background` 参数。
+Superpowers 另外提供 15 个流程 skills。Core 为 `opencode-v1`、`opencode-v2`、`codex` 和 `dsh` 渲染共享 skills；控制流程不同时使用完整的宿主专用覆盖版本。OpenCode V2 和 DSH 使用原生 `subagent` 语义，均不带 `background` 参数。
 
 | MCP | 类型 | 行为 |
 | :--- | :--- | :--- |

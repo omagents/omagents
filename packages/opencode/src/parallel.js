@@ -59,16 +59,16 @@ You have parallel execution capabilities via background tasks.
 
 ## How to parallelize
 1. Decompose the user's request into independent subtasks
-2. Call \`subagent(agent, description, prompt, background: true)\` for each - multiple calls in one response run in parallel
+2. Call \`subagent(agent, description, prompt)\` for each - multiple calls in one response run in parallel; every subagent runs in the background
 3. Continue working on other things while they run
 4. Background task completions are automatically delivered to you and tracked on the Background Job Board - do NOT poll
 5. When all background tasks are done, synthesize their results
 
 ## For dependent tasks
-If task B needs results from task A: launch A with \`background: true\`, continue other work, and when A's result appears in the Job Board, launch B with A's results in the prompt.
+If task B needs results from task A: launch A with \`subagent(...)\`, continue other work, and when A's result appears in the Job Board, launch B with A's results in the prompt.
 
 ## Rules
-- Prefer \`subagent(..., background: true)\` for delegated work that can run independently
+- Prefer \`subagent(...)\` for delegated work that can run independently
 - Do NOT poll running tasks. Completion notifications arrive automatically.
 - Acknowledge completed tasks from the Job Board before your final response.
 - Parallel background tasks are allowed only when their write scopes do not conflict.
@@ -799,7 +799,11 @@ export async function setupParallelV2(ctx) {
     try {
       if (event.tool !== "subagent") return
       const args = event.input
-      if (!args || typeof args !== "object" || args.background !== true) return
+      if (!args || typeof args !== "object") return
+      // A sessionID continuation is another round of an existing native child.
+      // Keep its original terminal Board record sticky; native completion delivery
+      // owns later rounds and historical notices must not reactivate old jobs.
+      if (typeof args.sessionID === "string" && args.sessionID.length > 0) return
       pendingCalls.set(event.id, {
         parentSessionId: event.sessionID,
         agentType: typeof args.agent === "string" ? args.agent : "general",

@@ -63,7 +63,7 @@ There is no root-level `templates/` directory. The canonical template path is `p
 
 ### OpenCode
 
-`@omagents/omagents` preserves the dual V1/V2 descriptor and native V1 `task(background: true)` / V2 `subagent(..., background: true)` behavior. Product code belongs in `packages/opencode/src/`; the parallel adapter is `packages/opencode/src/parallel.js`. The repository `.opencode/plugins/index.js` must remain a re-export, and the self-repository dedup guard must remain intact.
+`@omagents/omagents` preserves the dual V1/V2 descriptor, native V1 `task(background: true)`, and current V2 `subagent(...)` behavior without a `background` argument. Product code belongs in `packages/opencode/src/`; the parallel adapter is `packages/opencode/src/parallel.js`. The repository `.opencode/plugins/index.js` must remain a re-export, and the self-repository dedup guard must remain intact.
 
 ### Codex
 

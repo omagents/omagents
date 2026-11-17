@@ -307,19 +307,23 @@ test("OpenCode and Codex keep their own native subagent rendering", () => {
   const definitions = listSkillDefinitions({ host: "opencode-v2" })
   const research = definitions.find((skill) => skill.name === "deep-research")
   const hyperplan = definitions.find((skill) => skill.name === "hyperplan")
+  const parallel = definitions.find((skill) => skill.name === "parallel-execution")
 
   const v1Research = renderSkillForHost(research, "opencode-v1").content
   assert.match(v1Research, /task\(background:\s*true\)/)
   const v2Research = renderSkillForHost(research, "opencode-v2").content
-  assert.match(v2Research, /subagent\([^)]*background:\s*true/)
-  assert.doesNotMatch(v2Research, /\btask\s*\(/)
+  assert.match(v2Research, /`subagent`/)
+  assert.doesNotMatch(v2Research, /\btask\s*\(|background\s*[:=]\s*true/)
   const codexResearch = renderSkillForHost(research, "codex").content
   assert.match(codexResearch, /spawn_agent/)
   assert.doesNotMatch(codexResearch, /\btask\s*\(|background\s*[:=]\s*true/)
 
   const v2Hyperplan = renderSkillForHost(hyperplan, "opencode-v2").content
-  assert.match(v2Hyperplan, /subagent\(background\s*=\s*true/)
-  assert.doesNotMatch(v2Hyperplan, /\btask\s*\(/)
+  assert.match(v2Hyperplan, /subagent\(agent="general",/)
+  assert.doesNotMatch(v2Hyperplan, /\btask\s*\(|background\s*[:=]\s*true/)
+  const v2Parallel = renderSkillForHost(parallel, "opencode-v2").content
+  assert.match(v2Parallel, /subagents always run in the background/)
+  assert.doesNotMatch(v2Parallel, /auto-enabled|background\s*[:=]\s*true/)
   const codexHyperplan = renderSkillForHost(hyperplan, "codex").content
   assert.match(codexHyperplan, /spawn_agent/)
   assert.doesNotMatch(codexHyperplan, /\btask\s*\(|background\s*[:=]\s*true/)

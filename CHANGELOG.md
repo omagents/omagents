@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OpenCode 2.3 native subagent compatibility**: V2 tracking no longer requires the removed `background` argument, and generated guidance uses the current `subagent` contract. `sessionID` follow-up rounds remain on the native completion path without reactivating sticky Board outcomes or duplicating jobs.
 - **Release registry confirmation**: `scripts/publish-all.js` now waits about five minutes for a just-published version to appear in npm instead of 60 seconds, so ordinary registry propagation no longer fails the four-package publish gate and forces manual reruns.
 
 ## [0.14.1] - 2026-11-16

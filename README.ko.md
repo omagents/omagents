@@ -49,7 +49,7 @@ Codex에서 GitHub 인증은 토큰 값 대신 `GITHUB_TOKEN` 환경 변수 참�
 
 | 호스트 또는 역할 | 패키지 | 설치 | Skills | 백그라운드 실행 및 복구 | 관리 화면 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **OpenCode 1.x 및 OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**: OmAgents 18 + Superpowers 15 | V1은 `task(background: true)`, V2는 네이티브 `subagent(..., background: true)` 사용. 영구 Core Job Board, 완료 전달 및 복구. | `/ps`, `parallel_status`, `cancel_task`, 부모 컨텍스트 결과 및 OpenCode TUI 상태 |
+| **OpenCode 1.x 및 OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**: OmAgents 18 + Superpowers 15 | V1은 `task(background: true)`, V2는 항상 백그라운드에서 실행되는 네이티브 `subagent(...)` 사용. 영구 Core Job Board, 완료 전달 및 복구. | `/ps`, `parallel_status`, `cancel_task`, 부모 컨텍스트 결과 및 OpenCode TUI 상태 |
 | **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **33**: OmAgents 18 + Superpowers 15 | Codex 네이티브 subagents. OpenCode 병렬 엔진과 DSH Web Job Board는 설치되지 않습니다. | Codex 네이티브 인터페이스와 skills |
 | **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **33**: OmAgents 18 + Superpowers 15 | 네이티브 비동기 `subagent` 생명주기, 영구 `job-board.json`, 취소, 복구, `/ps`, `parallel_status`, `cancel_task` | 권한이 부여된 Remote `watchJobs` 스트림과 네이티브 React Web Job Board |
 | **공유 라이브러리(호스트 plugin 아님)** | `@omagents/core` | 자동 의존성이며 사용자가 별도 설치하지 않음 | 공유 skill 정의와 Superpowers 자산 | 호스트 독립 실행 상태, 영속성, MCP 해석, research 자산 및 Python 환경 | 독립 UI 없음 |
@@ -89,7 +89,7 @@ Deep Research에서 `--workspace <dir>`는 공개 결과물에만 사용합니�
 
 `deep-research`, `parallel-execution`, `agents-python-tools`, `markitdown-converter`, `officecli`, `playwright-web-scraping`, `init-deep`, `doctor`, `remove-ai-slops`, `remove-deadcode`, `github-triage`, `tech-debt-audit`, `lsp-guide`, `ast-grep`, `work-with-pr`, `pre-publish-review`, `hyperplan`, `refactor`.
 
-Superpowers는 15개 프로세스 skills를 추가로 제공합니다. Core는 `opencode-v1`, `opencode-v2`, `codex`, `dsh`용으로 공유 skills를 렌더링하며, 제어 흐름이 다른 경우 완전한 호스트별 override를 사용합니다. DSH는 OpenCode `background` 인자 없이 네이티브 `subagent` 의미를 사용합니다.
+Superpowers는 15개 프로세스 skills를 추가로 제공합니다. Core는 `opencode-v1`, `opencode-v2`, `codex`, `dsh`용으로 공유 skills를 렌더링하며, 제어 흐름이 다른 경우 완전한 호스트별 override를 사용합니다. OpenCode V2와 DSH는 모두 `background` 인자 없이 네이티브 `subagent` 의미를 사용합니다.
 
 | MCP | 유형 | 동작 |
 | :--- | :--- | :--- |

@@ -155,7 +155,7 @@ Key variables:
 The parallel execution engine:
 
 - **V1**: intercepts `task` tool calls with `background: true`; auto-enables background subagents by writing `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` to shell config
-- **V2**: intercepts native `subagent` tool calls with `background: true` (no env var needed); the child session ID comes from the tool result's structured `metadata.sessionID` (text parsing as fallback); completion notices arrive as synthetic `<subagent sessionID="..." state="...">` user messages scanned by the `context` hook; `session.idle` / `session.execution.{succeeded,failed,interrupted}` events are the fallback/reconcile path; cancel uses `ctx.session.interrupt`
+- **V2**: intercepts native `subagent` tool calls (always background in current OpenCode, with no `background` argument or env var); the child session ID comes from the tool result's structured `metadata.sessionID` (text parsing as fallback); completion notices arrive as synthetic `<subagent sessionID="..." state="...">` user messages scanned by the `context` hook; `sessionID` follow-up rounds remain native-only so historical notices cannot reactivate terminal Board records; `session.idle` / `session.execution.{succeeded,failed,interrupted}` events are the completion/fallback/reconcile path; cancel uses `ctx.session.interrupt`
 - Maintains Job Board (`Map<taskID, JobRecord>`), persisted to `~/.local/share/opencode/storage/omagents/job-board.json`
 - Injects Job Board status into LLM context (V1: `experimental.chat.messages.transform`; V2: `ctx.session.hook("context")`); sentinel-guarded against double injection
 - Injects parallel execution system prompt (V1: `experimental.chat.system.transform` with `task(...)`; V2: `event.system` with `subagent(...)`)
