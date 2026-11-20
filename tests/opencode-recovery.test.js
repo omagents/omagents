@@ -287,6 +287,17 @@ test("V1 duplicate completion notices inject one outcome", async (t) => {
   assert.equal(count(first), 1)
   assert.equal(count(second), 0)
   assert.equal(jobByHostId(await statusV1(hooks), child).result, "first result")
+  await waitFor(() => {
+    try {
+      const snapshot = readStore(filePath)
+      return (
+        !Array.isArray(snapshot) &&
+        snapshot.jobs.find((job) => job.hostTaskId === child)?.notificationState === "injected"
+      )
+    } catch {
+      return false
+    }
+  }, "persisted V1 outcome")
 })
 
 test("legacy error and reconciled labels are adapter serializations", async (t) => {
