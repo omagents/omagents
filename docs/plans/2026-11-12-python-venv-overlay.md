@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node.js ESM, `node:child_process`, `node:test`, Python 3.11+ `venv`/`site`/`sysconfig`, Prettier, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-11-12-python-venv-overlay-design.md`
+**Spec:** `docs/specs/2026-11-12-python-venv-overlay-design.md`
 
 ## Global Constraints
 
@@ -309,7 +309,7 @@ Expected: only Python environment routing and diagnostics change.
 - Modify: `AGENTS.md`
 - Modify: `README.md`, `README.zh-cn.md`, `README.ja.md`, `README.ko.md`
 - Modify: `CHANGELOG.md`
-- Modify: `docs/superpowers/INTEGRATION-CHECKLIST.md`
+- Modify: `docs/INTEGRATION-CHECKLIST.md`
 - Modify: `package.json:33-34`
 - Modify: `.github/workflows/ci.yml:23-47`
 - Verify: all files from Tasks 1-5

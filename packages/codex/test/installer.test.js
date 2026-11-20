@@ -203,6 +203,18 @@ describe("isolated standalone Codex package", () => {
     )
     assert.match(researchSkill, /web_search/)
     assert.doesNotMatch(researchSkill, /websearch_web_search_exa|webfetch/)
+    const brainstormingSkill = fs.readFileSync(
+      path.join(pluginRoot, "skills", "superpowers", "brainstorming", "SKILL.md"),
+      "utf8"
+    )
+    const writingPlansSkill = fs.readFileSync(
+      path.join(pluginRoot, "skills", "superpowers", "writing-plans", "SKILL.md"),
+      "utf8"
+    )
+    assert.match(brainstormingSkill, /docs\/specs\//)
+    assert.match(writingPlansSkill, /docs\/plans\//)
+    assert.doesNotMatch(brainstormingSkill, /docs\/superpowers\//)
+    assert.doesNotMatch(writingPlansSkill, /docs\/superpowers\//)
 
     const mcp = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"))
     assert.deepEqual(mcp.mcpServers.context7, {

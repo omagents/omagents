@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11+ standard library, existing Jinja2 report generation, Node.js `node:test`, `pathlib`.
 
-**Spec:** `docs/superpowers/specs/2026-11-12-deep-research-storage-design.md`
+**Spec:** `docs/specs/2026-11-12-deep-research-storage-design.md`
 
 ## Global Constraints
 
@@ -273,7 +273,7 @@ Expected: all storage, legacy compatibility, pipeline, provenance, and packaging
 - Modify: `README.ja.md`
 - Modify: `README.ko.md`
 - Modify: `.github/workflows/ci.yml`
-- Modify: `docs/superpowers/specs/2026-11-12-deep-research-storage-design.md`
+- Modify: `docs/specs/2026-11-12-deep-research-storage-design.md`
 
 **Interfaces:**
 - Consumes: final behavior and tests from Tasks 1–4.

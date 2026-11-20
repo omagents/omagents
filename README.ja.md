@@ -89,7 +89,7 @@ Deep Researchでは、`--workspace <dir>`を公開成果物だけに使用しま
 
 `deep-research`、`parallel-execution`、`agents-python-tools`、`markitdown-converter`、`officecli`、`playwright-web-scraping`、`init-deep`、`doctor`、`remove-ai-slops`、`remove-deadcode`、`github-triage`、`tech-debt-audit`、`lsp-guide`、`ast-grep`、`work-with-pr`、`pre-publish-review`、`hyperplan`、`refactor`。
 
-Superpowersはさらに15個のプロセスskillsを提供します。Coreは`opencode-v1`、`opencode-v2`、`codex`、`dsh`向けに共有skillsをレンダリングし、制御フローが異なる場合は完全なホスト別overrideを使用します。OpenCode V2とDSHは、いずれも`background`引数を付けないネイティブ`subagent`セマンティクスを使用します。
+Superpowersはさらに15個のプロセスskillsを提供します。Coreは`opencode-v1`、`opencode-v2`、`codex`、`dsh`向けに共有skillsをレンダリングし、制御フローが異なる場合は完全なホスト別overrideを使用します。Superpowers skillsでは、`docs/superpowers`をルートとするドキュメントパスをすべて`docs`をルートとするパスにレンダリングし、後続のディレクトリ（例：`docs/specs/`や`docs/plans/`）を保持します。既存のドキュメントは自動移行されません。OpenCode V2とDSHは、いずれも`background`引数を付けないネイティブ`subagent`セマンティクスを使用します。
 
 | MCP | 種類 | 動作 |
 | :--- | :--- | :--- |

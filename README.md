@@ -89,7 +89,7 @@ The 18 OmAgents skills are:
 
 `deep-research`, `parallel-execution`, `agents-python-tools`, `markitdown-converter`, `officecli`, `playwright-web-scraping`, `init-deep`, `doctor`, `remove-ai-slops`, `remove-deadcode`, `github-triage`, `tech-debt-audit`, `lsp-guide`, `ast-grep`, `work-with-pr`, `pre-publish-review`, `hyperplan`, and `refactor`.
 
-Superpowers contributes 15 additional process skills. Core renders shared skills for `opencode-v1`, `opencode-v2`, `codex`, and `dsh`, using complete host-specific overrides where control flow differs. OpenCode V2 and DSH use native `subagent` semantics without a `background` argument.
+Superpowers contributes 15 additional process skills. Core renders shared skills for `opencode-v1`, `opencode-v2`, `codex`, and `dsh`, using complete host-specific overrides where control flow differs. For Superpowers skills, every `docs/superpowers` documentation root is rendered as `docs`, preserving all following directories (for example, `docs/specs/` and `docs/plans/`). Existing documents are not migrated automatically. OpenCode V2 and DSH use native `subagent` semantics without a `background` argument.
 
 | MCP | Type | Behavior |
 | :--- | :--- | :--- |

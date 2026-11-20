@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node.js 24, ESM, npm workspaces, JavaScript, TypeScript, React, DSH Cordis/Typert APIs, Node test runner, Playwright, Python 3.11+, npm OIDC Trusted Publishing.
 
-**Spec:** `docs/superpowers/specs/2026-11-13-multi-host-packages-dsh-design.md`
+**Spec:** `docs/specs/2026-11-13-multi-host-packages-dsh-design.md`
 
 ## Global Constraints
 
@@ -746,7 +746,7 @@ Commit: `docs: document multi-host packages and DSH Job Board`
 **Files:**
 - Create: `scripts/set-release-version.js`, `scripts/check-release.js`, `scripts/publish-all.js`
 - Modify: `.github/workflows/publish.yml`, `package.json`
-- Modify: `docs/superpowers/specs/2026-11-13-multi-host-packages-dsh-design.md` status after implementation verification
+- Modify: `docs/specs/2026-11-13-multi-host-packages-dsh-design.md` status after implementation verification
 - Create: `tests/release-workflow.test.js`
 
 **Interfaces:**

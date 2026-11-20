@@ -20,6 +20,8 @@ Execution and notification state are separate. Terminal states never regress, `i
 
 `SKILL.md` is the fallback and `SKILL.<host>.md` is a complete override, not a runtime search-and-replace fragment. Do not add runtime host detection. Preserve native host delegation forms and the pinned Superpowers commit.
 
+For Superpowers sources only, rendering replaces every bounded `docs/superpowers` documentation root with `docs`, preserving arbitrary following directories and leaving similar names such as `docs/superpowers-archive` unchanged. OpenCode V2, Codex, and DSH consume this Core rendering; the OpenCode V1 adapter supplies the equivalent system-prompt preference because it reads the upstream skill files directly. Existing project documents are never migrated automatically.
+
 Jinja2 templates live only under `packages/core/skills/deep-research/templates/`. There is no root `templates/` directory. Deep-research internal state and public deliverables must remain separated through `skills/deep-research/scripts/layout.py`.
 
 Only `jinja2` is automatically provisioned. Optional Python tools install on demand. Use the `agents-python-tools` skill for environment selection, paths, and CLI details rather than duplicating the full Python guide here. Never auto-delete the base or project environment.

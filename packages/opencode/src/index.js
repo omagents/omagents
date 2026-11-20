@@ -17,6 +17,7 @@ import {
   listSkillDefinitions,
   renderSkillForHost,
   resolveMcpServers,
+  SUPERPOWERS_DOCS_PATH_PREFERENCE,
 } from "@omagents/core"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -199,6 +200,21 @@ export const OmagentsPlugin = async (ctx) => {
     if (parallelHooks.config) await parallelHooks.config(config)
   }
 
+  // V1 reads Superpowers skills directly from disk, so express the same
+  // documentation-root override as the preference supported by those skills.
+  const mergedSystemTransform = async (input, output) => {
+    if (superHooks["experimental.chat.system.transform"]) {
+      await superHooks["experimental.chat.system.transform"](input, output)
+    }
+    if (parallelHooks["experimental.chat.system.transform"]) {
+      await parallelHooks["experimental.chat.system.transform"](input, output)
+    }
+    output.system = output.system || []
+    if (!output.system.includes(SUPERPOWERS_DOCS_PATH_PREFERENCE)) {
+      output.system.push(SUPERPOWERS_DOCS_PATH_PREFERENCE)
+    }
+  }
+
   // Merged messages.transform: superpowers bootstrap first, then Job Board
   const mergedMessagesTransform = async (input, output) => {
     if (superHooks["experimental.chat.messages.transform"]) {
@@ -268,7 +284,7 @@ export const OmagentsPlugin = async (ctx) => {
     "tool.execute.before": mergedToolBefore,
     "tool.execute.after": mergedToolAfter,
     "experimental.chat.messages.transform": mergedMessagesTransform,
-    "experimental.chat.system.transform": parallelHooks["experimental.chat.system.transform"],
+    "experimental.chat.system.transform": mergedSystemTransform,
     "experimental.session.compacting": async (_input, output) => {
       output.context = output.context || []
       if (
@@ -298,9 +314,6 @@ export const OmagentsPlugin = async (ctx) => {
 function collectSkillInfos() {
   const skills = []
   for (const definition of listSkillDefinitions({ host: "opencode-v2" })) {
-    // Superpowers registers its own plugin skills through the module resolved
-    // from Core; only OmAgents skills need this OpenCode adapter registration.
-    if (definition.source !== "omagents") continue
     try {
       const rendered = renderSkillForHost(definition, "opencode-v2")
       skills.push({
@@ -407,17 +420,24 @@ async function setupV2(ctx) {
     return
   }
 
-  // Superpowers: run its V2 setup half (registers its skills + bootstrap)
+  // Keep Superpowers' V2 bootstrap, but let Core be the single registration
+  // path for every skill so host rendering also applies to Superpowers.
   const sp = await loadSuperpowers()
   if (sp && sp.setup) {
     try {
-      await sp.setup(ctx)
+      await sp.setup({
+        ...ctx,
+        skill: {
+          ...ctx.skill,
+          transform: async () => {},
+        },
+      })
     } catch (err) {
       warnIfDebug("[omagents] superpowers v2 setup failed:", err.message)
     }
   }
 
-  // Register bundled skills as native V2 skills
+  // Register all bundled skills as native V2 skills through Core rendering.
   try {
     const skills = collectSkillInfos()
     if (skills.length > 0) {

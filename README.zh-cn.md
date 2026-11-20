@@ -89,7 +89,7 @@ Deep Research 的 `--workspace <dir>` 只用于公开交付物。计划、原始
 
 `deep-research`、`parallel-execution`、`agents-python-tools`、`markitdown-converter`、`officecli`、`playwright-web-scraping`、`init-deep`、`doctor`、`remove-ai-slops`、`remove-deadcode`、`github-triage`、`tech-debt-audit`、`lsp-guide`、`ast-grep`、`work-with-pr`、`pre-publish-review`、`hyperplan` 和 `refactor`。
 
-Superpowers 另外提供 15 个流程 skills。Core 为 `opencode-v1`、`opencode-v2`、`codex` 和 `dsh` 渲染共享 skills；控制流程不同时使用完整的宿主专用覆盖版本。OpenCode V2 和 DSH 使用原生 `subagent` 语义，均不带 `background` 参数。
+Superpowers 另外提供 15 个流程 skills。Core 为 `opencode-v1`、`opencode-v2`、`codex` 和 `dsh` 渲染共享 skills；控制流程不同时使用完整的宿主专用覆盖版本。对于 Superpowers skills，所有以 `docs/superpowers` 为根目录的文档路径都会渲染为以 `docs` 为根目录，并保留后续目录（例如 `docs/specs/` 和 `docs/plans/`）。现有文档不会自动迁移。OpenCode V2 和 DSH 使用原生 `subagent` 语义，均不带 `background` 参数。
 
 | MCP | 类型 | 行为 |
 | :--- | :--- | :--- |

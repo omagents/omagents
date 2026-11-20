@@ -289,8 +289,8 @@ test("scoped package guides and approved multi-host design artifacts are present
     "packages/opencode/AGENTS.md",
     "packages/codex/AGENTS.md",
     "packages/dsh/AGENTS.md",
-    "docs/superpowers/specs/2026-11-13-multi-host-packages-dsh-design.md",
-    "docs/superpowers/plans/2026-11-13-multi-host-packages-dsh.md",
+    "docs/specs/2026-11-13-multi-host-packages-dsh-design.md",
+    "docs/plans/2026-11-13-multi-host-packages-dsh.md",
   ]) {
     assert.ok(fs.existsSync(path.join(ROOT, file)), `${file} must be included`)
     assert.ok(read(file).length > 0, `${file} must not be empty`)

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Superpowers documentation paths**: Core-rendered skills replace every `docs/superpowers` documentation root with `docs`, preserving arbitrary following subdirectories. OpenCode V2 now uses Core as the single registration path for all 33 skills, V1 injects the equivalent path preference, and existing project documents are not migrated automatically.
+
 ## [0.14.2] - 2026-11-17
 
 ### Changed
@@ -243,8 +249,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Python venv setup hook** (`hooks/setup-venv.sh`): shared script that creates `~/.venvs/omagents` and installs `jinja2`, invoked by Codex `SessionStart` hooks.
 - **Codex marketplace** (`.agents/plugins/marketplace.json`): npm-sourced marketplace entry for Codex plugin discovery.
 - **`prepublishOnly` script**: automatically runs `npm run sync` before `npm publish` to include generated `.codex-plugin/` in the tarball.
-- **Integration checklist** (`docs/superpowers/INTEGRATION-CHECKLIST.md`): step-by-step verification for OpenCode and Codex.
-- **Design spec and implementation plan** (`docs/superpowers/specs/` and `docs/superpowers/plans/`).
+- **Integration checklist** (`docs/INTEGRATION-CHECKLIST.md`): step-by-step verification for OpenCode and Codex.
+- **Design spec and implementation plan** (`docs/specs/` and `docs/plans/`).
 
 ### Changed
 
@@ -352,7 +358,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deep Research artifact package** (`package.py`): generates `package.json` manifest and `README.md` index for complete research workspace.
 - **Deep Research meta-orchestration** (`orchestrate.py`): pausable state machine for full pipeline (plan → dispatch → gaps → merge → report → audit → package). Agent calls `--resume` after subagent dispatch.
 - **Project SVG icon**: Unified Bot design with violet/gold palette (`assets/omagents-icon.svg` + `.png`)
-- **Design spec**: icon design documentation (`docs/superpowers/specs/`)
+- **Design spec**: icon design documentation (`docs/specs/`)
 
 ### Changed
 

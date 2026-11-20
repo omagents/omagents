@@ -4,7 +4,7 @@ export { JsonJobStore } from "./storage/json-job-store.js"
 export { resolveMcpServers } from "./mcp/resolve-servers.js"
 export { getCorePaths } from "./paths.js"
 export { listSkillDefinitions } from "./skills/catalog.js"
-export { renderSkillForHost } from "./skills/render.js"
+export { renderSkillForHost, SUPERPOWERS_DOCS_PATH_PREFERENCE } from "./skills/render.js"
 export {
   AGENT_VENV,
   AGENT_VENV_BIN,

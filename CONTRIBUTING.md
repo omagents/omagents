@@ -128,8 +128,8 @@ Update `README.md`, `README.zh-cn.md`, `README.ja.md`, and `README.ko.md` togeth
 
 The approved design and implementation plan are retained at:
 
-- `docs/superpowers/specs/2026-11-13-multi-host-packages-dsh-design.md`
-- `docs/superpowers/plans/2026-11-13-multi-host-packages-dsh.md`
+- `docs/specs/2026-11-13-multi-host-packages-dsh-design.md`
+- `docs/plans/2026-11-13-multi-host-packages-dsh.md`
 
 Do not rewrite approved technical decisions or final verification status while synchronizing user documentation.
 

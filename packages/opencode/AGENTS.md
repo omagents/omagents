@@ -15,7 +15,7 @@ The installer takes no positional argument. Only conventional `--help` and `--ve
 - `src/index.js` exports the plain dual descriptor `{ id, server, setup }` plus the named V1 plugin export. Do not import either OpenCode SDK package.
 - V1 preserves `task(background: true)`; V2 uses native `subagent(...)` without a `background` argument, preserves structured child-session metadata, and keeps `sessionID` follow-up rounds native-only so historical notices never reactivate terminal Board records.
 - `src/parallel.js` is the OpenCode lifecycle adapter over Core, not a host-neutral storage implementation.
-- Skills and MCP entries come from Core. User MCP configuration takes precedence, and local V2 servers retain their cold-cache startup timeout.
+- Skills and MCP entries come from Core. V2 preserves the upstream Superpowers bootstrap but suppresses its file-based skill registration so Core renders and registers all 33 skills exactly once; V1 injects Core's equivalent Superpowers documentation-path preference through its system prompt. User MCP configuration takes precedence, and local V2 servers retain their cold-cache startup timeout.
 - Preserve parent-context completion delivery, compaction state, `/ps`, `parallel_status`, `cancel_task`, TUI state, PATH injection, and the established OpenCode storage location.
 - `bin/install.js` is the CLI only. `main` must remain the plugin entry so importing the package never executes CLI dispatch.
 

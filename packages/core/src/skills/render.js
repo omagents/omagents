@@ -5,6 +5,11 @@ import { AGENT_VENV, AGENT_VENV_BIN, getVenvPython } from "../../hooks/python-en
 
 export const SKILL_HOSTS = Object.freeze(["opencode-v1", "opencode-v2", "codex", "dsh"])
 
+export const SUPERPOWERS_DOCS_PATH_PREFERENCE =
+  "User documentation-path preference for every Superpowers skill: replace every `docs/superpowers` path prefix with `docs`, preserving all following directories (for example, `docs/specs/` and `docs/plans/`). Apply this rule to every current or future subdirectory."
+
+const SUPERPOWERS_DOCS_ROOT = /(?<![\w-])docs\/superpowers(?![\w-])/g
+
 const CODEX_TOOL_MAPPING = {
   "# OpenCode Deep Research": "# Codex Deep Research",
   "native to OpenCode's subagent and MCP infrastructure": "native to Codex subagents and MCP infrastructure",
@@ -232,6 +237,9 @@ export function renderSkillForHost(definition, host) {
   const skillPath = selectSkillPath(definition.directory, host)
   const sharedSkill = skillPath === path.join(definition.directory, "SKILL.md")
   let content = applyToolMapping(fs.readFileSync(skillPath, "utf8"), host)
+  if (definition.source === "superpowers") {
+    content = content.replace(SUPERPOWERS_DOCS_ROOT, "docs")
+  }
   if (host === "dsh") {
     content = applyDshResourceMapping(content, definition, sharedSkill)
   }

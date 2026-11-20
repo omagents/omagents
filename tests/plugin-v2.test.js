@@ -113,13 +113,11 @@ test("V2 setup uses the injected Python provisioner", async (t) => {
   }
 })
 
-test("V2 setup registers bundled skills via ctx.skill.transform", async (t) => {
+test("V2 setup registers every bundled skill once through Core with flattened Superpowers docs", async (t) => {
   const mod = await importModule(path.join(PLUGINS_DIR, "index.js"))
   const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
-    // Every skills/<name>/SKILL.md must be registered (superpowers skills may
-    // also be present — assert containment, not equality)
     const expected = fs
       .readdirSync(SKILLS_DIR, { withFileTypes: true })
       .filter((e) => e.isDirectory() && !e.name.startsWith(".") && !e.name.startsWith("_"))
@@ -127,9 +125,15 @@ test("V2 setup registers bundled skills via ctx.skill.transform", async (t) => {
       .map((e) => e.name)
     assert.ok(expected.length >= 18, "repo should bundle at least 18 skills")
     const registered = new Set(captured.skills.map((s) => s.id))
+    assert.equal(captured.skills.length, 33, "Core is the single registration path for all skills")
+    assert.equal(registered.size, 33, "Superpowers and Core must not register duplicate skills")
     for (const id of expected) {
       assert.ok(registered.has(id), `skill "${id}" should be registered`)
     }
+    for (const id of ["brainstorming", "writing-plans"]) {
+      assert.ok(registered.has(id), `Superpowers skill "${id}" should be Core-rendered`)
+    }
+
     // Registered entries carry the V2 Skill.Info fields
     const deepResearch = captured.skills.find((s) => s.id === "deep-research")
     assert.ok(deepResearch.name, "skill has a name")
@@ -137,6 +141,13 @@ test("V2 setup registers bundled skills via ctx.skill.transform", async (t) => {
     assert.ok(deepResearch.path.endsWith(path.join("deep-research", "SKILL.md")))
     assert.ok(deepResearch.content.length > 0, "skill has body content")
     assert.ok(!deepResearch.content.startsWith("---"), "frontmatter is stripped from content")
+
+    const brainstorming = captured.skills.find((s) => s.id === "brainstorming")
+    const writingPlans = captured.skills.find((s) => s.id === "writing-plans")
+    assert.match(brainstorming.content, /docs\/specs\//)
+    assert.match(writingPlans.content, /docs\/plans\//)
+    assert.doesNotMatch(brainstorming.content, /docs\/superpowers\//)
+    assert.doesNotMatch(writingPlans.content, /docs\/superpowers\//)
   } finally {
     if (typeof cleanup === "function") await cleanup()
   }

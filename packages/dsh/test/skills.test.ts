@@ -65,6 +65,13 @@ test("DSH registers all 33 bundled skills with absolute resources and native sem
   assert.doesNotMatch(parallel.content, /background:\s*true/)
   assert.match(parallel.content, /native DSH subagents/)
 
+  const brainstorming = registrations.find((skill) => skill.name === "brainstorming")
+  const writingPlans = registrations.find((skill) => skill.name === "writing-plans")
+  assert.match(brainstorming.content, /docs\/specs\//)
+  assert.match(writingPlans.content, /docs\/plans\//)
+  assert.doesNotMatch(brainstorming.content, /docs\/superpowers\//)
+  assert.doesNotMatch(writingPlans.content, /docs\/superpowers\//)
+
   const deepResearch = registrations.find((skill) => skill.name === "deep-research")
   const absoluteScript = resolve(deepResearch.resourceBase.path, "scripts", "orchestrate.py")
   assert.ok(isAbsolute(absoluteScript))

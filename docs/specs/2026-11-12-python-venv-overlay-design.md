@@ -307,7 +307,7 @@ Update in the same change:
 - `AGENTS.md`
 - `README.md`, `README.zh-cn.md`, `README.ja.md`, `README.ko.md`
 - `CHANGELOG.md`
-- `docs/superpowers/INTEGRATION-CHECKLIST.md`
+- `docs/INTEGRATION-CHECKLIST.md`
 - `package.json` formatting scripts
 - `.github/workflows/ci.yml` syntax and formatting checks for `hooks/*.js`
 
