@@ -41,7 +41,7 @@ omagents/
 │   ├── ISSUE_TEMPLATE/         # bug_report.md, feature_request.md
 │   └── workflows/
 │       ├── ci.yml              # Syntax checks + isolated Python/Node tests on push/PR
-│       └── publish.yml         # OIDC trusted publishing on tag push
+│       └── publish.yml         # OIDC npm publishing + GitHub Release on tag push
 ├── packages/
 │   ├── core/                   # @omagents/core: host-neutral assets and behavior
 │   │   ├── src/
@@ -281,7 +281,7 @@ Research pauses emit host-neutral `{ action: "dispatch_subagent", description, p
 ## CI/CD
 
 - **CI** (`ci.yml`): Node 24 unit/package checks run on Linux, macOS, and Windows, including real offline tarball installs. A second three-OS job runs the packed DSH Web composition with Playwright, deterministic native events, and local MCP fixtures only. Both jobs create an isolated `.omagents/ci-venv` containing only Jinja2 and pass its absolute interpreter (`bin/python` on Unix, `Scripts/python.exe` on Windows); the browser helper falls back to `python3` on Unix and `python` on Windows when no override is set.
-- **Publish** (`publish.yml`): OIDC trusted publishing on `v*` tag push. No npm token needed.
+- **Publish** (`publish.yml`): OIDC trusted publishing on `v*` tag push, followed by idempotent GitHub Release creation with GitHub-generated notes. No npm token needed.
 
 ## Publishing
 
@@ -298,6 +298,8 @@ Publish in this exact order:
 `@omagents/core → @omagents/omagents → @omagents/omagents-codex → @omagents/omagents-dsh`
 
 Confirm that the exact Core version is available in npm before publishing any host. The three hosts are sequential only for deterministic logs and failure handling; none depends on another host. DSH Host and Client artifacts must be built before packing, and its declared compatibility range must match tested DSH versions.
+
+After all four npm versions are confirmed, the tag workflow creates the corresponding GitHub Release with GitHub-generated notes and `--verify-tag`. An existing Release is left unchanged so workflow reruns remain idempotent.
 
 Use the aligned release automation and final gate when implementing a release; do not invent a version or publish packages independently from this guidance. Actual versioning, Git mutation, tagging, pushing, npm publishing, GitHub releases, and community announcements each require explicit user authorization. npm publication uses OIDC Trusted Publishing for all four package names, without a placeholder npm authentication token.
 

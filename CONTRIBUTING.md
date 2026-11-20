@@ -141,6 +141,8 @@ Every release uses one aligned version for all four manifests and each host's ex
 
 Confirm the exact Core version is available in npm before publishing hosts. Host packages have no host-to-host dependencies; sequential host publication is only for deterministic logs and failure handling. Use OIDC Trusted Publishing for all four names, inspect the tarballs before publication, and never publish from an unverified or independently versioned package.
 
+After all four npm versions are confirmed, the tag workflow creates the corresponding GitHub Release with GitHub-generated notes. It verifies the pushed tag and skips an existing Release, so rerunning the workflow neither duplicates nor overwrites the Release.
+
 Versioning, Git mutations, tags, pushes, npm publication, GitHub releases, and community announcements require explicit user authorization.
 
 ## Submitting Changes

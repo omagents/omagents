@@ -7,7 +7,7 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -38,3 +38,17 @@ jobs:
           OMAGENTS_TEST_PYTHON: ${{ github.workspace }}/.omagents/ci-venv/bin/python
           OMAGENTS_PLAYWRIGHT_WITH_DEPS: "1"
         run: node scripts/publish-all.js --execute
+
+      - name: Create GitHub Release
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes \
+              --verify-tag
+          else
+            echo "GitHub Release ${GITHUB_REF_NAME} already exists; skipping."
+          fi

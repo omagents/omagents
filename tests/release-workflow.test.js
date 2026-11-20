@@ -393,3 +393,24 @@ test("release workflow retains OIDC, requires the clean final gate, and has no p
   assert.doesNotMatch(workflow, /publish-all\.js[^\n]*--allow-dirty/)
   assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN|registry-url/)
 })
+
+test("release workflow creates an idempotent GitHub Release after npm publication", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github/workflows/publish.yml"), "utf8")
+  const publishIndex = workflow.indexOf("node scripts/publish-all.js --execute")
+  const releaseIndex = workflow.indexOf("- name: Create GitHub Release")
+
+  assert.match(workflow, /contents:\s*write/)
+  assert.ok(publishIndex >= 0)
+  assert.ok(releaseIndex > publishIndex, "GitHub Release must follow successful npm publication")
+
+  const releaseStep = workflow.slice(releaseIndex)
+  assert.match(releaseStep, /if:\s*success\(\)/)
+  assert.match(releaseStep, /GH_TOKEN:\s*\$\{\{ github\.token \}\}/)
+  const viewIndex = releaseStep.indexOf('if ! gh release view "${GITHUB_REF_NAME}"')
+  const createIndex = releaseStep.indexOf('gh release create "${GITHUB_REF_NAME}"')
+  assert.ok(viewIndex >= 0, "existing Releases must be detected before creation")
+  assert.ok(createIndex > viewIndex, "creation must be guarded by the existing Release check")
+  assert.match(releaseStep, /--title "\$\{GITHUB_REF_NAME\}"/)
+  assert.match(releaseStep, /--generate-notes/)
+  assert.match(releaseStep, /--verify-tag/)
+})
