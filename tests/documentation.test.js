@@ -50,7 +50,7 @@ test("every README language has exactly the approved host installation surface",
     assert.doesNotMatch(text, /npx\s+@omagents\/omagents\s+codex\b/, file)
     assert.doesNotMatch(text, /npx\s+@omagents\/omagents\s+opencode\b/, file)
     assert.ok(text.includes("@omagents/core"), `${file} must identify the shared Core package`)
-    assert.ok(text.includes("0.14.2"), `${file} must identify the aligned release candidate`)
+    assert.ok(text.includes("0.15.0"), `${file} must identify the aligned release candidate`)
   }
 })
 
@@ -89,11 +89,11 @@ test("every README language has a complete host and shared-Core support matrix",
 test("release guidance keeps four versions aligned and publishes Core before sequential hosts", () => {
   assert.deepEqual(
     PACKAGE_MANIFESTS.map((file) => readJson(file).version),
-    ["0.14.2", "0.14.2", "0.14.2", "0.14.2"]
+    ["0.15.0", "0.15.0", "0.15.0", "0.15.0"]
   )
   for (const file of HOST_MANIFESTS) {
     const pkg = readJson(file)
-    assert.equal(pkg.dependencies["@omagents/core"], "0.14.2", file)
+    assert.equal(pkg.dependencies["@omagents/core"], "0.15.0", file)
     for (const otherHost of PACKAGE_NAMES.slice(1)) {
       assert.equal(
         pkg.dependencies[otherHost],
@@ -238,6 +238,20 @@ test("root READMEs qualify interrupted recovery with the observed-active cold-mi
   }
 })
 
+test("changelog has a versioned Superpowers documentation-path release entry", () => {
+  const changelog = read("CHANGELOG.md")
+  const release = changelog.split("## [0.14.2]")[0]
+  assert.match(release, /^## \[0.15.0\] - 2026-11-20$/m)
+  for (const required of [
+    "Superpowers documentation paths",
+    "OpenCode V2",
+    "V1 injects the equivalent path preference",
+    "not migrated automatically",
+  ]) {
+    assert.ok(release.includes(required), `0.15.0 changelog omits ${required}`)
+  }
+})
+
 test("changelog has a versioned OpenCode compatibility release entry", () => {
   const changelog = read("CHANGELOG.md")
   const release = changelog.split("## [0.14.1]")[0]
@@ -308,9 +322,9 @@ test("verification notes include the confirmed cross-platform CI run", () => {
     "packages/dsh/AGENTS.md",
   ]) {
     const text = read(file)
-    assert.ok(text.includes("macOS arm64"), file)
-    assert.ok(text.includes("chromium_headless_shell-1228"), file)
-    assert.ok(text.includes("43688132997"), file)
+    assert.ok(text.includes("Linux x64"), file)
+    assert.ok(text.includes("chromium_headless_shell-1254"), file)
+    assert.ok(text.includes("44712737977"), file)
     assert.ok(text.includes("Linux"), file)
     assert.ok(text.includes("Windows"), file)
     assert.doesNotMatch(

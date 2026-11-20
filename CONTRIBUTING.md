@@ -120,7 +120,7 @@ npm run test:browser
 
 These commands build and inspect the four aligned tarballs, install them into isolated homes/profiles, and exercise the real DSH Host/Web composition without external model credentials. DSH users must receive built artifacts and never need to compile TypeScript or React source.
 
-**Current release-candidate verification scope:** verification includes local **macOS arm64** with the **`chromium_headless_shell-1228`** override and main CI run **`43688132997`** on Linux, macOS, and Windows with the default pinned Chromium. All six Unit/packed and DSH Web jobs passed.
+**Current release-candidate verification scope:** verification includes local **Linux x64** with the default pinned **`chromium_headless_shell-1254`** and main CI run **`44712737977`** on Linux, macOS, and Windows with the default pinned Chromium. All six Unit/packed and DSH Web jobs passed.
 
 ## Documentation Changes
 

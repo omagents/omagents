@@ -27,7 +27,7 @@ npx @omagents/omagents-codex
 dsh plugin --profile web add @omagents/omagents-dsh
 ```
 
-설치 후 호스트를 다시 시작하세요. `@omagents/core`는 의존성으로 자동 설치되므로 **plugin으로 별도 설치하지 마세요**. 현재 릴리스 후보는 네 패키지 모두 **0.14.2**로 정렬되어 있습니다.
+설치 후 호스트를 다시 시작하세요. `@omagents/core`는 의존성으로 자동 설치되므로 **plugin으로 별도 설치하지 마세요**. 현재 릴리스 후보는 네 패키지 모두 **0.15.0**로 정렬되어 있습니다.
 
 Python 기반 skills를 사용하려면 PATH에서 Python 3.11+를 사용할 수 있어야 합니다. DSH에는 Node.js 24.9 이상과 패키지에 명시된 테스트 완료 호환 범위의 DSH 버전이 필요합니다.
 

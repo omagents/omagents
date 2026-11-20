@@ -438,6 +438,7 @@ async function testNonOwnerGateway(host, allowedLane, secretLane) {
 async function openJobBoard(browser, url) {
   const context = await browser.newContext({
     colorScheme: "light",
+    locale: "en-US",
     viewport: { width: 1440, height: 1000 },
   })
   const page = await context.newPage()

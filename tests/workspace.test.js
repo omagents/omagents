@@ -18,7 +18,7 @@ test("root is private and exposes the OpenCode workspace package", () => {
   assert.deepEqual(root.workspaces, ["packages/*"])
   assert.equal(root.name, "@omagents/omagents")
   assert.equal(opencode.name, "@omagents/omagents")
-  assert.equal(opencode.version, "0.14.2")
+  assert.equal(opencode.version, "0.15.0")
   assert.equal(opencode.version, root.version)
 })
 
@@ -29,7 +29,7 @@ test("OpenCode depends on Core and Core bundles pinned Superpowers assets", () =
   assert.equal(pkg.type, "module")
   assert.equal(pkg.main, "src/index.js")
   assert.deepEqual(pkg.bin, { omagents: "bin/install.js" })
-  assert.equal(pkg.dependencies["@omagents/core"], "0.14.2")
+  assert.equal(pkg.dependencies["@omagents/core"], "0.15.0")
   assert.equal(pkg.dependencies.superpowers, undefined)
   assert.ok(core.dependencies.superpowers.includes("#8ca22dba9a94f28898bbce59f2537ff4d87c747d"))
   assert.ok(core.bundledDependencies.includes("superpowers"))
