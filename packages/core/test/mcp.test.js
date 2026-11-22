@@ -123,6 +123,41 @@ for (const { name, env, exaApiKey, githubToken } of environmentMatrix) {
   })
 }
 
+test("Keenable is not registered unless the user opts in", () => {
+  for (const env of [
+    {},
+    { OMAGENTS_KEENABLE: "" },
+    { OMAGENTS_KEENABLE: "0" },
+    { KEENABLE_API_KEY: "" },
+  ]) {
+    assert.equal(resolveMcpServers({ env }).keenable, undefined)
+  }
+})
+
+test("OMAGENTS_KEENABLE=1 registers the keyless Keenable endpoint next to websearch", () => {
+  const servers = resolveMcpServers({ env: { OMAGENTS_KEENABLE: "1", EXA_API_KEY: "" } })
+  assert.deepEqual(servers.keenable, {
+    type: "remote",
+    url: "https://api.keenable.ai/mcp-public",
+    oauth: false,
+  })
+  assert.deepEqual(servers.websearch, expectedWebsearch(""))
+  assertCanonicalServers(servers)
+})
+
+test("KEENABLE_API_KEY registers the keyed Keenable endpoint", () => {
+  const servers = resolveMcpServers({
+    env: { KEENABLE_API_KEY: "keenable-secret", OMAGENTS_KEENABLE: "1" },
+  })
+  assert.deepEqual(servers.keenable, {
+    type: "remote",
+    url: "https://api.keenable.ai/mcp",
+    oauth: false,
+    headers: { "X-API-Key": "keenable-secret" },
+  })
+  assert.deepEqual(servers.websearch, expectedWebsearch(""))
+})
+
 test("Context7 is always local and omits environment without CONTEXT7_API_KEY", () => {
   const servers = resolveMcpServers({ env: { CONTEXT7_API_KEY: "" } })
   assert.deepEqual(servers.context7, {

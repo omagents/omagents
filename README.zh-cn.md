@@ -35,11 +35,13 @@ Python 驱动的 skills 要求 PATH 中可使用 Python 3.11+。DSH 要求 Node.
 
 ```bash
 export EXA_API_KEY="your-exa-key"
+export KEENABLE_API_KEY="your-keenable-key"  # 或设置 OMAGENTS_KEENABLE=1 免密钥使用
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
 - **`EXA_API_KEY`**：通过 `x-api-key` 为托管的 Exa `websearch` MCP 鉴权；未设置时，同一端点可匿名使用。
+- **`KEENABLE_API_KEY`** / **`OMAGENTS_KEENABLE=1`**：可选启用。任一设置都会在 `websearch` 之外新增一个 `keenable` 远程 MCP（网页搜索与页面抓取），`websearch` 保持不变。设置密钥时通过 `X-API-Key` 使用 `https://api.keenable.ai/mcp`；仅设置 `OMAGENTS_KEENABLE=1` 时使用免密钥的 `https://api.keenable.ai/mcp-public`，按 IP 限流，并会记录请求的查询内容和 IP。对于 Codex，已配置的密钥会像 Exa 的一样写入 `.mcp.json`。
 - **`CONTEXT7_API_KEY`**：本地 `@upstash/context7-mcp` server 的可选速率限制凭据。
 - **`GITHUB_TOKEN`**：启用 GitHub Copilot MCP。未设置时，OmAgents 使用 `mcp.grep.app` 搜索公开代码。
 
@@ -97,6 +99,7 @@ Superpowers 另外提供 15 个流程 skills。Core 为 `opencode-v1`、`opencod
 | `codegraph` | 本地 | 代码库符号图和探索 |
 | `context7` | 本地 | 通过 `@upstash/context7-mcp` 搜索文档 |
 | `websearch` | 远程 | 托管 Exa MCP，匿名或通过 `EXA_API_KEY` 鉴权 |
+| `keenable` | 远程 | 仅在启用时注册：通过 `KEENABLE_API_KEY` 使用托管 Keenable MCP，或通过 `OMAGENTS_KEENABLE=1` 免密钥使用 |
 | `github` / `grep_app` | 远程 | 有 token 时使用 GitHub Copilot MCP；否则通过 `mcp.grep.app` 搜索公开代码 |
 
 用户定义的 MCP 配置优先于内置注册。

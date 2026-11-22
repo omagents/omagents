@@ -174,6 +174,7 @@ Registered automatically (V1: `config` hook; V2: `ctx.mcp.transform`). User conf
 | `codegraph` | local | `npx -y @colbymchenry/codegraph serve --mcp` |
 | `context7` | local | `npx -y @upstash/context7-mcp` (optional `CONTEXT7_API_KEY` for higher rate limits) |
 | `websearch` | remote | `https://mcp.exa.ai/mcp` (anonymous; `x-api-key` header when `EXA_API_KEY` is set) |
+| `keenable` | remote | Opt-in only, never in the base catalog: `https://api.keenable.ai/mcp` with `X-API-Key` when `KEENABLE_API_KEY` is set, otherwise `https://api.keenable.ai/mcp-public` when `OMAGENTS_KEENABLE=1` |
 | `github` | remote | `https://api.githubcopilot.com/mcp/` (requires `GITHUB_TOKEN`) |
 | `grep_app` | remote | `https://mcp.grep.app` (fallback when no `GITHUB_TOKEN`) |
 

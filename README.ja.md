@@ -35,11 +35,13 @@ Pythonを使用するskillsには、PATH上のPython 3.11+が必要です。DSH�
 
 ```bash
 export EXA_API_KEY="your-exa-key"
+export KEENABLE_API_KEY="your-keenable-key"  # キーなしで使う場合は OMAGENTS_KEENABLE=1
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
 - **`EXA_API_KEY`**：ホスト型Exa `websearch` MCPを`x-api-key`で認証します。未設定でも同じエンドポイントを匿名で利用できます。
+- **`KEENABLE_API_KEY`** / **`OMAGENTS_KEENABLE=1`**：オプトイン。どちらかを設定すると、`websearch`はそのままに、`keenable`リモートMCP（Web検索とページ取得）が追加されます。キーがある場合は`X-API-Key`で`https://api.keenable.ai/mcp`を、`OMAGENTS_KEENABLE=1`のみの場合はキー不要の`https://api.keenable.ai/mcp-public`を使います。後者はIPごとにレート制限され、クエリとIPが記録されます。Codexでは、設定したキーはExaと同様に`.mcp.json`に書き込まれます。
 - **`CONTEXT7_API_KEY`**：ローカル`@upstash/context7-mcp` serverのレート制限を緩和するオプションの認証情報です。
 - **`GITHUB_TOKEN`**：GitHub Copilot MCPを有効にします。未設定の場合、OmAgentsは`mcp.grep.app`で公開コードを検索します。
 
@@ -97,6 +99,7 @@ Superpowersはさらに15個のプロセスskillsを提供します。Coreは`op
 | `codegraph` | ローカル | コードベースsymbol graphと探索 |
 | `context7` | ローカル | `@upstash/context7-mcp`によるドキュメント検索 |
 | `websearch` | リモート | ホスト型Exa MCP。匿名、または`EXA_API_KEY`で認証 |
+| `keenable` | リモート | オプトインのみ：`KEENABLE_API_KEY`でホスト型Keenable MCP、または`OMAGENTS_KEENABLE=1`でキーなし |
 | `github` / `grep_app` | リモート | tokenがある場合はGitHub Copilot MCP、ない場合は`mcp.grep.app`で公開コード検索 |
 
 ユーザー定義のMCP設定は組み込み登録より優先されます。

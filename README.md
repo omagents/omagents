@@ -35,11 +35,13 @@ Python 3.11+ must be available on PATH for Python-backed skills. DSH requires No
 
 ```bash
 export EXA_API_KEY="your-exa-key"
+export KEENABLE_API_KEY="your-keenable-key"  # or OMAGENTS_KEENABLE=1 for keyless
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
 - **`EXA_API_KEY`**: authenticates the hosted Exa `websearch` MCP through `x-api-key`; without it, the same endpoint works anonymously.
+- **`KEENABLE_API_KEY`** / **`OMAGENTS_KEENABLE=1`**: opt-in. Either one adds a `keenable` remote MCP (web search and page fetch) next to `websearch`, which stays as it is. With the key it uses `https://api.keenable.ai/mcp` through `X-API-Key`; with only `OMAGENTS_KEENABLE=1` it uses the keyless `https://api.keenable.ai/mcp-public`, which is rate limited per IP and logs requests with the query and IP. For Codex, a configured key is written to `.mcp.json` like Exa's.
 - **`CONTEXT7_API_KEY`**: optional rate-limit credentials for the local `@upstash/context7-mcp` server.
 - **`GITHUB_TOKEN`**: enables the GitHub Copilot MCP. Without it, OmAgents uses `mcp.grep.app` for public code search.
 
@@ -97,6 +99,7 @@ Superpowers contributes 15 additional process skills. Core renders shared skills
 | `codegraph` | Local | Codebase symbol graph and exploration |
 | `context7` | Local | Documentation search through `@upstash/context7-mcp` |
 | `websearch` | Remote | Hosted Exa MCP, anonymous or authenticated with `EXA_API_KEY` |
+| `keenable` | Remote | Opt-in only: hosted Keenable MCP with `KEENABLE_API_KEY`, or keyless with `OMAGENTS_KEENABLE=1` |
 | `github` / `grep_app` | Remote | GitHub Copilot MCP with a token; otherwise public code search through `mcp.grep.app` |
 
 User-defined MCP configuration takes precedence over built-in registrations.

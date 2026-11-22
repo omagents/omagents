@@ -33,6 +33,23 @@ export function resolveMcpServers({ env = process.env } = {}) {
     }
   }
 
+  // Keenable is opt-in and never replaces websearch: registered only when KEENABLE_API_KEY is set
+  // (keyed endpoint, X-API-Key) or OMAGENTS_KEENABLE=1 (keyless public endpoint, rate limited per IP).
+  if (env.KEENABLE_API_KEY) {
+    servers.keenable = {
+      type: "remote",
+      url: "https://api.keenable.ai/mcp",
+      oauth: false,
+      headers: { "X-API-Key": env.KEENABLE_API_KEY },
+    }
+  } else if (env.OMAGENTS_KEENABLE === "1") {
+    servers.keenable = {
+      type: "remote",
+      url: "https://api.keenable.ai/mcp-public",
+      oauth: false,
+    }
+  }
+
   // Prefer the authenticated GitHub MCP, falling back to public Grep.app.
   if (env.GITHUB_TOKEN) {
     servers.github = {
