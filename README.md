@@ -27,7 +27,7 @@ npx @omagents/omagents-codex
 dsh plugin --profile web add @omagents/omagents-dsh
 ```
 
-Restart the host after installation. `@omagents/core` is installed automatically as a dependency; **do not install it separately as a plugin**. The current release candidate aligns all four packages at **0.15.0**.
+Restart the host after installation. `@omagents/core` is installed automatically as a dependency; **do not install it separately as a plugin**. The current release candidate aligns all four packages at **0.16.0**.
 
 Python 3.11+ must be available on PATH for Python-backed skills. DSH requires Node.js 24.9 or newer and a DSH version in the package's tested compatibility range.
 

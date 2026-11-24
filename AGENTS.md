@@ -344,6 +344,7 @@ Use the aligned release automation and final gate when implementing a release; d
 | 0.14.1 | v0.14.1 | DSH 0.2.2-rc.3 compatibility: aligned rc.3 dependencies, root-insert bundle row, native `mcpManager` waiting, activation name resolution and parent-scoped cancellation |
 | 0.14.2 | v0.14.2 | OpenCode 2.3 native `subagent` compatibility, DSH plugin discovery metadata, longer npm registry propagation confirmation |
 | 0.15.0 | v0.15.0 | Superpowers documentation roots flattened from `docs/superpowers` to `docs`, unified OpenCode V2 skill registration |
+| 0.16.0 | v0.16.0 | Automatic local Search MCP Proxy with Exa → Keenable → You.com fallback, explicit You.com provider, and three-host research integration |
 
 ## Design Principles
 
