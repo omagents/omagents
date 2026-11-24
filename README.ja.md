@@ -31,19 +31,35 @@ dsh plugin --profile web add @omagents/omagents-dsh
 
 Pythonを使用するskillsには、PATH上のPython 3.11+が必要です。DSHにはNode.js 24.9以降と、パッケージが検証済みの互換範囲として宣言するDSHバージョンが必要です。
 
-### オプションのAPI Keys
+### 検索ProviderとオプションのAPI Keys
 
 ```bash
+export OMAGENTS_SEARCH_PROVIDER="auto"  # デフォルト。単一providerへの直接接続には "exa"、"keenable"、または "youcom"
 export EXA_API_KEY="your-exa-key"
+export KEENABLE_API_KEY="your-keenable-key"  # オプション
+export YDC_API_KEY="your-youcom-key"  # オプション
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-- **`EXA_API_KEY`**：ホスト型Exa `websearch` MCPを`x-api-key`で認証します。未設定でも同じエンドポイントを匿名で利用できます。
+- **`OMAGENTS_SEARCH_PROVIDER`**：`auto`、`exa`、`keenable`、`youcom`をサポートし、`auto`は未設定または空の場合のデフォルトです。認証情報がproviderを切り替えることはなく、未対応の値は明示的なエラーになります。
+- **`EXA_API_KEY`**：ホスト型Exaを`x-api-key`で認証します。未設定でも同じエンドポイントを匿名で利用できます。これは自動Proxyと明示的な直接Exa登録の両方に適用されます。
+- **`KEENABLE_API_KEY`**：自動フォールバックと明示的な`keenable`の両方でオプションです。キーがある場合は`X-API-Key`で`https://api.keenable.ai/mcp`を使用し、ない場合はキー不要の`https://api.keenable.ai/mcp-public`を使用します。公開層はIPごとに1時間あたり1,000リクエスト、1秒あたり10リクエストに制限され、検索クエリまたは取得URLとprompt、IP、User-Agent、`X-Keenable-Title`が記録されます。Codexでは、設定したキーはExaと同様に`.mcp.json`に書き込まれます。
+- **`YDC_API_KEY`**：自動フォールバックと明示的な`youcom`の両方でオプションで、直接登録名は`youdotcom`です。キーがある場合は`Authorization: Bearer <YDC_API_KEY>`で`https://api.you.com/mcp`を使用し、ない場合はAuthorizationヘッダーやOAuthフローなしでキー不要の`https://api.you.com/mcp/free`を使用します。公式の[You.com MCPドキュメント](https://you.com/docs/agents/mcp-server#choose-your-setup)では、キー不要エンドポイントの上限は1日100クエリとされています。キー不要とはアカウント認証情報が不要という意味であり、ネットワークトラフィックの匿名性やproviderによるログ記録の不存在を意味しません。
 - **`CONTEXT7_API_KEY`**：ローカル`@upstash/context7-mcp` serverのレート制限を緩和するオプションの認証情報です。
 - **`GITHUB_TOKEN`**：GitHub Copilot MCPを有効にします。未設定の場合、OmAgentsは`mcp.grep.app`で公開コードを検索します。
 
-Codexでは、GitHub認証はトークン値ではなく`GITHUB_TOKEN`環境変数参照（`bearer_token_env_var`）として保存されます。Codex pluginの`.mcp.json`契約には、Exaの`x-api-key`やContext7のstdio `env`に相当する間接参照がないため、設定されたExaとContext7の値はこのファイルに書き込まれます。POSIXモードを尊重するプラットフォームでは、インストーラーは非公開ディレクトリを`0700`で作成し、`.mcp.json`を`0600`で書き込み・再書き込みします。
+`auto`では、1つのローカル`websearch` Search MCP Proxyが**Exa → Keenable → You.com**の順で動作します。最初にExaを呼び出し、フォールバック対象のExa失敗後にのみKeenableを最大1回試行し、その後フォールバック対象のKeenable失敗時にのみYou.comを最大1回試行します。成功した空の結果、認証または権限の失敗、無効なパラメータ、明示的な再試行不可の失敗、呼び出し元のキャンセルではフォールバックしません。各providerの試行は最大1回で、バックエンド試行ごとに30秒の上限には遅延初期化とツール呼び出しが含まれます。3回すべてを試行する呼び出しでは約90秒のバックエンド上限となり、わずかなローカル処理時間は含みません。
+
+Proxyは汎用の`search`と`fetch`を公開し、`fetch`は厳密に1つの`http`または`https` URLを受け付けます。OpenCodeでは`websearch_search`と`websearch_fetch`、CodexとDSHでは`mcp__websearch__search`と`mcp__websearch__fetch`という名前になります。明示的な`exa`、`keenable`、`youcom`は、直接登録とproviderネイティブのツール名を保持します。You.comの直接登録では`youdotcom`と`you-search`/`you-extract`を使用します。
+
+You.comの試行では、汎用searchが`you-search`にマッピングされ、`query`を変更せずに転送し、`maxResults`を`count`にマッピングします（デフォルト10、範囲1～50）。汎用fetchは、キー付きとキー不要に共通するサブセットを使い、`you-extract`には`url`のみを渡します。You.comには`objective`と`maxCharacters`に直接相当するものがないため、Proxyはその試行でのみこれらを省略し、ローカルでクエリを書き換えたり応答を切り詰めたりしません。ExaとKeenableの成功メタデータは変更されません。2回のフォールバック対象の失敗後にYou.comが成功した場合、`provider: "youcom"`を報告し、最初の失敗を示す`fallback`を保持したまま、順序付き`fallbacks`メタデータと、以前のフォールバック対象の失敗ごとの可読な`Fallback`行を追加します。
+
+**プライバシーとオプトアウト：**自動フォールバックでは、同じ検索クエリ、オプションの`objective`、または対象URLがExa、Keenable、You.comに開示される可能性があります。特にフォールバック対象のExa失敗では、同じ検索クエリまたはURLをKeenableに送信する場合があり、Keenableキーが未設定の場合は公開層のログ記録も適用されます。その後のフォールバック対象のKeenable失敗では、クエリまたはURLがYou.comに送信される場合があります。You.comは`objective`をネイティブ引数として受け取りませんが、前のproviderが受け取っている場合があります。直接のExa動作を維持して自動フォールバックを防ぐには、明示的に`exa`を選択してください。明示的な`keenable`と`youcom`も単一providerへのオプトアウトです。このフォールバック保証は内蔵Proxy経由の呼び出しだけに適用されます。OmAgentsが無効化できないホストネイティブのWebツールは対象外であり、ユーザー定義の`websearch`または`youdotcom` MCPはユーザー所有のまま優先され、ラップされません。
+
+**Codexの設定タイミング：** Codexはインストーラーの実行時にproviderと認証情報の設定を取り込みます。インストール前に環境変数を設定してください。providerまたはキー（`YDC_API_KEY`を含む）を変更した後は、`OMAGENTS_SEARCH_PROVIDER="keenable" npx @omagents/omagents-codex`のようにインストーラーを再実行し、同じ環境でCodexを再起動してください。再インストールではコピーされたProxyが更新され、古いproviderエントリと認証情報が置き換えられます。
+
+Codexでは、Bearer環境変数の間接参照はMCP serverの所有者ごとに決まり、`github`は`bearer_token_env_var = "GITHUB_TOKEN"`、直接の`youdotcom`は`bearer_token_env_var = "YDC_API_KEY"`を使用するため、Bearerシークレットはシリアライズされません。自動ローカルProxyでは、設定された`YDC_API_KEY`は`.mcp.json`内のstdio `env`値のままです。Codex pluginの`.mcp.json`契約には、Exaの`x-api-key`、Keenableの`X-API-Key`、Context7のstdio `env`に相当する間接参照がないため、設定されたExa、Keenable、Context7の値はこのファイルに書き込まれます。POSIXモードを尊重するプラットフォームでは、インストーラーは非公開ディレクトリを`0700`で作成し、`.mcp.json`を`0600`で書き込み・再書き込みします。
 
 ## サポートマトリクス
 
@@ -65,7 +81,7 @@ Codexでは、GitHub認証はトークン値ではなく`GITHUB_TOKEN`環境変�
 | **Deep Research** | マルチソースitems × fields research、gap detection、永続evidence、Jinja2レポート |
 | **Parallel Execution** | OpenCodeとDSHで共有Core実行モデルを使うホストネイティブbackground agents |
 | **DSH Web Job Board** | ネイティブReactのフィルター、詳細、通知状態、確認付きキャンセル、再接続、health表示 |
-| **組み込みMCPs** | agentmemory、codegraph、context7、websearch、github/grep_app |
+| **組み込みMCPs** | agentmemory、codegraph、context7、websearch/keenable/youdotcom、github/grep_app |
 | **Python Tooling** | 永続agent baseとオンデマンドproject overlay。既存project `.venv`は変更しません |
 | **文書・Webツール** | MarkItDown変換、OfficeCLI文書、Playwright scraping |
 | **Code Intelligence** | LSPガイダンスとgrepフォールバック付きAST検索・書き換え |
@@ -96,7 +112,9 @@ Superpowersはさらに15個のプロセスskillsを提供します。Coreは`op
 | `agentmemory` | ローカル | Session memoryとaudit |
 | `codegraph` | ローカル | コードベースsymbol graphと探索 |
 | `context7` | ローカル | `@upstash/context7-mcp`によるドキュメント検索 |
-| `websearch` | リモート | ホスト型Exa MCP。匿名、または`EXA_API_KEY`で認証 |
+| `websearch` | `auto`ではローカル、明示的な`exa`ではリモート | 自動`Exa → Keenable → You.com` Proxy、または匿名/`EXA_API_KEY`認証の直接ホスト型Exa MCP |
+| `keenable` | リモート | `keenable` provider選択時はキー付きプライベートMCPまたはキー不要の公開エンドポイントを利用 |
+| `youdotcom` | リモート | `youcom` provider選択時はキー付き`https://api.you.com/mcp`またはキー不要の`https://api.you.com/mcp/free`を利用 |
 | `github` / `grep_app` | リモート | tokenがある場合はGitHub Copilot MCP、ない場合は`mcp.grep.app`で公開コード検索 |
 
 ユーザー定義のMCP設定は組み込み登録より優先されます。

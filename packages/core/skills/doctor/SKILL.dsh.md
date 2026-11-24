@@ -41,19 +41,26 @@ Start a small native `subagent` with a self-contained `description` and `prompt`
 
 ## 4. MCP Registration and Connectivity
 
-OmAgents mounts Core's catalog through the DSH `mcpManager` adapter. Existing Loader-owned user server names take precedence. Local definitions use `stdio`; remote definitions use `streamable-http`.
+OmAgents mounts Core's catalog through the DSH `mcpManager` adapter. Existing Loader-owned user server names take precedence. Local definitions use `stdio`; remote definitions use `streamable-http`. `OMAGENTS_SEARCH_PROVIDER` selects `auto` (the default when `OMAGENTS_SEARCH_PROVIDER` is unset or empty), `exa`, `keenable`, or `youcom`. In `auto`, the only built-in search registration is a local stdio `websearch` Search MCP Proxy; explicit `exa` and `keenable` retain their direct registrations, while explicit `youcom` uses direct `youdotcom`.
 
 | Server | Expected check |
 |--------|----------------|
 | `agentmemory` | Local handshake succeeds through `npx -y @agentmemory/mcp`. |
 | `codegraph` | Local handshake succeeds through `npx -y @colbymchenry/codegraph serve --mcp`. |
 | `context7` | The configured local or remote Context7 endpoint answers initialization. |
-| `websearch` | Hosted `https://mcp.exa.ai/mcp` is reachable; `EXA_API_KEY`, when set, is sent as `x-api-key`. |
+| `websearch` in auto | Verify the local Proxy handshake and generic `mcp__websearch__search` / `mcp__websearch__fetch` tools, then inspect an actual response for provider evidence. |
+| `websearch` with explicit Exa | Hosted `https://mcp.exa.ai/mcp` is reachable; `EXA_API_KEY`, when set, is sent as `x-api-key`. |
+| `keenable` with explicit Keenable | `KEENABLE_API_KEY` selects `https://api.keenable.ai/mcp` with `X-API-Key`; without a key, `https://api.keenable.ai/mcp-public` is used without that header. |
+| `youdotcom` with explicit You.com | `YDC_API_KEY` selects keyed `https://api.you.com/mcp` with `Authorization: Bearer <YDC_API_KEY>`; without a key, keyless `https://api.you.com/mcp/free` is used without an Authorization header. |
 | `github` / `grep_app` | `GITHUB_TOKEN` selects GitHub; otherwise the grep.app fallback is expected. |
+
+In auto, the Proxy follows Exa → Keenable → You.com and programmatically makes at most one attempt per eligible position, advancing only after a fallback-eligible failure at that position: transport/session failures, timeouts, MCP protocol or malformed responses, HTTP 408/429/5xx, explicit temporary/rate-limit/retryable failures, or an otherwise unclassified backend `isError`. A valid success, including zero search hits, never falls back. Local validation, backend tool/page HTTP 400/401/403/404/422, known authentication, authorization, invalid-parameter, and permission failures, `Retryable: no`, caller cancellation, stdin closure, and shutdown stop the chain without another provider attempt. Each new call starts with Exa again.
+
+Distinguish the configured route (`auto` or an explicit provider) from runtime provider evidence. Use the actual response's prepended `Provider: exa|keenable|youcom` and optional `Fallback: <from> failed (<code>)` lines, or `_meta.omagents.provider`, `_meta.omagents.fallback`, and `_meta.omagents.fallbacks`, rather than configuration inference. A You.com success after two eligible failures exposes ordered two-fallback history through `fallbacks`; `fallback` continues to identify the first eligible failure. When all three providers fail, the error identifies the attempts actually made in route order with bounded, redacted categories. Only calls through the OmAgents-registered Proxy guarantee failover. Host-native web tools and a user-overridden `websearch` entry are not wrapped and are outside automatic failover.
 
 Model-facing MCP tools use `mcp__<server>__<raw_tool>`, for example `mcp__codegraph__codegraph_explore`. Check for that actual DSH name rather than flattened names from other hosts.
 
-Do not probe a stdio MCP server with `--help`; it can block waiting for protocol input. Use a real MCP handshake fixture or close stdin cleanly. A cold `npx` download can make the first startup slow without being a hang. Report each server's registration/readiness health separately.
+Do not probe a stdio MCP server with `--help`; it can block waiting for protocol input. Use a real MCP handshake fixture or close stdin cleanly. A cold `npx` download can make the first startup slow without being a hang. Report each server's registration/readiness health separately and credential presence only. Never print API key values or authorization headers, and do not replace redacted Proxy errors with raw backend payloads.
 
 ## 5. Persistent Python Base
 

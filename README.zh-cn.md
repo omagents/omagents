@@ -31,19 +31,35 @@ dsh plugin --profile web add @omagents/omagents-dsh
 
 Python 驱动的 skills 要求 PATH 中可使用 Python 3.11+。DSH 要求 Node.js 24.9 或更高版本，并要求 DSH 版本位于软件包声明的已测试兼容范围内。
 
-### 可选 API Keys
+### 搜索 Provider 与可选 API Keys
 
 ```bash
+export OMAGENTS_SEARCH_PROVIDER="auto"  # 默认；使用 "exa"、"keenable" 或 "youcom" 可仅直连一个 provider
 export EXA_API_KEY="your-exa-key"
+export KEENABLE_API_KEY="your-keenable-key"  # 可选
+export YDC_API_KEY="your-youcom-key"  # 可选
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-- **`EXA_API_KEY`**：通过 `x-api-key` 为托管的 Exa `websearch` MCP 鉴权；未设置时，同一端点可匿名使用。
+- **`OMAGENTS_SEARCH_PROVIDER`**：支持 `auto`、`exa`、`keenable` 和 `youcom`；`auto` 是未设置或为空时默认值。凭据不会切换 provider，不支持的值会明确报错。
+- **`EXA_API_KEY`**：通过 `x-api-key` 为托管 Exa 鉴权；未设置时，同一端点可匿名使用。此行为同时适用于自动 Proxy 和显式直连 Exa 注册。
+- **`KEENABLE_API_KEY`**：自动回退和显式 `keenable` 均可选。设置后通过 `X-API-Key` 使用 `https://api.keenable.ai/mcp`；未设置时使用免密钥的 `https://api.keenable.ai/mcp-public`。公共层按 IP 限制为每小时 1,000 次请求和每秒 10 次请求，并记录搜索查询或抓取的 URL 和 prompt，以及 IP、User-Agent 和 `X-Keenable-Title`。对于 Codex，已配置的密钥会像 Exa 的一样写入 `.mcp.json`。
+- **`YDC_API_KEY`**：自动回退和显式 `youcom` 均可选，显式直连注册名为 `youdotcom`。设置后通过 `Authorization: Bearer <YDC_API_KEY>` 使用 `https://api.you.com/mcp`；未设置时使用免密钥的 `https://api.you.com/mcp/free`，不发送 Authorization header，也不需要 OAuth 流程。官方 [You.com MCP 文档](https://you.com/docs/agents/mcp-server#choose-your-setup)说明免密钥端点限额为每天 100 次查询。免密钥表示不需要账户凭据，并不表示网络流量匿名或 provider 不记录日志。
 - **`CONTEXT7_API_KEY`**：本地 `@upstash/context7-mcp` server 的可选速率限制凭据。
 - **`GITHUB_TOKEN`**：启用 GitHub Copilot MCP。未设置时，OmAgents 使用 `mcp.grep.app` 搜索公开代码。
 
-对于 Codex，GitHub 鉴权保存为 `GITHUB_TOKEN` 环境变量引用（`bearer_token_env_var`），而不是 token 值。Codex plugin 的 `.mcp.json` 合约不为 Exa 的 `x-api-key` 或 Context7 的 stdio `env` 提供等效间接引用，因此已配置的 Exa 和 Context7 值会写入该文件。在支持 POSIX 权限模式的平台上，安装器以 `0700` 创建私有目录，并以 `0600` 写入或重写 `.mcp.json`。
+在 `auto` 下，一个本地 `websearch` Search MCP Proxy 按 **Exa → Keenable → You.com** 顺序调用：先调用 Exa，并且只在出现符合回退条件的 Exa 失败后最多尝试一次 Keenable，随后只在出现符合回退条件的 Keenable 失败后最多尝试一次 You.com。成功的空结果、身份验证或权限失败、无效参数、明确标记的不可重试失败以及调用方取消都不会触发回退。每个 provider 最多尝试一次，每个后端尝试 30 秒的上限包括延迟初始化和工具调用。完整三次尝试的调用因此具有约 90 秒的后端总上限，不含少量本地处理时间。
+
+Proxy 提供通用的 `search` 和 `fetch` 工具；`fetch` 只接受恰好一个 `http` 或 `https` URL。OpenCode 中的名称是 `websearch_search` 和 `websearch_fetch`；Codex 和 DSH 中的名称是 `mcp__websearch__search` 和 `mcp__websearch__fetch`。显式 `exa`、`keenable` 和 `youcom` 保留其直连注册和 provider 原生工具名称；You.com 直连使用 `youdotcom` 以及 `you-search` 和 `you-extract`。
+
+在 You.com 尝试中，通用 search 映射到 `you-search`：将 `query` 原样转发，并将 `maxResults` 映射为 `count`（默认 10，范围 1–50）。通用 fetch 只向 `you-extract` 传递 `url`，使用 keyed/keyless 的共同参数子集。You.com 没有与 `objective` 或 `maxCharacters` 直接对应的参数；Proxy 仅在该尝试中忽略它们，不会在本地改写查询或截断响应。Exa 和 Keenable 的成功元数据保持不变。You.com 在两次符合回退条件的失败后成功时，会报告 `provider: "youcom"`，保留描述首次失败的 `fallback`，并添加有序的 `fallbacks` 元数据，同时为每次此前符合回退条件的失败添加一行可读的 `Fallback`。
+
+**隐私与退出自动回退：**自动回退可能将相同的搜索查询、可选 `objective` 或目标 URL 披露给 Exa、Keenable 和 You.com。具体而言，符合回退条件的 Exa 失败可能将相同的搜索查询或 URL 发送给 Keenable；未配置 Keenable 密钥时，还适用其公共层日志记录。随后符合回退条件的 Keenable 失败可能再将查询或 URL 发送给 You.com。You.com 不会将 `objective` 作为原生参数接收，但此前的 provider 可能已经接收。要保留直连 Exa 行为并防止自动回退，请显式选择 `exa`；显式 `keenable` 和 `youcom` 也是单 provider 退出选项，均绕过 Proxy。只有通过内置 Proxy 的调用才具有此回退保证：OmAgents 无法禁用的宿主原生 Web 工具不在保证范围内；用户自定义的 `websearch` 或 `youdotcom` MCP 仍归用户所有、优先于内置注册，并且不会被包装。
+
+**Codex 配置时机：** Codex 会在安装器运行时固化 provider 和凭据配置。请在安装前设置环境变量；更改 provider 或密钥（包括 `YDC_API_KEY`）后，请重新运行安装器，例如 `OMAGENTS_SEARCH_PROVIDER="keenable" npx @omagents/omagents-codex`，然后使用相同环境重启 Codex。重新安装会刷新复制的 Proxy，并替换过期的 provider 条目和凭据。
+
+对于 Codex，Bearer 环境变量间接引用按 MCP server 所有者确定：`github` 使用 `bearer_token_env_var = "GITHUB_TOKEN"`，而直连 `youdotcom` 使用 `bearer_token_env_var = "YDC_API_KEY"`，不会序列化 Bearer 密钥。对于自动本地 Proxy，已配置的 `YDC_API_KEY` 仍是 `.mcp.json` 中的 stdio `env` 值。Codex plugin 的 `.mcp.json` 合约不为 Exa 的 `x-api-key`、Keenable 的 `X-API-Key` 或 Context7 的 stdio `env` 提供等效间接引用，因此已配置的 Exa、Keenable 和 Context7 值会写入该文件。在支持 POSIX 权限模式的平台上，安装器以 `0700` 创建私有目录，并以 `0600` 写入或重写 `.mcp.json`。
 
 ## 支持矩阵
 
@@ -65,7 +81,7 @@ export GITHUB_TOKEN="your-github-token"
 | **Deep Research** | 多来源 items × fields 研究、缺口检测、持久证据和 Jinja2 报告 |
 | **Parallel Execution** | 在 OpenCode 和 DSH 上通过共享 Core 执行模型使用宿主原生后台 agents |
 | **DSH Web Job Board** | 原生 React 筛选、详情、通知状态、确认取消、重连和健康状态显示 |
-| **内置 MCPs** | agentmemory、codegraph、context7、websearch 和 github/grep_app |
+| **内置 MCPs** | agentmemory、codegraph、context7、websearch/keenable/youdotcom 和 github/grep_app |
 | **Python 工具链** | 持久 agent base 和按需项目 overlay，不修改已有项目 `.venv` |
 | **文档与 Web 工具** | MarkItDown 转换、OfficeCLI 文档和 Playwright 抓取 |
 | **Code Intelligence** | LSP 指引和带 grep 回退的 AST 感知搜索/重写 |
@@ -96,7 +112,9 @@ Superpowers 另外提供 15 个流程 skills。Core 为 `opencode-v1`、`opencod
 | `agentmemory` | 本地 | Session 记忆和审计 |
 | `codegraph` | 本地 | 代码库符号图和探索 |
 | `context7` | 本地 | 通过 `@upstash/context7-mcp` 搜索文档 |
-| `websearch` | 远程 | 托管 Exa MCP，匿名或通过 `EXA_API_KEY` 鉴权 |
+| `websearch` | `auto` 时为本地；显式 `exa` 时为远程 | 自动使用 `Exa → Keenable → You.com` Proxy，或匿名/通过 `EXA_API_KEY` 鉴权直连托管 Exa MCP |
+| `keenable` | 远程 | 选择 `keenable` provider 时使用带密钥的私有 MCP 或免密钥公共端点 |
+| `youdotcom` | 远程 | 选择 `youcom` provider 时使用带密钥的 `https://api.you.com/mcp` 或免密钥的 `https://api.you.com/mcp/free` |
 | `github` / `grep_app` | 远程 | 有 token 时使用 GitHub Copilot MCP；否则通过 `mcp.grep.app` 搜索公开代码 |
 
 用户定义的 MCP 配置优先于内置注册。

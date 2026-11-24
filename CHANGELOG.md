@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Automatic search MCP Proxy**: `OMAGENTS_SEARCH_PROVIDER=auto` is now the default when unset or empty. A self-contained Core-owned local `websearch` Proxy exposes generic `search` and single-URL `fetch` and follows Exa → Keenable → You.com, with at most one attempt per provider after fallback-eligible failures. Empty success, authentication/permission/parameter/non-retryable failures, and caller cancellation do not fall back. Each backend attempt has a 30-second budget, giving a three-attempt call an approximate 90-second backend upper bound, and responses identify the provider and fallback. Explicit `exa`, `keenable`, and `youcom` retain direct registration, optional credentials, and native tool behavior. User-owned `websearch`/`youdotcom` entries and host-native web tools remain outside automatic wrapping/failover, and documentation warns that eligible fallback can disclose the same query or URL to Exa, Keenable, and You.com. Codex installs a relocatable copy of all six Proxy modules and replaces stale copies, provider entries, and credentials on reinstall. Deep Research and Doctor render the selected route, including exclusive generic Proxy instructions in automatic research-child prompts; all four README languages document the lifecycle and privacy boundary.
+- **You.com search provider**: explicit `youcom` registers direct `youdotcom` MCP with optional `YDC_API_KEY`, using keyed `https://api.you.com/mcp` with Bearer authentication or keyless `https://api.you.com/mcp/free` without an Authorization header or OAuth flow. The [official You.com MCP documentation](https://you.com/docs/agents/mcp-server#choose-your-setup) advertises 100 queries/day for keyless use; keyless does not imply anonymous traffic or no provider logging. Automatic You.com attempts map `maxResults` to `count`, pass only `url` to `you-extract`, and omit unsupported `objective` and `maxCharacters` without local query rewriting or response truncation. Existing Exa/Keenable success metadata is unchanged, while You.com success after two eligible failures adds ordered `fallbacks` history and readable per-failure lines. Codex scopes Bearer environment ownership by server: direct `youdotcom` writes `bearer_token_env_var = "YDC_API_KEY"` rather than the secret, while automatic Proxy stdio environment behavior is unchanged; changing provider or credentials still requires reinstall and a Codex restart.
+
 ## [0.15.0] - 2026-11-20
 
 ### Changed

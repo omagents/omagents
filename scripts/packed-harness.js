@@ -21,7 +21,7 @@ export const CLEAN_ROOM_SUMMARY = path.join(ARTIFACT_ROOT, "clean-room.json")
 export const OFFLINE_CACHE = path.join(ARTIFACT_ROOT, "offline-npm-cache")
 const CACHE_SEAL = path.join(OFFLINE_CACHE, "omagents-seed.json")
 const DSH_VERSION = "0.2.2-rc.3"
-const MCP_NAMES = ["agentmemory", "codegraph", "context7", "websearch", "grep_app"]
+const MCP_NAMES = ["agentmemory", "codegraph", "context7", "grep_app"]
 
 function hash(value) {
   return createHash("sha256").update(value).digest("hex")
@@ -223,6 +223,8 @@ function offlineEnvironment(home) {
     NODE_PATH: "",
     GITHUB_TOKEN: "",
     EXA_API_KEY: "",
+    KEENABLE_API_KEY: "",
+    YDC_API_KEY: "",
     CONTEXT7_API_KEY: "",
     DEEPSEEK_API_KEY: "",
     DSH_TELEMETRY_DISABLED: "1",

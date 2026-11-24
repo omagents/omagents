@@ -32,22 +32,29 @@ cat ~/.config/opencode/opencode.json
 
 ### 2. MCP Server Connectivity
 
-Each MCP server should be reachable. Check:
+Each MCP server should be reachable. `OMAGENTS_SEARCH_PROVIDER` selects `auto` (the default when `OMAGENTS_SEARCH_PROVIDER` is unset or empty), `exa`, `keenable`, or `youcom`. In `auto`, the only built-in search registration is a local stdio `websearch` Search MCP Proxy; explicit `exa` and `keenable` retain their direct registrations, while explicit `youcom` uses direct `youdotcom`. Check:
 
 | MCP | How to verify |
 |-----|---------------|
 | `agentmemory` | `npx -y @agentmemory/mcp < /dev/null` exits promptly with code 0 |
 | `codegraph` | `npx -y @colbymchenry/codegraph serve --mcp < /dev/null` exits promptly |
 | `context7` | `npx -y @upstash/context7-mcp < /dev/null` exits promptly |
-| `websearch` | Remote URL `https://mcp.exa.ai/mcp` is reachable; when `EXA_API_KEY` is set, the registered config includes an `x-api-key` header |
+| `websearch` in auto | Verify the local Proxy handshake and generic `websearch_search` / `websearch_fetch` tools, then inspect an actual response for provider evidence. |
+| `websearch` with explicit Exa | Remote URL `https://mcp.exa.ai/mcp` is reachable; when `EXA_API_KEY` is set, the registered config includes an `x-api-key` header. |
+| `keenable` with explicit Keenable | `KEENABLE_API_KEY` selects `https://api.keenable.ai/mcp` with an `X-API-Key` header; without a key, use `https://api.keenable.ai/mcp-public` without that header. |
+| `youdotcom` with explicit You.com | `YDC_API_KEY` selects keyed `https://api.you.com/mcp` with `Authorization: Bearer <YDC_API_KEY>`; without a key, use keyless `https://api.you.com/mcp/free` without an Authorization header. |
 | `github` / `grep_app` | Check if `GITHUB_TOKEN` env var is set. If set, github MCP should work. If not, grep_app fallback is used. |
+
+In auto, the Proxy follows Exa → Keenable → You.com and programmatically makes at most one attempt per eligible position, advancing only after a fallback-eligible failure at that position: transport/session failures, timeouts, MCP protocol or malformed responses, HTTP 408/429/5xx, explicit temporary/rate-limit/retryable failures, or an otherwise unclassified backend `isError`. A valid success, including zero search hits, never falls back. Local validation, backend tool/page HTTP 400/401/403/404/422, known authentication, authorization, invalid-parameter, and permission failures, `Retryable: no`, caller cancellation, stdin closure, and shutdown stop the chain without another provider attempt. Each new call starts with Exa again.
+
+Distinguish the configured route (`auto` or an explicit provider) from runtime provider evidence. Use the actual response's prepended `Provider: exa|keenable|youcom` and optional `Fallback: <from> failed (<code>)` lines, or `_meta.omagents.provider`, `_meta.omagents.fallback`, and `_meta.omagents.fallbacks`, rather than configuration inference. A You.com success after two eligible failures exposes ordered two-fallback history through `fallbacks`; `fallback` continues to identify the first eligible failure. When all three providers fail, the error identifies the attempts actually made in route order with bounded, redacted categories. Only calls through the OmAgents-registered Proxy guarantee failover. Host-native web tools and a user-overridden `websearch` entry are not wrapped and are outside automatic failover.
 
 Do NOT probe local (stdio) MCP servers with `--help` — they ignore the flag
 and block on stdin forever. Stdio servers exit cleanly on stdin EOF, so
 redirect `< /dev/null` instead. A cold npx cache can make the first run slow
 (package download); that is normal and not a hang.
 
-Report which MCPs are configured and whether the token/key is present.
+Report which MCPs are configured and credential presence only. Never print API key values or authorization headers, and do not replace redacted Proxy errors with raw backend payloads.
 
 ### 3. Python Venv
 
@@ -139,7 +146,7 @@ Present results as a table:
 | MCP: agentmemory | PASS | npx available |
 | MCP: codegraph | PASS | npx available |
 | MCP: context7 | PASS | Remote reachable |
-| MCP: websearch | PASS | Remote reachable |
+| MCP: websearch | PASS | Local Proxy handshake; response reports provider |
 | MCP: github | FAIL | GITHUB_TOKEN not set, using grep_app fallback |
 | Python Venv | PASS | jinja2 3.1.4 |
 | Skill Discovery | PASS | 5 skills found |

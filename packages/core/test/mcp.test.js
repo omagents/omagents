@@ -1,10 +1,13 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
-import { resolveMcpServers } from "../src/index.js"
+import { getCorePaths, resolveMcpServers } from "../src/index.js"
 
 const CORE_CATALOG_URL = new URL("../mcp-servers/base.json", import.meta.url)
+const SEARCH_PROXY_ENTRY = fileURLToPath(new URL("../mcp-servers/search-proxy/index.mjs", import.meta.url))
 const LEGACY_CATALOG_URL = new URL("../../../mcp-servers/base.json", import.meta.url)
 const OPENCODE_INDEX_URL = new URL("../../opencode/src/index.js", import.meta.url)
 
@@ -58,25 +61,29 @@ test("Core exports the resolver and owns the unchanged base catalog", async () =
 const environmentMatrix = [
   {
     name: "anonymous Exa and grep_app without tokens",
-    env: { EXA_API_KEY: "", GITHUB_TOKEN: "" },
+    env: { OMAGENTS_SEARCH_PROVIDER: "exa", EXA_API_KEY: "", GITHUB_TOKEN: "" },
     exaApiKey: "",
     githubToken: "",
   },
   {
     name: "authenticated Exa and grep_app with only EXA_API_KEY",
-    env: { EXA_API_KEY: "exa-secret", GITHUB_TOKEN: "" },
+    env: { OMAGENTS_SEARCH_PROVIDER: "exa", EXA_API_KEY: "exa-secret", GITHUB_TOKEN: "" },
     exaApiKey: "exa-secret",
     githubToken: "",
   },
   {
     name: "anonymous Exa and GitHub with only GITHUB_TOKEN",
-    env: { EXA_API_KEY: "", GITHUB_TOKEN: "github-secret" },
+    env: { OMAGENTS_SEARCH_PROVIDER: "exa", EXA_API_KEY: "", GITHUB_TOKEN: "github-secret" },
     exaApiKey: "",
     githubToken: "github-secret",
   },
   {
     name: "authenticated Exa and GitHub with both tokens",
-    env: { EXA_API_KEY: "exa-secret", GITHUB_TOKEN: "github-secret" },
+    env: {
+      OMAGENTS_SEARCH_PROVIDER: "exa",
+      EXA_API_KEY: "exa-secret",
+      GITHUB_TOKEN: "github-secret",
+    },
     exaApiKey: "exa-secret",
     githubToken: "github-secret",
   },
@@ -123,6 +130,170 @@ for (const { name, env, exaApiKey, githubToken } of environmentMatrix) {
   })
 }
 
+test("unset and empty provider select the auto proxy", () => {
+  const resolutions = []
+  const environments = [
+    {},
+    { OMAGENTS_SEARCH_PROVIDER: "" },
+    { OMAGENTS_SEARCH_PROVIDER: "auto" },
+  ]
+
+  for (const env of environments) {
+    const servers = resolveMcpServers({ env })
+    resolutions.push(servers)
+    assert.deepEqual(servers.websearch, {
+      type: "local",
+      command: ["node", SEARCH_PROXY_ENTRY],
+    })
+    assert.equal(servers.websearch.command[0], "node")
+    assert.equal(path.isAbsolute(servers.websearch.command[1]), true)
+    assert.equal(servers.websearch.command[1].endsWith(path.join("search-proxy", "index.mjs")), true)
+    assert.equal(Object.hasOwn(servers.websearch, "environment"), false)
+    assert.equal(servers.keenable, undefined)
+    assertCanonicalServers(servers)
+  }
+  assert.deepEqual(resolutions[1].websearch.command, resolutions[0].websearch.command)
+  assert.deepEqual(resolutions[2].websearch.command, resolutions[0].websearch.command)
+
+  const corePaths = getCorePaths()
+  assert.equal(path.isAbsolute(corePaths.searchProxyDir), true)
+  assert.equal(path.isAbsolute(corePaths.searchProxyEntry), true)
+  assert.equal(corePaths.searchProxyDir, path.dirname(SEARCH_PROXY_ENTRY))
+  assert.equal(corePaths.searchProxyEntry, SEARCH_PROXY_ENTRY)
+  assert.equal(resolutions[0].websearch.command[1], corePaths.searchProxyEntry)
+})
+
+test("explicit auto passes optional You.com credentials to the proxy", () => {
+  const env = {
+    OMAGENTS_SEARCH_PROVIDER: "auto",
+    EXA_API_KEY: "exa-secret",
+    KEENABLE_API_KEY: "keenable-secret",
+    YDC_API_KEY: "ydc-secret",
+    CONTEXT7_API_KEY: "context7-secret",
+  }
+  const envBefore = { ...env }
+  const searchProxyEntry = fileURLToPath(new URL("fixtures/custom-search-proxy.mjs", import.meta.url))
+
+  const servers = resolveMcpServers({ env, searchProxyEntry })
+
+  assert.deepEqual(servers.websearch, {
+    type: "local",
+    command: ["node", searchProxyEntry],
+    environment: {
+      EXA_API_KEY: "exa-secret",
+      KEENABLE_API_KEY: "keenable-secret",
+      YDC_API_KEY: "ydc-secret",
+    },
+  })
+  assert.equal(servers.keenable, undefined)
+  assert.deepEqual(env, envBefore)
+  assertCanonicalServers(servers)
+})
+
+test("explicit You.com retains keyed and keyless direct registration", () => {
+  const cases = [
+    {
+      name: "keyed You.com",
+      env: {
+        OMAGENTS_SEARCH_PROVIDER: "youcom",
+        EXA_API_KEY: "exa-secret",
+        KEENABLE_API_KEY: "keenable-secret",
+        YDC_API_KEY: "ydc-secret",
+      },
+      expected: {
+        type: "remote",
+        url: "https://api.you.com/mcp",
+        oauth: false,
+        headers: { Authorization: "Bearer ydc-secret" },
+      },
+    },
+    {
+      name: "keyless You.com",
+      env: {
+        OMAGENTS_SEARCH_PROVIDER: "youcom",
+        EXA_API_KEY: "exa-secret",
+        KEENABLE_API_KEY: "keenable-secret",
+        YDC_API_KEY: "",
+      },
+      expected: {
+        type: "remote",
+        url: "https://api.you.com/mcp/free",
+        oauth: false,
+      },
+    },
+  ]
+
+  for (const { name, env, expected } of cases) {
+    const envBefore = { ...env }
+    const servers = resolveMcpServers({ env })
+
+    assert.deepEqual(servers.youdotcom, expected, name)
+    assert.equal(servers.websearch, undefined, name)
+    assert.equal(servers.keenable, undefined, name)
+    assert.deepEqual(env, envBefore, name)
+    assertCanonicalServers(servers)
+  }
+})
+
+test("explicit Exa and Keenable retain direct registration", () => {
+  const cases = [
+    {
+      name: "explicit Exa ignores Keenable credentials",
+      env: {
+        OMAGENTS_SEARCH_PROVIDER: "exa",
+        EXA_API_KEY: "exa-secret",
+        KEENABLE_API_KEY: "keenable-secret",
+      },
+      expected: expectedWebsearch("exa-secret"),
+    },
+    {
+      name: "keyless Keenable",
+      env: { OMAGENTS_SEARCH_PROVIDER: "keenable", EXA_API_KEY: "exa-secret" },
+      expected: {
+        type: "remote",
+        url: "https://api.keenable.ai/mcp-public",
+        oauth: false,
+      },
+    },
+    {
+      name: "authenticated Keenable",
+      env: {
+        OMAGENTS_SEARCH_PROVIDER: "keenable",
+        EXA_API_KEY: "exa-secret",
+        KEENABLE_API_KEY: "keenable-secret",
+      },
+      expected: {
+        type: "remote",
+        url: "https://api.keenable.ai/mcp",
+        oauth: false,
+        headers: { "X-API-Key": "keenable-secret" },
+      },
+    },
+  ]
+
+  for (const { name, env, expected } of cases) {
+    const servers = resolveMcpServers({ env })
+    const provider = env.OMAGENTS_SEARCH_PROVIDER
+
+    if (provider === "keenable") {
+      assert.deepEqual(servers.keenable, expected, name)
+      assert.equal(servers.websearch, undefined, name)
+    } else {
+      assert.deepEqual(servers.websearch, expected, name)
+      assert.equal(servers.keenable, undefined, name)
+    }
+    assert.equal(servers.youdotcom, undefined, name)
+    assertCanonicalServers(servers)
+  }
+})
+
+test("an unsupported search provider fails explicitly", () => {
+  assert.throws(
+    () => resolveMcpServers({ env: { OMAGENTS_SEARCH_PROVIDER: "unknown" } }),
+    /Unsupported OMAGENTS_SEARCH_PROVIDER "unknown"; expected "auto", "exa", "keenable", or "youcom"/
+  )
+})
+
 test("Context7 is always local and omits environment without CONTEXT7_API_KEY", () => {
   const servers = resolveMcpServers({ env: { CONTEXT7_API_KEY: "" } })
   assert.deepEqual(servers.context7, {
@@ -157,18 +328,30 @@ test("resolver does not mutate process.env or the supplied environment", () => {
 })
 
 test("each resolution returns independent catalog data", () => {
-  const first = resolveMcpServers({ env: {} })
+  const env = { EXA_API_KEY: "exa-secret", KEENABLE_API_KEY: "keenable-secret" }
+  const first = resolveMcpServers({ env })
   first.agentmemory.command[0] = "changed"
-  first.websearch.url = "https://example.com/changed"
+  first.websearch.command[1] = "changed"
+  first.websearch.environment.EXA_API_KEY = "changed"
 
-  const second = resolveMcpServers({ env: {} })
+  const second = resolveMcpServers({ env })
   assert.deepEqual(second.agentmemory, BASE_CATALOG.agentmemory)
-  assert.deepEqual(second.websearch, BASE_CATALOG.websearch)
+  assert.deepEqual(second.websearch, {
+    type: "local",
+    command: ["node", SEARCH_PROXY_ENTRY],
+    environment: {
+      EXA_API_KEY: "exa-secret",
+      KEENABLE_API_KEY: "keenable-secret",
+    },
+  })
 })
 
 test("user-config precedence remains in the OpenCode host adapter", () => {
   const source = fs.readFileSync(OPENCODE_INDEX_URL, "utf8")
   assert.match(source, /if \(!config\.mcp\[name\]\)/)
   assert.match(source, /if \(!editor\.get\(name\)\)/)
-  assert.doesNotMatch(source, /process\.env\.(?:CONTEXT7_API_KEY|EXA_API_KEY|GITHUB_TOKEN)/)
+  assert.doesNotMatch(
+    source,
+    /process\.env\.(?:OMAGENTS_SEARCH_PROVIDER|CONTEXT7_API_KEY|EXA_API_KEY|KEENABLE_API_KEY|GITHUB_TOKEN)/
+  )
 })

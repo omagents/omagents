@@ -31,19 +31,35 @@ dsh plugin --profile web add @omagents/omagents-dsh
 
 Python 기반 skills를 사용하려면 PATH에서 Python 3.11+를 사용할 수 있어야 합니다. DSH에는 Node.js 24.9 이상과 패키지에 명시된 테스트 완료 호환 범위의 DSH 버전이 필요합니다.
 
-### 선택적 API Keys
+### 검색 Provider 및 선택적 API Keys
 
 ```bash
+export OMAGENTS_SEARCH_PROVIDER="auto"  # 기본값. 단일 provider 직접 연결은 "exa", "keenable" 또는 "youcom"
 export EXA_API_KEY="your-exa-key"
+export KEENABLE_API_KEY="your-keenable-key"  # 선택 사항
+export YDC_API_KEY="your-youcom-key"  # 선택 사항
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-- **`EXA_API_KEY`**: 호스팅된 Exa `websearch` MCP를 `x-api-key`로 인증합니다. 설정하지 않아도 같은 엔드포인트를 익명으로 사용할 수 있습니다.
+- **`OMAGENTS_SEARCH_PROVIDER`**: `auto`, `exa`, `keenable`, `youcom`을 지원하며 `auto`는 설정하지 않았거나 비어 있을 때 기본값입니다. 자격 증명이 provider를 바꾸지 않으며 지원하지 않는 값은 명시적인 오류가 발생합니다.
+- **`EXA_API_KEY`**: 호스팅된 Exa를 `x-api-key`로 인증합니다. 설정하지 않아도 같은 엔드포인트를 익명으로 사용할 수 있으며 자동 Proxy와 명시적 Exa 직접 등록에 모두 적용됩니다.
+- **`KEENABLE_API_KEY`**: 자동 fallback과 명시적 `keenable`에서 선택 사항입니다. 키가 있으면 `X-API-Key`로 `https://api.keenable.ai/mcp`를 사용하고, 없으면 키가 필요 없는 `https://api.keenable.ai/mcp-public`을 사용합니다. 공개 등급은 IP별로 시간당 1,000건, 초당 10건으로 제한되며 검색 쿼리 또는 가져온 URL과 prompt, IP, User-Agent, `X-Keenable-Title`이 기록됩니다. Codex에서는 설정한 키가 Exa와 마찬가지로 `.mcp.json`에 기록됩니다.
+- **`YDC_API_KEY`**: 자동 fallback과 명시적 `youcom`에서 선택 사항이며 직접 등록 이름은 `youdotcom`입니다. 키가 있으면 `Authorization: Bearer <YDC_API_KEY>`로 `https://api.you.com/mcp`를 사용하고, 없으면 Authorization 헤더나 OAuth 흐름 없이 키가 필요 없는 `https://api.you.com/mcp/free`를 사용합니다. [공식 You.com MCP 문서](https://you.com/docs/agents/mcp-server#choose-your-setup)는 키가 필요 없는 엔드포인트의 한도를 하루 100개 쿼리로 안내합니다. 키가 필요 없다는 것은 계정 자격 증명이 필요 없다는 뜻이며 네트워크 트래픽이 익명이거나 provider 로깅이 없다는 뜻은 아닙니다.
 - **`CONTEXT7_API_KEY`**: 로컬 `@upstash/context7-mcp` server의 rate limit을 완화하는 선택적 자격 증명입니다.
 - **`GITHUB_TOKEN`**: GitHub Copilot MCP를 활성화합니다. 설정하지 않으면 OmAgents가 `mcp.grep.app`으로 공개 코드를 검색합니다.
 
-Codex에서 GitHub 인증은 토큰 값 대신 `GITHUB_TOKEN` 환경 변수 참조(`bearer_token_env_var`)로 저장됩니다. Codex plugin `.mcp.json` 계약은 Exa의 `x-api-key` 또는 Context7의 stdio `env`에 해당하는 간접 참조를 제공하지 않으므로, 설정된 Exa 및 Context7 값은 이 파일에 기록됩니다. POSIX 모드를 지원하는 플랫폼에서 설치 프로그램은 비공개 디렉터리를 `0700`으로 만들고 `.mcp.json`을 `0600`으로 쓰거나 다시 씁니다.
+`auto`에서는 하나의 로컬 `websearch` Search MCP Proxy가 **Exa → Keenable → You.com** 순서로 동작합니다. 먼저 Exa를 호출하고 fallback 대상 Exa 실패 후에만 Keenable을 최대 한 번 시도한 다음, fallback 대상 Keenable 실패 후에만 You.com을 최대 한 번 시도합니다. 성공적인 빈 결과, 인증 또는 권한 실패, 잘못된 매개변수, 명시적인 재시도 불가 실패, 호출자 취소는 fallback을 유발하지 않습니다. 각 provider는 최대 한 번만 시도하며 백엔드 시도당 30초 제한에는 지연 초기화와 도구 호출이 포함됩니다. 세 번 모두 시도하는 호출은 약 90초의 백엔드 상한을 가지며 약간의 로컬 처리 시간은 제외됩니다.
+
+Proxy는 범용 `search` 및 `fetch` 도구를 제공하며 `fetch`는 정확히 하나의 `http` 또는 `https` URL을 받습니다. OpenCode에서는 `websearch_search` 및 `websearch_fetch`, Codex와 DSH에서는 `mcp__websearch__search` 및 `mcp__websearch__fetch`로 표시됩니다. 명시적 `exa`, `keenable` 및 `youcom`은 직접 등록과 provider 네이티브 도구 이름을 유지합니다. You.com 직접 등록은 `youdotcom`과 `you-search`/`you-extract`를 사용합니다.
+
+You.com 시도에서 범용 search는 `you-search`로 매핑되어 `query`를 변경 없이 전달하고 `maxResults`를 `count`로 매핑합니다(기본값 10, 범위 1–50). 범용 fetch는 keyed/keyless 공통 하위 집합을 사용하여 `you-extract`에는 `url`만 전달합니다. You.com에는 `objective` 또는 `maxCharacters`에 직접 대응하는 항목이 없으므로 Proxy는 해당 시도에서만 이를 생략하며 로컬에서 쿼리를 다시 쓰거나 응답을 잘라내지 않습니다. Exa 및 Keenable 성공 메타데이터는 변경되지 않습니다. 두 번의 fallback 대상 실패 후 You.com이 성공하면 `provider: "youcom"`을 보고하고 첫 번째 실패에 대한 `fallback`은 유지하면서 순서가 지정된 `fallbacks` 메타데이터와 이전 fallback 대상 실패마다 읽기 가능한 `Fallback` 행을 추가합니다.
+
+**개인 정보 보호 및 자동 fallback 해제:** 자동 fallback에서는 동일한 검색 쿼리, 선택적 `objective` 또는 대상 URL이 Exa, Keenable, You.com에 공개될 수 있습니다. 특히 fallback 대상 Exa 실패 시 동일한 검색 쿼리 또는 URL을 Keenable로 전송할 수 있으며 Keenable 키가 없으면 공개 등급 로깅도 적용됩니다. 이후 fallback 대상 Keenable 실패 시 쿼리 또는 URL이 You.com으로 전송될 수 있습니다. You.com은 `objective`를 네이티브 인수로 받지 않지만 이전 provider는 받았을 수 있습니다. Exa 직접 동작을 유지하고 자동 fallback을 방지하려면 명시적으로 `exa`를 선택하세요. 명시적 `keenable` 및 `youcom`도 단일 provider 옵트아웃입니다. 이 fallback 보장은 내장 Proxy를 통한 호출에만 적용됩니다. OmAgents가 비활성화할 수 없는 호스트 네이티브 Web 도구는 범위 밖이며 사용자 정의 `websearch` 또는 `youdotcom` MCP는 사용자 소유로 유지되고 우선 적용되며 래핑되지 않습니다.
+
+**Codex 구성 시점:** Codex는 설치 프로그램을 실행할 때 provider와 자격 증명 구성을 저장합니다. 설치 전에 환경 변수를 설정하세요. provider 또는 키(`YDC_API_KEY` 포함)를 변경한 후에는 `OMAGENTS_SEARCH_PROVIDER="keenable" npx @omagents/omagents-codex`처럼 설치 프로그램을 다시 실행한 다음 동일한 환경에서 Codex를 다시 시작하세요. 재설치하면 복사된 Proxy가 갱신되고 오래된 provider 항목과 자격 증명을 새 값으로 바꿉니다.
+
+Codex에서 Bearer 환경 변수 간접 참조는 MCP server 소유자별로 결정되며 `github`는 `bearer_token_env_var = "GITHUB_TOKEN"`, 직접 `youdotcom`은 `bearer_token_env_var = "YDC_API_KEY"`를 사용하므로 Bearer 비밀 값은 직렬화되지 않습니다. 자동 로컬 Proxy에서 설정된 `YDC_API_KEY`는 `.mcp.json`의 stdio `env` 값으로 유지됩니다. Codex plugin `.mcp.json` 계약은 Exa의 `x-api-key`, Keenable의 `X-API-Key` 또는 Context7의 stdio `env`에 해당하는 간접 참조를 제공하지 않으므로, 설정된 Exa, Keenable 및 Context7 값은 이 파일에 기록됩니다. POSIX 모드를 지원하는 플랫폼에서 설치 프로그램은 비공개 디렉터리를 `0700`으로 만들고 `.mcp.json`을 `0600`으로 쓰거나 다시 씁니다.
 
 ## 지원 매트릭스
 
@@ -65,7 +81,7 @@ Codex에서 GitHub 인증은 토큰 값 대신 `GITHUB_TOKEN` 환경 변수 참�
 | **Deep Research** | 다중 소스 items × fields research, gap detection, 영구 evidence 및 Jinja2 보고서 |
 | **Parallel Execution** | OpenCode와 DSH에서 공유 Core 실행 모델을 사용하는 호스트 네이티브 백그라운드 에이전트 |
 | **DSH Web Job Board** | 네이티브 React 필터, 세부 정보, 알림 상태, 확인 기반 취소, 재연결 및 health 표시 |
-| **내장 MCPs** | agentmemory, codegraph, context7, websearch, github/grep_app |
+| **내장 MCPs** | agentmemory, codegraph, context7, websearch/keenable/youdotcom, github/grep_app |
 | **Python Tooling** | 영구 agent base와 온디맨드 project overlay를 제공하며 기존 project `.venv`를 수정하지 않음 |
 | **문서 및 Web 도구** | MarkItDown 변환, OfficeCLI 문서, Playwright scraping |
 | **Code Intelligence** | LSP 안내와 grep fallback이 있는 AST 인식 검색/재작성 |
@@ -96,7 +112,9 @@ Superpowers는 15개 프로세스 skills를 추가로 제공합니다. Core는 `
 | `agentmemory` | 로컬 | Session memory 및 audit |
 | `codegraph` | 로컬 | 코드베이스 symbol graph 및 탐색 |
 | `context7` | 로컬 | `@upstash/context7-mcp`를 통한 문서 검색 |
-| `websearch` | 원격 | 호스팅된 Exa MCP, 익명 또는 `EXA_API_KEY` 인증 |
+| `websearch` | `auto`에서는 로컬, 명시적 `exa`에서는 원격 | 자동 `Exa → Keenable → You.com` Proxy 또는 익명/`EXA_API_KEY` 인증의 호스팅된 Exa MCP 직접 연결 |
+| `keenable` | 원격 | `keenable` provider 선택 시 키가 있는 비공개 MCP 또는 키가 필요 없는 공개 엔드포인트 사용 |
+| `youdotcom` | 원격 | `youcom` provider 선택 시 키가 있는 `https://api.you.com/mcp` 또는 키가 필요 없는 `https://api.you.com/mcp/free` 사용 |
 | `github` / `grep_app` | 원격 | token이 있으면 GitHub Copilot MCP, 없으면 `mcp.grep.app` 공개 코드 검색 |
 
 사용자 정의 MCP 설정은 내장 등록보다 우선합니다.

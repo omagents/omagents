@@ -23,9 +23,40 @@ const corePaths = core.getCorePaths()
 assert.equal(fs.realpathSync(corePaths.root), fs.realpathSync(corePackage))
 assert.ok(corePaths.superpowersDir)
 assert.ok(fs.realpathSync(corePaths.superpowersDir).startsWith(fs.realpathSync(corePackage) + path.sep), "Superpowers must resolve from Core's bundled dependency, not host hoisting")
-for (const asset of [corePaths.skillsDir, corePaths.hooksDir, corePaths.mcpCatalogPath]) {
+for (const asset of [corePaths.skillsDir, corePaths.hooksDir, corePaths.mcpCatalogPath, corePaths.searchProxyDir, corePaths.searchProxyEntry]) {
   assert.equal(fs.existsSync(asset), true, asset)
 }
+const searchProxyModules = ["backends.mjs", "errors.mjs", "index.mjs", "remote-client.mjs", "router.mjs", "stdio-server.mjs"]
+function assertCompleteSearchProxy(directory, sourceDirectory = directory) {
+  assert.deepEqual(fs.readdirSync(directory).sort(), [...searchProxyModules].sort())
+  for (const name of searchProxyModules) {
+    assert.equal(fs.readFileSync(path.join(directory, name), "utf8"), fs.readFileSync(path.join(sourceDirectory, name), "utf8"), name)
+  }
+}
+function assertSearchProxyHandshake(entry) {
+  const requests = [
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "packed-probe", version: "1.0.0" } } },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+  ]
+  const npmCache = path.join(home, "nonexistent npm cache")
+  assert.equal(fs.existsSync(npmCache), false)
+  const result = spawnSync(process.execPath, [entry], {
+    input: requests.map((request) => JSON.stringify(request)).join("\n") + "\n",
+    encoding: "utf8",
+    timeout: 30_000,
+    killSignal: "SIGKILL",
+    env: { ...process.env, NODE_PATH: "", NODE_OPTIONS: "", npm_config_cache: npmCache, NPM_CONFIG_CACHE: npmCache, OMAGENTS_SEARCH_PROVIDER: "auto", EXA_API_KEY: "", KEENABLE_API_KEY: "", YDC_API_KEY: "" },
+  })
+  assert.equal(result.status, 0, result.stderr || result.stdout || result.error?.message)
+  assert.equal(result.stderr, "")
+  const responses = result.stdout.trim().split("\n").map((line) => JSON.parse(line))
+  assert.equal(responses.length, 2)
+  assert.equal(responses[0].result.protocolVersion, "2025-06-18")
+  assert.deepEqual(responses[1].result.tools.map((tool) => tool.name), ["search", "fetch"])
+}
+assertCompleteSearchProxy(corePaths.searchProxyDir)
+assertSearchProxyHandshake(corePaths.searchProxyEntry)
 
 const definitions = core.listSkillDefinitions({ host: "dsh" })
 assert.equal(definitions.filter((skill) => skill.source === "omagents").length, 18)
@@ -95,7 +126,7 @@ function runCli(packageName, relativeCli, cwd) {
   fs.mkdirSync(cwd, { recursive: true })
   const result = spawnSync(process.execPath, [path.join(installed(packageName), relativeCli)], {
     cwd,
-    env: { ...process.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: path.join(home, ".config"), CODEX_HOME: undefined },
+    env: { ...process.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: path.join(home, ".config"), CODEX_HOME: undefined, OMAGENTS_SEARCH_PROVIDER: "auto", EXA_API_KEY: "", KEENABLE_API_KEY: "", YDC_API_KEY: "" },
     encoding: "utf8",
     timeout: 30_000,
     killSignal: "SIGKILL",
@@ -116,6 +147,13 @@ assert.equal(fs.existsSync(path.join(pluginRoot, ".codex-plugin", "plugin.json")
 assert.equal(fs.existsSync(path.join(pluginRoot, "skills", "superpowers", "brainstorming", "SKILL.md")), true)
 assert.equal(fs.existsSync(path.join(pluginRoot, "skills", "_shared", "scripts", "loop_engine.py")), true)
 assert.match(fs.readFileSync(path.join(home, ".codex", "config.toml"), "utf8"), /\[plugins\."omagents@omagents"\]/)
+const codexProxyDir = path.join(pluginRoot, "mcp-servers", "search-proxy")
+const codexProxyEntry = path.join(codexProxyDir, "index.mjs")
+assertCompleteSearchProxy(codexProxyDir, corePaths.searchProxyDir)
+const codexMcp = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"))
+assert.deepEqual(codexMcp.mcpServers.websearch, { command: "node", args: [codexProxyEntry] })
+assert.equal(codexMcp.mcpServers.keenable, undefined)
+assertSearchProxyHandshake(codexProxyEntry)
 
 for (const name of ["@omagents/core", "@omagents/omagents", "@omagents/omagents-codex"]) {
   const resolved = fs.realpathSync(installed(name))
@@ -129,6 +167,9 @@ console.log(JSON.stringify({
   openCodeV2: true,
   openCodeCli: true,
   codexCli: true,
+  coreSearchProxy: true,
+  codexSearchProxy: true,
+  searchProxyModules: searchProxyModules.length,
   windowsPython: true,
   dshBackgroundArgument: false,
 }))
@@ -227,8 +268,12 @@ async function runProbe(name, source, cwd) {
       HOME: path.join(path.dirname(cwd), "home"),
       USERPROFILE: path.join(path.dirname(cwd), "home"),
       NODE_PATH: "",
+      NODE_OPTIONS: "",
       GITHUB_TOKEN: "",
+      OMAGENTS_SEARCH_PROVIDER: "auto",
       EXA_API_KEY: "",
+      KEENABLE_API_KEY: "",
+      YDC_API_KEY: "",
       CONTEXT7_API_KEY: "",
       DEEPSEEK_API_KEY: "",
       DSH_TELEMETRY_DISABLED: "1",
@@ -278,6 +323,9 @@ test(
         openCodeV2: true,
         openCodeCli: true,
         codexCli: true,
+        coreSearchProxy: true,
+        codexSearchProxy: true,
+        searchProxyModules: 6,
         windowsPython: true,
         dshBackgroundArgument: false,
       })

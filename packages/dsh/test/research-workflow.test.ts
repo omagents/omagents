@@ -4,7 +4,7 @@ import { spawn, spawnSync } from "node:child_process"
 import fs from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { isAbsolute, join, resolve } from "node:path"
 
 import { Context } from "@deepseek-ai/cordis"
 import { scopeTarget } from "@deepseek-ai/dsh-scope"
@@ -46,8 +46,16 @@ function dispatchFrom(output) {
   return JSON.parse(normalized.slice(start))
 }
 
-async function runPython(script, args, cwd) {
-  const child = spawn(PYTHON, [script, ...args], { cwd })
+async function runPython(script, args, cwd, environment = {}) {
+  const env = { ...process.env }
+  for (const [key, value] of Object.entries(environment)) {
+    if (value === undefined) delete env[key]
+    else env[key] = value
+  }
+  const child = spawn(PYTHON, [script, ...args], {
+    cwd,
+    env,
+  })
   let stdout = ""
   let stderr = ""
   child.stdout.setEncoding("utf8")
@@ -269,6 +277,233 @@ test("two concurrent research lanes translate structured dispatches to real nati
     assert.ok(fs.existsSync(queue), `missing run-scoped queue ${queue}`)
     assert.ok(!fs.existsSync(join(cwd, lanes[dispatches.indexOf(dispatch)], "plan.json")))
   }
+})
+
+function assertAutoProxyPrompt(prompt) {
+  for (const tool of [
+    "websearch_search",
+    "websearch_fetch",
+    "mcp__websearch__search",
+    "mcp__websearch__fetch",
+  ]) {
+    assert.ok(prompt.includes(`\`${tool}\``), `auto prompt must name ${tool}`)
+  }
+  assert.match(prompt, /local Search MCP Proxy/i)
+  assert.match(prompt, /Exa → Keenable → You\.com/)
+  assert.match(prompt, /at most one attempt per eligible position/i)
+  assert.match(prompt, /after a fallback-eligible failure at that position/i)
+  assert.match(prompt, /do not perform provider fallback yourself/i)
+  assert.match(prompt, /do not use direct Exa, direct Keenable, or direct You\.com tools/i)
+  assert.doesNotMatch(
+    prompt,
+    /youdotcom_you-(?:search|extract)|mcp__youdotcom__you-(?:search|extract)/
+  )
+  assert.match(
+    prompt,
+    /do not use native web search\/fetch tools: `websearch_web_search_exa`, `webfetch`, `web_search`, or `web_fetch`/i
+  )
+}
+
+function assertNativeResearchPaths(prompt, dispatch, envelope, cwd) {
+  const planPath = join(cwd, ".omagents", "deep-research", envelope.run_id, "plan.json")
+  const task =
+    envelope.tasks?.find((candidate) => candidate.task_id === dispatch.name) || envelope.task
+  assert.ok(task, "dispatch envelope must include the task output path")
+  assert.ok(isAbsolute(planPath))
+  assert.ok(prompt.includes(`Plan path: ${planPath}`))
+  assert.ok(isAbsolute(task.output_path))
+  assert.ok(prompt.includes(`Output path: ${task.output_path}`))
+  assert.ok(isAbsolute(DEEP_RESEARCH))
+  assert.ok(prompt.includes(DEEP_RESEARCH), "child prompt must use the absolute packaged CLI")
+  assert.doesNotMatch(prompt, /\btask\s*\(\s*background|background\s*[:=]\s*true|OPENCODE_/)
+}
+
+test("DSH native children receive the actual auto proxy prompt", async (t) => {
+  const cwd = await project(t)
+  const result = await runPython(
+    DEEP_RESEARCH,
+    [
+      "run-all",
+      "--query",
+      "Research auto proxy routing",
+      "--workspace",
+      "auto-proxy-native",
+      "--skip-pre-research",
+    ],
+    cwd,
+    { OMAGENTS_SEARCH_PROVIDER: "auto" }
+  )
+  const envelope = dispatchFrom(result.stdout)
+  assert.equal(envelope.search_provider, "auto")
+  const dispatch = envelope.dispatches[0]
+  assert.equal(dispatch.search_provider, "auto")
+  const composition = await nativeSubagentComposition(t)
+
+  await startNativeLane(composition, parent(), dispatch)
+
+  assert.equal(composition.activations.length, 1)
+  const promptContent = composition.activations[0].prompt
+  assert.equal(promptContent.length, 1)
+  assert.equal(promptContent[0].type, "text")
+  const prompt = promptContent[0].text
+  assert.equal(prompt, dispatch.prompt)
+  assertAutoProxyPrompt(prompt)
+  assertNativeResearchPaths(prompt, dispatch, envelope, cwd)
+})
+
+function assertNoYoucomTools(prompt) {
+  assert.doesNotMatch(prompt, /You\.com|youdotcom/i)
+}
+
+function assertExclusiveYoucomPrompt(prompt) {
+  assert.match(prompt, /use only You\.com tools/i)
+  assert.match(
+    prompt,
+    /Search with `youdotcom_you-search` on OpenCode or `mcp__youdotcom__you-search` on Codex\/DSH/i
+  )
+  assert.match(
+    prompt,
+    /fetch promising sources with `youdotcom_you-extract` on OpenCode or `mcp__youdotcom__you-extract` on Codex\/DSH/i
+  )
+  assert.match(
+    prompt,
+    /Do not use Exa, Keenable, the Search MCP Proxy, or native web search\/fetch tools/i
+  )
+  for (const tool of [
+    "websearch_search",
+    "websearch_fetch",
+    "mcp__websearch__search",
+    "mcp__websearch__fetch",
+    "websearch_web_search_exa",
+    "webfetch",
+    "web_search",
+    "web_fetch",
+    "keenable_search_web_pages",
+    "keenable_fetch_page_content",
+    "mcp__keenable__search_web_pages",
+    "mcp__keenable__fetch_page_content",
+  ]) {
+    assert.ok(!prompt.includes(`\`${tool}\``), `explicit You.com prompt must exclude ${tool}`)
+  }
+}
+
+function assertExclusiveExaPrompt(prompt) {
+  assert.match(prompt, /use only Exa tools/i)
+  assertNoYoucomTools(prompt)
+  assert.match(
+    prompt,
+    /Search with `websearch_web_search_exa` on OpenCode or `web_search` on Codex\/DSH/i
+  )
+  assert.match(
+    prompt,
+    /fetch promising sources with `webfetch` on OpenCode or `web_fetch` on Codex\/DSH/i
+  )
+  assert.match(
+    prompt,
+    /Do not use Keenable tools: `keenable_search_web_pages`, `keenable_fetch_page_content`, `mcp__keenable__search_web_pages`, or `mcp__keenable__fetch_page_content`/i
+  )
+}
+
+test("DSH native children receive the actual exclusive Exa prompt", async (t) => {
+  const cwd = await project(t)
+  const result = await runPython(
+    DEEP_RESEARCH,
+    [
+      "run-all",
+      "--query",
+      "Research Exa routing",
+      "--workspace",
+      "exa-native",
+      "--skip-pre-research",
+    ],
+    cwd,
+    { OMAGENTS_SEARCH_PROVIDER: "exa" }
+  )
+  const envelope = dispatchFrom(result.stdout)
+  assert.equal(envelope.search_provider, "exa")
+  const dispatch = envelope.dispatches[0]
+  assert.equal(dispatch.search_provider, "exa")
+  const composition = await nativeSubagentComposition(t)
+
+  await startNativeLane(composition, parent(), dispatch)
+
+  assert.equal(composition.activations.length, 1)
+  const promptContent = composition.activations[0].prompt
+  assert.equal(promptContent.length, 1)
+  assert.equal(promptContent[0].type, "text")
+  const prompt = promptContent[0].text
+  assert.equal(prompt, dispatch.prompt)
+  assertExclusiveExaPrompt(prompt)
+  assertNativeResearchPaths(prompt, dispatch, envelope, cwd)
+})
+
+test("DSH native children receive the actual exclusive Keenable prompt", async (t) => {
+  const cwd = await project(t)
+  const result = await runPython(
+    DEEP_RESEARCH,
+    [
+      "run-all",
+      "--query",
+      "Research Keenable routing",
+      "--workspace",
+      "keenable-native",
+      "--skip-pre-research",
+    ],
+    cwd,
+    { OMAGENTS_SEARCH_PROVIDER: "keenable" }
+  )
+  const envelope = dispatchFrom(result.stdout)
+  const dispatch = envelope.dispatches[0]
+  const composition = await nativeSubagentComposition(t)
+
+  await startNativeLane(composition, parent(), dispatch)
+
+  assert.equal(composition.activations.length, 1)
+  const promptContent = composition.activations[0].prompt
+  assert.equal(promptContent.length, 1)
+  assert.equal(promptContent[0].type, "text")
+  const prompt = promptContent[0].text
+  assert.equal(prompt, dispatch.prompt)
+  assert.match(prompt, /use only Keenable/i)
+  assertNoYoucomTools(prompt)
+  assert.match(prompt, /`mcp__keenable__search_web_pages`/)
+  assert.match(prompt, /`mcp__keenable__fetch_page_content`/)
+  assert.match(prompt, /do not use Exa/i)
+  assert.match(prompt, /do not use native web search\/fetch tools/i)
+  assertNativeResearchPaths(prompt, dispatch, envelope, cwd)
+})
+
+test("DSH native children receive the actual exclusive You.com prompt", async (t) => {
+  const cwd = await project(t)
+  const result = await runPython(
+    DEEP_RESEARCH,
+    [
+      "run-all",
+      "--query",
+      "Research You.com routing",
+      "--workspace",
+      "youcom-native",
+      "--skip-pre-research",
+    ],
+    cwd,
+    { OMAGENTS_SEARCH_PROVIDER: "youcom" }
+  )
+  const envelope = dispatchFrom(result.stdout)
+  assert.equal(envelope.search_provider, "youcom")
+  const dispatch = envelope.dispatches[0]
+  assert.equal(dispatch.search_provider, "youcom")
+  const composition = await nativeSubagentComposition(t)
+
+  await startNativeLane(composition, parent(), dispatch)
+
+  assert.equal(composition.activations.length, 1)
+  const promptContent = composition.activations[0].prompt
+  assert.equal(promptContent.length, 1)
+  assert.equal(promptContent[0].type, "text")
+  const prompt = promptContent[0].text
+  assert.equal(prompt, dispatch.prompt)
+  assertExclusiveYoucomPrompt(prompt)
+  assertNativeResearchPaths(prompt, dispatch, envelope, cwd)
 })
 
 test("hyperplan runs three critics to completion or authoritative cancellation", async (t) => {

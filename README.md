@@ -31,19 +31,35 @@ Restart the host after installation. `@omagents/core` is installed automatically
 
 Python 3.11+ must be available on PATH for Python-backed skills. DSH requires Node.js 24.9 or newer and a DSH version in the package's tested compatibility range.
 
-### Optional API Keys
+### Search Providers and Optional API Keys
 
 ```bash
+export OMAGENTS_SEARCH_PROVIDER="auto"  # default; use "exa", "keenable", or "youcom" for a direct-only provider
 export EXA_API_KEY="your-exa-key"
+export KEENABLE_API_KEY="your-keenable-key"  # optional
+export YDC_API_KEY="your-youcom-key"  # optional
 export CONTEXT7_API_KEY="your-context7-key"
 export GITHUB_TOKEN="your-github-token"
 ```
 
-- **`EXA_API_KEY`**: authenticates the hosted Exa `websearch` MCP through `x-api-key`; without it, the same endpoint works anonymously.
+- **`OMAGENTS_SEARCH_PROVIDER`**: supports `auto`, `exa`, `keenable`, and `youcom`; `auto` is the default when unset or empty. Credentials never switch the provider, and unsupported values fail explicitly.
+- **`EXA_API_KEY`**: authenticates hosted Exa through `x-api-key`; without it, the same endpoint works anonymously. This applies to the automatic Proxy and to explicit direct Exa registration.
+- **`KEENABLE_API_KEY`**: optional for automatic fallback and explicit `keenable`. With a key, Keenable uses `https://api.keenable.ai/mcp` through `X-API-Key`; without one, it uses the keyless `https://api.keenable.ai/mcp-public`. The public tier allows 1,000 requests/hour and 10 requests/second per IP and logs search queries or fetched URLs and prompts, plus IP, user agent, and `X-Keenable-Title`. For Codex, a configured key is written to `.mcp.json` like Exa's.
+- **`YDC_API_KEY`**: optional for automatic fallback and explicit `youcom`, whose direct registration is named `youdotcom`. With a key, You.com uses `https://api.you.com/mcp` through `Authorization: Bearer <YDC_API_KEY>`; without one, it uses keyless `https://api.you.com/mcp/free` with no Authorization header or OAuth flow. The [official You.com MCP documentation](https://you.com/docs/agents/mcp-server#choose-your-setup) advertises **100 queries/day** for the keyless endpoint. Keyless means no account credential, not anonymous network traffic or an absence of provider logging.
 - **`CONTEXT7_API_KEY`**: optional rate-limit credentials for the local `@upstash/context7-mcp` server.
 - **`GITHUB_TOKEN`**: enables the GitHub Copilot MCP. Without it, OmAgents uses `mcp.grep.app` for public code search.
 
-For Codex, GitHub authentication is stored as the `GITHUB_TOKEN` environment-variable reference (`bearer_token_env_var`), not the token value. The Codex plugin `.mcp.json` contract has no equivalent indirection for Exa's `x-api-key` or Context7's stdio `env`, so configured Exa and Context7 values are written to that file. On platforms that honor POSIX modes, the installer creates private directories with mode `0700` and writes or rewrites `.mcp.json` with mode `0600`.
+In `auto`, one local `websearch` Search MCP Proxy follows **Exa → Keenable → You.com**: it tries Exa first and makes at most one Keenable attempt after a fallback-eligible Exa failure, then at most one You.com attempt after a fallback-eligible Keenable failure. Successful empty results, authentication or permission failures, invalid parameters, explicit non-retryable failures, and caller cancellation never fall back. Each provider receives at most one attempt, bounded at 30 seconds per backend attempt, including lazy initialization and the tool call. A full three-attempt call therefore has an approximate 90-second backend upper bound, excluding small local processing time.
+
+The Proxy exposes generic `search` and `fetch` tools; `fetch` accepts exactly one `http` or `https` URL. OpenCode names them `websearch_search` and `websearch_fetch`; Codex and DSH name them `mcp__websearch__search` and `mcp__websearch__fetch`. Explicit `exa`, `keenable`, and `youcom` retain their direct registrations and native provider tool names; direct You.com uses `youdotcom` with `you-search` and `you-extract`.
+
+On a You.com attempt, generic search maps to `you-search`: it forwards `query` unchanged and maps `maxResults` to `count` (default 10, range 1–50). Generic fetch passes only `url` to `you-extract`, using the common keyed/keyless subset. You.com has no direct equivalent for `objective` or `maxCharacters`; the Proxy omits them only for that attempt, without local query rewriting or response truncation. Exa and Keenable success metadata remains unchanged. A You.com success after two eligible failures reports `provider: "youcom"`, retains `fallback` for the first failure, and adds ordered `fallbacks` metadata plus one readable `Fallback` line per prior eligible failure.
+
+**Privacy and opt-out:** automatic fallback can disclose the same search query, optional objective, or target URL to Exa, Keenable, and You.com. In particular, a fallback-eligible Exa failure can send the same search query or URL to Keenable, including its public-tier logging when no Keenable key is configured; an eligible Keenable failure can then send the query or URL to You.com. You.com does not receive `objective` as a native argument, but earlier providers may have received it. Select explicit `exa` to retain direct Exa behavior and prevent automatic fallback; explicit `keenable` and `youcom` are also single-provider opt-outs that bypass the Proxy. Only calls through the built-in Proxy have this failover guarantee: native host web tools that OmAgents cannot disable are outside it, and a user-defined `websearch` or `youdotcom` MCP remains user-owned, takes precedence, and is not wrapped.
+
+**Codex install timing:** Codex snapshots provider and credential configuration when the installer runs. Set the environment before installation. After changing the provider or keys, including `YDC_API_KEY`, rerun the installer—for example, `OMAGENTS_SEARCH_PROVIDER="keenable" npx @omagents/omagents-codex`—then restart Codex with that environment. Reinstallation refreshes the copied Proxy and replaces stale provider entries and credentials.
+
+For Codex, Bearer environment indirection is scoped by MCP server owner: `github` uses `bearer_token_env_var = "GITHUB_TOKEN"`, while direct `youdotcom` uses `bearer_token_env_var = "YDC_API_KEY"` instead of serializing the Bearer secret. For the automatic local Proxy, configured `YDC_API_KEY` remains a stdio `env` value in `.mcp.json`. The Codex plugin `.mcp.json` contract has no equivalent indirection for Exa's `x-api-key`, Keenable's `X-API-Key`, or Context7's stdio `env`, so configured Exa, Keenable, and Context7 values are written to that file. On platforms that honor POSIX modes, the installer creates private directories with mode `0700` and writes or rewrites `.mcp.json` with mode `0600`.
 
 ## Support Matrix
 
@@ -65,7 +81,7 @@ All host packages depend only on the aligned Core version, never on another host
 | **Deep Research** | Multi-source items × fields research, gap detection, durable evidence, and Jinja2 reports |
 | **Parallel Execution** | Host-native background agents with a shared Core execution model on OpenCode and DSH |
 | **DSH Web Job Board** | Native React filters, details, notification state, confirmed cancellation, reconnect, and health displays |
-| **Built-in MCPs** | agentmemory, codegraph, context7, websearch, and github/grep_app |
+| **Built-in MCPs** | agentmemory, codegraph, context7, websearch/keenable/youdotcom, and github/grep_app |
 | **Python Tooling** | Persistent agent base and on-demand project overlays without modifying an existing project `.venv` |
 | **Document and Web Tools** | MarkItDown conversion, OfficeCLI documents, and Playwright scraping |
 | **Code Intelligence** | LSP guidance and AST-aware search/rewrite with grep fallback |
@@ -96,7 +112,9 @@ Superpowers contributes 15 additional process skills. Core renders shared skills
 | `agentmemory` | Local | Session memory and audit |
 | `codegraph` | Local | Codebase symbol graph and exploration |
 | `context7` | Local | Documentation search through `@upstash/context7-mcp` |
-| `websearch` | Remote | Hosted Exa MCP, anonymous or authenticated with `EXA_API_KEY` |
+| `websearch` | Local in `auto`; remote in explicit `exa` | Automatic `Exa → Keenable → You.com` Proxy, or direct hosted Exa anonymously/authenticated with `EXA_API_KEY` |
+| `keenable` | Remote | With the `keenable` provider, keyed private MCP or the keyless public endpoint |
+| `youdotcom` | Remote | With the `youcom` provider, keyed `https://api.you.com/mcp` or keyless `https://api.you.com/mcp/free` |
 | `github` / `grep_app` | Remote | GitHub Copilot MCP with a token; otherwise public code search through `mcp.grep.app` |
 
 User-defined MCP configuration takes precedence over built-in registrations.

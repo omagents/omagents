@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import http from "node:http"
-import { dirname, resolve } from "node:path"
+import { dirname, isAbsolute, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { Context } from "@deepseek-ai/cordis"
@@ -10,6 +10,10 @@ import { createHealthRecords } from "../dist/host/health.js"
 import { createDshMcpManager, registerDshMcp, toDshMcpConfig } from "../dist/host/register-mcp.js"
 
 const fixture = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures", "stdio-mcp-server.mjs")
+const SEARCH_PROXY_ENTRY = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../core/mcp-servers/search-proxy/index.mjs"
+)
 
 function healthyRecords() {
   return createHealthRecords(() => [])
@@ -148,7 +152,12 @@ test("canonical MCP entries use DSH transports and never override existing names
 
   const dispose = registerDshMcp(
     ctx,
-    { CONTEXT7_API_KEY: "context", EXA_API_KEY: "exa", GITHUB_TOKEN: "github" },
+    {
+      OMAGENTS_SEARCH_PROVIDER: "exa",
+      CONTEXT7_API_KEY: "context",
+      EXA_API_KEY: "exa",
+      GITHUB_TOKEN: "github",
+    },
     health
   )
 
@@ -183,6 +192,137 @@ test("canonical MCP entries use DSH transports and never override existing names
   assert.equal(health.mcp.status, "ready")
 })
 
+test("DSH converts auto websearch to stdio with the absolute proxy and credentials", async () => {
+  const manager = createFakeManager()
+  const health = healthyRecords()
+  const dispose = registerDshMcp(
+    { mcpManager: manager },
+    {
+      OMAGENTS_SEARCH_PROVIDER: "auto",
+      EXA_API_KEY: "auto-exa-secret",
+      KEENABLE_API_KEY: "auto-keenable-secret",
+      YDC_API_KEY: "auto-youcom-secret",
+      GITHUB_TOKEN: "",
+    },
+    health
+  )
+
+  const websearch = manager.registrations.find((entry) => entry.name === "websearch").config
+  assert.equal(websearch.transport, "stdio")
+  assert.equal(websearch.serverName, "websearch")
+  assert.equal(websearch.command, "node")
+  assert.deepEqual(websearch.args, [SEARCH_PROXY_ENTRY])
+  assert.equal(isAbsolute(websearch.args[0]), true)
+  assert.deepEqual(websearch.env, {
+    EXA_API_KEY: "auto-exa-secret",
+    KEENABLE_API_KEY: "auto-keenable-secret",
+    YDC_API_KEY: "auto-youcom-secret",
+  })
+  assert.equal(websearch.url, undefined)
+  assert.equal(websearch.failOnStartupError, true)
+  assert.equal(
+    manager.registrations.some((entry) => entry.name === "keenable"),
+    false
+  )
+
+  await dispose()
+  assert.equal(health.mcp.status, "ready")
+})
+
+test("DSH registers keyless Keenable through the selected provider without Exa", async () => {
+  const manager = createFakeManager()
+  const health = healthyRecords()
+  const dispose = registerDshMcp(
+    { mcpManager: manager },
+    {
+      OMAGENTS_SEARCH_PROVIDER: "keenable",
+      EXA_API_KEY: "unused-exa-secret",
+      KEENABLE_API_KEY: "",
+    },
+    health
+  )
+
+  const keenable = manager.registrations.find((entry) => entry.name === "keenable")
+  assert.equal(keenable.config.transport, "streamable-http")
+  assert.equal(keenable.config.url, "https://api.keenable.ai/mcp-public")
+  assert.equal(keenable.config.headers?.["X-API-Key"], undefined)
+  assert.equal(
+    manager.registrations.some((entry) => entry.name === "websearch"),
+    false
+  )
+
+  await dispose()
+  assert.equal(health.mcp.status, "ready")
+})
+
+test("DSH registers keyed direct You.com without the proxy", async () => {
+  const manager = createFakeManager()
+  const health = healthyRecords()
+  const dispose = registerDshMcp(
+    { mcpManager: manager },
+    {
+      OMAGENTS_SEARCH_PROVIDER: "youcom",
+      EXA_API_KEY: "unused-exa-secret",
+      KEENABLE_API_KEY: "unused-keenable-secret",
+      YDC_API_KEY: "direct-youcom-secret",
+      GITHUB_TOKEN: "",
+    },
+    health
+  )
+
+  const youdotcom = manager.registrations.find((entry) => entry.name === "youdotcom")
+  assert.equal(youdotcom.config.transport, "streamable-http")
+  assert.equal(youdotcom.config.serverName, "youdotcom")
+  assert.equal(youdotcom.config.url, "https://api.you.com/mcp")
+  assert.deepEqual(youdotcom.config.headers, { Authorization: "Bearer direct-youcom-secret" })
+  assert.equal(
+    manager.registrations.some((entry) => entry.name === "websearch" || entry.name === "keenable"),
+    false
+  )
+
+  await dispose()
+  assert.equal(health.mcp.status, "ready")
+})
+
+test("DSH registers keyless direct You.com without authentication", async () => {
+  const manager = createFakeManager()
+  const health = healthyRecords()
+  const dispose = registerDshMcp(
+    { mcpManager: manager },
+    { OMAGENTS_SEARCH_PROVIDER: "youcom", YDC_API_KEY: "", GITHUB_TOKEN: "" },
+    health
+  )
+
+  const youdotcom = manager.registrations.find((entry) => entry.name === "youdotcom")
+  assert.equal(youdotcom.config.transport, "streamable-http")
+  assert.equal(youdotcom.config.url, "https://api.you.com/mcp/free")
+  assert.deepEqual(youdotcom.config.headers, {})
+  assert.equal(
+    manager.registrations.some((entry) => entry.name === "websearch" || entry.name === "keenable"),
+    false
+  )
+
+  await dispose()
+  assert.equal(health.mcp.status, "ready")
+})
+
+test("DSH does not override a user-configured youdotcom", async () => {
+  const manager = createFakeManager(["youdotcom"])
+  const health = healthyRecords()
+  const dispose = registerDshMcp(
+    { mcpManager: manager },
+    { OMAGENTS_SEARCH_PROVIDER: "youcom", YDC_API_KEY: "unused-youcom-secret" },
+    health
+  )
+
+  assert.equal(
+    manager.registrations.some((entry) => entry.name === "youdotcom"),
+    false
+  )
+  await dispose()
+  assert.equal(health.mcp.status, "ready")
+})
+
 test("the built-in DSH mcp manager registers Core entries through its fleet API", async () => {
   const registered = []
   const removed = []
@@ -205,7 +345,12 @@ test("the built-in DSH mcp manager registers Core entries through its fleet API"
 
   const dispose = registerDshMcp(
     ctx,
-    { CONTEXT7_API_KEY: "context", EXA_API_KEY: "exa", GITHUB_TOKEN: "github" },
+    {
+      OMAGENTS_SEARCH_PROVIDER: "exa",
+      CONTEXT7_API_KEY: "context",
+      EXA_API_KEY: "exa",
+      GITHUB_TOKEN: "github",
+    },
     health
   )
 
@@ -269,10 +414,13 @@ test("a composition with the built-in manager row waits for its service before r
   assert.equal(health.mcp.status, "ready", health.mcp.diagnostics[0]?.message)
 
   await dispose()
-  assert.deepEqual(
-    removed.sort(),
-    ["agentmemory", "codegraph", "context7", "grep_app", "websearch"]
-  )
+  assert.deepEqual(removed.sort(), [
+    "agentmemory",
+    "codegraph",
+    "context7",
+    "grep_app",
+    "websearch",
+  ])
 })
 
 test("already available tools and an absent manager use safe lookup without external processes", async (t) => {

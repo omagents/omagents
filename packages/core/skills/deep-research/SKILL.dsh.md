@@ -22,17 +22,28 @@ The native skill result supplies this skill's absolute base directory. Call it `
 - Run the durable queue as `<python> <skill-dir>/../_shared/scripts/loop_engine.py`.
 - Only `jinja2` is provisioned automatically. Other Python packages remain on demand through `agents-python-tools`.
 
-Use DSH 0.2.2's actual tool names:
+Use DSH 0.2.2's actual tool names. `OMAGENTS_SEARCH_PROVIDER` selects `auto` (the default when `OMAGENTS_SEARCH_PROVIDER` is unset or empty), `exa`, `keenable`, or `youcom`. Explicit providers use only their own direct tools. In `auto`, OmAgents registers a local stdio `websearch` Search MCP Proxy; use only its generic search/fetch tools for the web route.
 
 | Evidence source | Native tools |
 |-----------------|--------------|
-| Web | `web_search`, then `web_fetch` for selected sources |
+| Web with auto Proxy | `mcp__websearch__search`, then `mcp__websearch__fetch` for selected sources |
+| Web with explicit Exa | `web_search`, then `web_fetch` for selected sources |
+| Web with explicit Keenable | `mcp__keenable__search_web_pages`, then `mcp__keenable__fetch_page_content` for selected sources |
+| Web with explicit You.com | `mcp__youdotcom__you-search`, then `mcp__youdotcom__you-extract` for selected sources |
 | GitHub MCP | `mcp__github__search_code`, `mcp__github__search_issues`, `mcp__github__search_pull_requests`, `mcp__github__list_releases` |
 | Codegraph MCP | `mcp__codegraph__codegraph_explore` |
 | Local code | `grep`, `glob`, `read` |
 | Shell and file output | `bash`, `write` |
 | Delegation | `subagent` with `description`, `prompt`, and optional `cwd` |
 | Status and cancellation | `parallel_status`, `cancel_task` |
+
+### Auto Proxy routing and evidence
+
+The Proxy follows Exa → Keenable → You.com and programmatically makes at most one attempt per eligible position, advancing only after a fallback-eligible failure at that position: transport/session failures, timeouts, MCP protocol or malformed responses, HTTP 408/429/5xx, explicit temporary/rate-limit/retryable failures, or an otherwise unclassified backend `isError`. A valid success, including zero search hits, never falls back. Local validation, backend tool/page HTTP 400/401/403/404/422, known authentication, authorization, invalid-parameter, and permission failures, `Retryable: no`, caller cancellation, stdin closure, and shutdown stop the chain without another provider attempt. Each new call starts with Exa again; the model must not implement its own fallback. In auto, do not use direct Exa, direct Keenable, or direct You.com tools.
+
+Read the actual response's prepended `Provider: exa|keenable|youcom` and optional `Fallback: <from> failed (<code>)` lines, or `_meta.omagents.provider`, `_meta.omagents.fallback`, and `_meta.omagents.fallbacks`, for provider/fallback evidence; do not infer the backend from configuration. A You.com success after two eligible failures carries ordered two-fallback history in `fallbacks`. When all three providers fail, the error identifies every attempted provider in route order with bounded, redacted failure categories.
+
+Only calls through the OmAgents-registered Proxy have this failover guarantee. Host-native web tools and a user-overridden `websearch` server are not wrapped and are outside automatic failover. Report credential presence only; never print API key values or authorization headers, and do not replace redacted Proxy errors with raw backend payloads. Automatic routing can disclose the same query, optional `objective`, or target URL to the initial Exa attempt and then to eligible Keenable and You.com fallback attempts; You.com does not natively receive `objective`. Select an explicit provider when that disclosure is unacceptable.
 
 `websearch`, `github`, and `codegraph` remain internal plan configuration values; they are not tool invocations.
 
@@ -79,7 +90,7 @@ The orchestrator emits absolute resume instructions as well. `--skip-pre-researc
 Pre-research is mandatory by default.
 
 1. The orchestrator initializes the run-scoped pre-research queue and emits `pre_research_search` JSON.
-2. Use `web_search` with the supplied current year/date, then `web_fetch` for important sources. Extract current real candidates, vendors, source URLs, and a landscape summary.
+2. Follow the actual instruction's provider route: with auto, use `mcp__websearch__search` and then `mcp__websearch__fetch`; with explicit Exa, use `web_search` and then `web_fetch`; with explicit Keenable, use `mcp__keenable__search_web_pages` and then `mcp__keenable__fetch_page_content`; with explicit You.com, use `mcp__youdotcom__you-search` and then `mcp__youdotcom__you-extract`. Include the supplied current year/date and extract current real candidates, vendors, source URLs, and a landscape summary. In auto, the Proxy—not the model—owns any fallback.
 3. Write the requested schema to the exact `output_path`; use `output_path_quoted` in shell commands.
 4. Resume. Evaluation can add targeted searches until coverage is sufficient or `max_pre_research_loops` is reached.
 5. Finalization writes internal `pre_research.json` and planning begins.

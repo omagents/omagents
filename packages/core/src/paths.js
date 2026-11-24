@@ -38,6 +38,7 @@ function resolveOptionalSuperpowersDir(coreRoot) {
 export function getCorePaths() {
   const root = path.resolve(fileURLToPath(new URL("../", import.meta.url)))
   const superpowersDir = resolveOptionalSuperpowersDir(root)
+  const searchProxyDir = path.join(root, "mcp-servers", "search-proxy")
 
   return {
     root,
@@ -45,5 +46,7 @@ export function getCorePaths() {
     superpowersDir,
     hooksDir: path.join(root, "hooks"),
     mcpCatalogPath: path.join(root, "mcp-servers", "base.json"),
+    searchProxyDir,
+    searchProxyEntry: path.join(searchProxyDir, "index.mjs"),
   }
 }

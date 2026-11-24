@@ -47,10 +47,15 @@ function makeProject(t) {
 }
 
 function runPython(script, args, cwd, expectedStatus = 0, environment = {}) {
+  const env = { ...process.env }
+  for (const [key, value] of Object.entries(environment)) {
+    if (value === undefined) delete env[key]
+    else env[key] = value
+  }
   const result = spawnSync(PYTHON, [script, ...args], {
     cwd,
     encoding: "utf-8",
-    env: { ...process.env, ...environment },
+    env,
   })
   assert.strictEqual(
     result.status,
@@ -519,6 +524,322 @@ test("test_default_and_ancestor_workspaces_are_rejected_before_writes", (t) => {
   )
   assert.match(`${ancestorResult.stdout}\n${ancestorResult.stderr}`, /separate child workspace/)
   assert.ok(!fs.existsSync(path.join(nested, ".omagents")))
+})
+
+const AUTO_PROVIDER_CASES = [
+  ["explicit auto", { OMAGENTS_SEARCH_PROVIDER: "auto" }],
+  ["unset environment", { OMAGENTS_SEARCH_PROVIDER: undefined }],
+  ["empty environment", { OMAGENTS_SEARCH_PROVIDER: "" }],
+]
+
+function assertAutoProxyPrompt(prompt) {
+  for (const tool of [
+    "websearch_search",
+    "websearch_fetch",
+    "mcp__websearch__search",
+    "mcp__websearch__fetch",
+  ]) {
+    assert.ok(prompt.includes(`\`${tool}\``), `auto prompt must name ${tool}`)
+  }
+  assert.match(prompt, /local Search MCP Proxy/i)
+  assert.match(prompt, /Exa → Keenable → You\.com/)
+  assert.match(prompt, /at most one attempt per eligible position/i)
+  assert.match(prompt, /after a fallback-eligible failure at that position/i)
+  assert.match(prompt, /do not perform provider fallback yourself/i)
+  assert.match(prompt, /do not use direct Exa, direct Keenable, or direct You\.com tools/i)
+  assert.doesNotMatch(
+    prompt,
+    /youdotcom_you-(?:search|extract)|mcp__youdotcom__you-(?:search|extract)/
+  )
+  assert.match(
+    prompt,
+    /do not use native web search\/fetch tools: `websearch_web_search_exa`, `webfetch`, `web_search`, or `web_fetch`/i
+  )
+}
+
+test("auto structured research children receive generic proxy routing", async (t) => {
+  for (const [mode, environment] of AUTO_PROVIDER_CASES) {
+    await t.test(mode, (t) => {
+      const project = makeProject(t)
+      const envelope = dispatchFrom(
+        runPython(
+          DEEP_RESEARCH,
+          [
+            "run-all",
+            "--query",
+            "Research current agent frameworks",
+            "--workspace",
+            `auto-dispatch-${mode.replaceAll(" ", "-")}`,
+            "--skip-pre-research",
+          ],
+          project,
+          0,
+          environment
+        ).stdout
+      )
+
+      assert.equal(envelope.search_provider, "auto")
+      const dispatches = envelope.dispatches || [envelope]
+      assert.ok(dispatches.length > 0)
+      for (const dispatch of dispatches) {
+        assert.equal(dispatch.search_provider, "auto")
+        assertAutoProxyPrompt(dispatch.prompt)
+      }
+    })
+  }
+})
+
+test("auto pre-research instructions receive generic proxy routing", async (t) => {
+  for (const [mode, environment] of AUTO_PROVIDER_CASES) {
+    await t.test(mode, (t) => {
+      const project = makeProject(t)
+      const instruction = dispatchFrom(
+        runPython(
+          DEEP_RESEARCH,
+          [
+            "run-all",
+            "--query",
+            "Research current agent frameworks",
+            "--workspace",
+            `auto-pre-${mode.replaceAll(" ", "-")}`,
+          ],
+          project,
+          0,
+          environment
+        ).stdout
+      )
+
+      assert.equal(instruction.action, "pre_research_search")
+      assert.equal(instruction.search_provider, "auto")
+      assertAutoProxyPrompt(instruction.instruction)
+    })
+  }
+})
+
+function assertNoYoucomTools(prompt) {
+  assert.doesNotMatch(prompt, /You\.com|youdotcom/i)
+}
+
+function assertExclusiveYoucomPrompt(prompt) {
+  assert.match(prompt, /use only You\.com tools/i)
+  assert.match(
+    prompt,
+    /Search with `youdotcom_you-search` on OpenCode or `mcp__youdotcom__you-search` on Codex\/DSH/i
+  )
+  assert.match(
+    prompt,
+    /fetch promising sources with `youdotcom_you-extract` on OpenCode or `mcp__youdotcom__you-extract` on Codex\/DSH/i
+  )
+  assert.match(
+    prompt,
+    /Do not use Exa, Keenable, the Search MCP Proxy, or native web search\/fetch tools/i
+  )
+  for (const tool of [
+    "websearch_search",
+    "websearch_fetch",
+    "mcp__websearch__search",
+    "mcp__websearch__fetch",
+    "websearch_web_search_exa",
+    "webfetch",
+    "web_search",
+    "web_fetch",
+    "keenable_search_web_pages",
+    "keenable_fetch_page_content",
+    "mcp__keenable__search_web_pages",
+    "mcp__keenable__fetch_page_content",
+  ]) {
+    assert.ok(!prompt.includes(`\`${tool}\``), `explicit You.com prompt must exclude ${tool}`)
+  }
+}
+
+function assertExclusiveExaPrompt(prompt) {
+  assert.match(prompt, /use only Exa tools/i)
+  assertNoYoucomTools(prompt)
+  assert.match(
+    prompt,
+    /Search with `websearch_web_search_exa` on OpenCode or `web_search` on Codex\/DSH/i
+  )
+  assert.match(
+    prompt,
+    /fetch promising sources with `webfetch` on OpenCode or `web_fetch` on Codex\/DSH/i
+  )
+  assert.match(
+    prompt,
+    /Do not use Keenable tools: `keenable_search_web_pages`, `keenable_fetch_page_content`, `mcp__keenable__search_web_pages`, or `mcp__keenable__fetch_page_content`/i
+  )
+}
+
+test("structured research children receive exclusive Exa routing", (t) => {
+  const project = makeProject(t)
+  const envelope = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      [
+        "run-all",
+        "--query",
+        "Research current agent frameworks",
+        "--workspace",
+        "exa-dispatch",
+        "--skip-pre-research",
+      ],
+      project,
+      0,
+      { OMAGENTS_SEARCH_PROVIDER: "exa" }
+    ).stdout
+  )
+
+  assert.equal(envelope.search_provider, "exa")
+  const dispatches = envelope.dispatches || [envelope]
+  assert.ok(dispatches.length > 0)
+  for (const dispatch of dispatches) {
+    assert.equal(dispatch.search_provider, "exa")
+    assertExclusiveExaPrompt(dispatch.prompt)
+  }
+})
+
+test("pre-research instructions receive exclusive Exa routing", (t) => {
+  const project = makeProject(t)
+  const instruction = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      ["run-all", "--query", "Research current agent frameworks", "--workspace", "exa-pre"],
+      project,
+      0,
+      { OMAGENTS_SEARCH_PROVIDER: "exa" }
+    ).stdout
+  )
+
+  assert.equal(instruction.action, "pre_research_search")
+  assert.equal(instruction.search_provider, "exa")
+  assertExclusiveExaPrompt(instruction.instruction)
+})
+
+test("structured research children receive exclusive Keenable routing", (t) => {
+  const project = makeProject(t)
+  const envelope = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      [
+        "run-all",
+        "--query",
+        "Research current agent frameworks",
+        "--workspace",
+        "keenable-dispatch",
+        "--skip-pre-research",
+      ],
+      project,
+      0,
+      { OMAGENTS_SEARCH_PROVIDER: "keenable" }
+    ).stdout
+  )
+
+  assert.equal(envelope.search_provider, "keenable")
+  const dispatches = envelope.dispatches || [envelope]
+  assert.ok(dispatches.length > 0)
+  for (const dispatch of dispatches) {
+    assert.equal(dispatch.search_provider, "keenable")
+    assert.match(dispatch.prompt, /use only Keenable/i)
+    assertNoYoucomTools(dispatch.prompt)
+    assert.match(dispatch.prompt, /`keenable_search_web_pages`/)
+    assert.match(dispatch.prompt, /`keenable_fetch_page_content`/)
+    assert.match(dispatch.prompt, /`mcp__keenable__search_web_pages`/)
+    assert.match(dispatch.prompt, /`mcp__keenable__fetch_page_content`/)
+    assert.match(dispatch.prompt, /do not use Exa/i)
+    assert.match(dispatch.prompt, /do not use native web search\/fetch tools/i)
+    assert.doesNotMatch(dispatch.prompt, /host's available web/)
+  }
+})
+
+test("pre-research instructions receive exclusive Keenable routing", (t) => {
+  const project = makeProject(t)
+  const instruction = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      ["run-all", "--query", "Research current agent frameworks", "--workspace", "keenable-pre"],
+      project,
+      0,
+      { OMAGENTS_SEARCH_PROVIDER: "keenable" }
+    ).stdout
+  )
+
+  assert.equal(instruction.action, "pre_research_search")
+  assert.equal(instruction.search_provider, "keenable")
+  assert.match(instruction.instruction, /use only Keenable/i)
+  assertNoYoucomTools(instruction.instruction)
+  assert.match(instruction.instruction, /`keenable_search_web_pages`/)
+  assert.match(instruction.instruction, /`keenable_fetch_page_content`/)
+  assert.match(instruction.instruction, /`mcp__keenable__search_web_pages`/)
+  assert.match(instruction.instruction, /`mcp__keenable__fetch_page_content`/)
+  assert.match(instruction.instruction, /do not use Exa/i)
+  assert.match(instruction.instruction, /do not use native web search\/fetch tools/i)
+})
+
+test("structured research children receive exclusive You.com routing", (t) => {
+  const project = makeProject(t)
+  const envelope = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      [
+        "run-all",
+        "--query",
+        "Research current agent frameworks",
+        "--workspace",
+        "youcom-dispatch",
+        "--skip-pre-research",
+      ],
+      project,
+      0,
+      { OMAGENTS_SEARCH_PROVIDER: "youcom" }
+    ).stdout
+  )
+
+  assert.equal(envelope.search_provider, "youcom")
+  const dispatches = envelope.dispatches || [envelope]
+  assert.ok(dispatches.length > 0)
+  for (const dispatch of dispatches) {
+    assert.equal(dispatch.search_provider, "youcom")
+    assertExclusiveYoucomPrompt(dispatch.prompt)
+  }
+})
+
+test("pre-research instructions receive exclusive You.com routing", (t) => {
+  const project = makeProject(t)
+  const instruction = dispatchFrom(
+    runPython(
+      DEEP_RESEARCH,
+      ["run-all", "--query", "Research current agent frameworks", "--workspace", "youcom-pre"],
+      project,
+      0,
+      { OMAGENTS_SEARCH_PROVIDER: "youcom" }
+    ).stdout
+  )
+
+  assert.equal(instruction.action, "pre_research_search")
+  assert.equal(instruction.search_provider, "youcom")
+  assertExclusiveYoucomPrompt(instruction.instruction)
+})
+
+test("orchestration rejects providers outside the expanded provider set", (t) => {
+  const project = makeProject(t)
+  const result = runPython(
+    DEEP_RESEARCH,
+    [
+      "run-all",
+      "--query",
+      "Research current agent frameworks",
+      "--workspace",
+      "unsupported-provider",
+      "--skip-pre-research",
+    ],
+    project,
+    1,
+    { OMAGENTS_SEARCH_PROVIDER: "tavily" }
+  )
+
+  assert.match(
+    `${result.stdout}\n${result.stderr}`,
+    /expected "auto", "exa", "keenable", or "youcom"/
+  )
 })
 
 test("structured subagent dispatch is host-neutral and complete", (t) => {

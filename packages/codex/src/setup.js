@@ -61,9 +61,14 @@ function copyDir(src, dest) {
 
 // ─── .mcp.json generation ───────────────────────────────────────────────────
 
-function generateMcpJson(env) {
+const BEARER_TOKEN_ENV_VARS = {
+  github: "GITHUB_TOKEN",
+  youdotcom: "YDC_API_KEY",
+}
+
+function generateMcpJson(env, { searchProxyEntry } = {}) {
   const servers = {}
-  for (const [name, definition] of Object.entries(resolveMcpServers({ env }))) {
+  for (const [name, definition] of Object.entries(resolveMcpServers({ env, searchProxyEntry }))) {
     if (definition.command) {
       servers[name] = {
         command: definition.command[0],
@@ -72,8 +77,9 @@ function generateMcpJson(env) {
       }
     } else {
       servers[name] = { url: definition.url }
-      if (definition.headers?.Authorization) {
-        servers[name].bearer_token_env_var = "GITHUB_TOKEN"
+      const bearerTokenEnvVar = BEARER_TOKEN_ENV_VARS[name]
+      if (definition.headers?.Authorization && bearerTokenEnvVar) {
+        servers[name].bearer_token_env_var = bearerTokenEnvVar
       } else if (definition.headers) {
         servers[name].headers = definition.headers
       }
@@ -198,11 +204,14 @@ export async function installCodex(options = {}) {
   }
 
   const pkg = readJson(fileURLToPath(new URL("../package.json", import.meta.url)))
-  const mcpJson = generateMcpJson(env)
 
   // Use "local" as version dir - Codex always prefers it over semver versions
   const cacheDir = path.join(codexHome, "plugins", "cache", "omagents", "omagents", "local")
   const marketplaceRoot = path.join(codexHome, "plugins", "cache", "omagents")
+  const searchProxyDest = path.join(cacheDir, "mcp-servers", "search-proxy")
+  const mcpJson = generateMcpJson(env, {
+    searchProxyEntry: path.join(searchProxyDest, "index.mjs"),
+  })
 
   console.log(`[omagents] Installing to ${cacheDir}`)
 
@@ -233,7 +242,10 @@ export async function installCodex(options = {}) {
   })
   fs.chmodSync(mcpPath, 0o600)
 
-  // 3. hooks
+  // 3. Self-contained Search MCP Proxy runtime
+  copyDir(corePaths.searchProxyDir, searchProxyDest)
+
+  // 4. hooks
   const hooksDir = path.join(cacheDir, "hooks")
   mkdirp(hooksDir)
   fs.writeFileSync(path.join(hooksDir, "hooks.json"), JSON.stringify(HOOKS_CONFIG, null, 2) + "\n")
@@ -244,7 +256,7 @@ export async function installCodex(options = {}) {
     }
   }
 
-  // 4. Render every discovered skill through Core for Codex.
+  // 5. Render every discovered skill through Core for Codex.
   const skillsSrc = corePaths.skillsDir
   const skillsDest = path.join(cacheDir, "skills")
   mkdirp(skillsDest)
@@ -270,7 +282,7 @@ export async function installCodex(options = {}) {
     fs.writeFileSync(path.join(skillDestDir, "SKILL.md"), rendered.content)
   }
 
-  // 5. Copy _shared scripts
+  // 6. Copy _shared scripts
   const sharedSrc = path.join(skillsSrc, "_shared")
   if (fs.existsSync(sharedSrc)) {
     copyDir(sharedSrc, path.join(skillsDest, "_shared"))
@@ -280,7 +292,7 @@ export async function installCodex(options = {}) {
     console.warn("[omagents] warning: superpowers skills not found, skipping")
   }
 
-  // 6. Update config.toml (marketplace registration + plugin enable)
+  // 7. Update config.toml (marketplace registration + plugin enable)
   const configPath = path.join(codexHome, "config.toml")
   const pluginSection = [
     `[marketplaces.omagents]`,
@@ -293,7 +305,7 @@ export async function installCodex(options = {}) {
   updateConfigToml(configPath, pluginSection)
   console.log(`[omagents] Updated ${configPath}`)
 
-  // 7. Done
+  // 8. Done
   console.log("")
   console.log("[omagents] Installation complete!")
   console.log(`[omagents] Plugin: ${cacheDir}`)

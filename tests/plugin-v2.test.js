@@ -1,13 +1,60 @@
-import { test } from "node:test"
+import { after, test } from "node:test"
 import assert from "node:assert"
 import fs from "fs"
 import os from "os"
 import path from "path"
 import { importModule } from "./import-module.js"
+import { pathToFileURL } from "node:url"
+
+let freshModuleId = 0
+function importFreshModule(filePath) {
+  freshModuleId += 1
+  return import(`${pathToFileURL(filePath).href}?omagents-v2-test=${freshModuleId}`)
+}
 
 const ROOT = path.resolve(import.meta.dirname, "..")
 const SKILLS_DIR = path.join(ROOT, "packages", "core", "skills")
 const PLUGINS_DIR = path.join(ROOT, "packages", "opencode", "src")
+const SEARCH_PROXY_ENTRY = path.join(
+  ROOT,
+  "packages",
+  "core",
+  "mcp-servers",
+  "search-proxy",
+  "index.mjs"
+)
+
+const SEARCH_ENV_KEYS = [
+  "OMAGENTS_SEARCH_PROVIDER",
+  "EXA_API_KEY",
+  "KEENABLE_API_KEY",
+  "YDC_API_KEY",
+]
+const ORIGINAL_SEARCH_ENV = new Map(SEARCH_ENV_KEYS.map((key) => [key, process.env[key]]))
+process.env.OMAGENTS_SEARCH_PROVIDER = "auto"
+delete process.env.EXA_API_KEY
+delete process.env.KEENABLE_API_KEY
+delete process.env.YDC_API_KEY
+after(() => {
+  for (const [key, value] of ORIGINAL_SEARCH_ENV) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+})
+
+function setSearchEnv(t, values) {
+  const previous = new Map(SEARCH_ENV_KEYS.map((key) => [key, process.env[key]]))
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+  t.after(() => {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  })
+}
 
 /**
  * Minimal fake of the V2 plugin context (@opencode/plugin promise API).
@@ -170,18 +217,11 @@ test("V2 setup registers built-in MCP servers in V2 shape", async (t) => {
       assert.ok(!captured.mcps.github)
     }
     assert.strictEqual(captured.mcps.context7.type, "local", "context7 should register as local")
-    assert.strictEqual(
-      captured.mcps.websearch.type,
-      "remote",
-      "websearch always uses the remote endpoint"
-    )
-    assert.strictEqual(captured.mcps.websearch.url, "https://mcp.exa.ai/mcp")
-    if (process.env.EXA_API_KEY) {
-      assert.strictEqual(captured.mcps.websearch.headers["x-api-key"], process.env.EXA_API_KEY)
-      assert.strictEqual(captured.mcps.websearch.oauth, false)
-    } else {
-      assert.strictEqual(captured.mcps.websearch.headers, undefined)
-    }
+    assert.deepStrictEqual(captured.mcps.websearch, {
+      type: "local",
+      command: ["node", SEARCH_PROXY_ENTRY],
+      timeout: { startup: 180_000 },
+    })
     for (const [name, cfg] of Object.entries(captured.mcps)) {
       assert.ok(!("enabled" in cfg), `MCP "${name}" must not carry the V1 'enabled' field`)
       assert.ok(cfg.type === "local" || cfg.type === "remote", `MCP "${name}" has a valid type`)
@@ -197,12 +237,101 @@ test("V2 setup registers built-in MCP servers in V2 shape", async (t) => {
   }
 })
 
+test("V2 setup forwards automatic You.com credentials to the local proxy", async (t) => {
+  setSearchEnv(t, {
+    OMAGENTS_SEARCH_PROVIDER: "auto",
+    EXA_API_KEY: "v2-auto-exa-key",
+    KEENABLE_API_KEY: "v2-auto-keenable-key",
+    YDC_API_KEY: "v2-auto-youcom-key",
+  })
+  const mod = await importFreshModule(path.join(PLUGINS_DIR, "index.js"))
+  const { ctx, captured } = makeFakeV2Context(t)
+  const cleanup = await mod.default.setup(ctx)
+  try {
+    assert.deepStrictEqual(captured.mcps.websearch, {
+      type: "local",
+      command: ["node", SEARCH_PROXY_ENTRY],
+      environment: {
+        EXA_API_KEY: "v2-auto-exa-key",
+        KEENABLE_API_KEY: "v2-auto-keenable-key",
+        YDC_API_KEY: "v2-auto-youcom-key",
+      },
+      timeout: { startup: 180_000 },
+    })
+  } finally {
+    if (typeof cleanup === "function") await cleanup()
+  }
+})
+
+test("V2 setup registers keyed direct You.com without the proxy", async (t) => {
+  setSearchEnv(t, {
+    OMAGENTS_SEARCH_PROVIDER: "youcom",
+    EXA_API_KEY: "unused-exa-key",
+    KEENABLE_API_KEY: "unused-keenable-key",
+    YDC_API_KEY: "v2-direct-youcom-key",
+  })
+  const mod = await importFreshModule(path.join(PLUGINS_DIR, "index.js"))
+  const { ctx, captured } = makeFakeV2Context(t)
+  const cleanup = await mod.default.setup(ctx)
+  try {
+    assert.deepStrictEqual(captured.mcps.youdotcom, {
+      type: "remote",
+      url: "https://api.you.com/mcp",
+      oauth: false,
+      headers: { Authorization: "Bearer v2-direct-youcom-key" },
+    })
+    assert.strictEqual(captured.mcps.websearch, undefined)
+    assert.strictEqual(captured.mcps.keenable, undefined)
+  } finally {
+    if (typeof cleanup === "function") await cleanup()
+  }
+})
+
+test("V2 setup registers keyless direct You.com without authentication", async (t) => {
+  setSearchEnv(t, { OMAGENTS_SEARCH_PROVIDER: "youcom", YDC_API_KEY: "" })
+  const mod = await importFreshModule(path.join(PLUGINS_DIR, "index.js"))
+  const { ctx, captured } = makeFakeV2Context(t)
+  const cleanup = await mod.default.setup(ctx)
+  try {
+    assert.deepStrictEqual(captured.mcps.youdotcom, {
+      type: "remote",
+      url: "https://api.you.com/mcp/free",
+      oauth: false,
+    })
+    assert.strictEqual(captured.mcps.websearch, undefined)
+    assert.strictEqual(captured.mcps.keenable, undefined)
+  } finally {
+    if (typeof cleanup === "function") await cleanup()
+  }
+})
+
+test("V2 setup does not override a user-configured youdotcom", async (t) => {
+  setSearchEnv(t, { OMAGENTS_SEARCH_PROVIDER: "youcom", YDC_API_KEY: "unused-youcom-key" })
+  const mod = await importFreshModule(path.join(PLUGINS_DIR, "index.js"))
+  const { ctx, captured } = makeFakeV2Context(t)
+  const custom = { type: "remote", url: "https://example.com/custom-youcom", oauth: false }
+  captured.mcps.youdotcom = custom
+  const cleanup = await mod.default.setup(ctx)
+  try {
+    assert.deepStrictEqual(captured.mcps.youdotcom, custom)
+  } finally {
+    if (typeof cleanup === "function") await cleanup()
+  }
+})
+
 test("V2 setup does not override user-configured MCP servers", async (t) => {
   const mod = await importModule(path.join(PLUGINS_DIR, "index.js"))
   const { ctx, captured } = makeFakeV2Context(t)
+  const customWebsearch = {
+    type: "remote",
+    url: "https://example.com/custom-websearch",
+    oauth: false,
+  }
   captured.mcps.context7 = { type: "remote", url: "https://example.com/custom" }
+  captured.mcps.websearch = customWebsearch
   await mod.default.setup(ctx)
   assert.strictEqual(captured.mcps.context7.url, "https://example.com/custom")
+  assert.deepStrictEqual(captured.mcps.websearch, customWebsearch)
 })
 
 test("V2 setup registers parallel_status/cancel_task tools and /ps command", async (t) => {

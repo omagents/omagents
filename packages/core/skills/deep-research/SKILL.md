@@ -25,11 +25,24 @@ This skill combines the **structured items × fields approach** (inspired by Rhi
 
 ## Sources Supported
 
+`OMAGENTS_SEARCH_PROVIDER` selects `auto` (the default when `OMAGENTS_SEARCH_PROVIDER` is unset or empty), `exa`, `keenable`, or `youcom`. Explicit providers use only their own direct tools. In `auto`, OmAgents registers a local stdio `websearch` Search MCP Proxy; use only its generic search/fetch tools for the web route.
+
 | Source | Tools to Use |
 |--------|--------------|
-| Web | `websearch_web_search_exa`, `webfetch` |
+| Web with auto Proxy | `websearch_search`, `websearch_fetch` |
+| Web with explicit Exa | `websearch_web_search_exa`, `webfetch` |
+| Web with explicit Keenable | `keenable_search_web_pages`, `keenable_fetch_page_content` |
+| Web with explicit You.com | `youdotcom_you-search`, `youdotcom_you-extract` |
 | GitHub | `github_search_code`, `github_search_issues`, `github_search_pull_requests`, `github_list_releases` |
 | Codebase | `codegraph_codegraph_explore`, `grep`, `glob`, `read` |
+
+### Auto Proxy routing and evidence
+
+The Proxy follows Exa → Keenable → You.com and programmatically makes at most one attempt per eligible position, advancing only after a fallback-eligible failure at that position: transport/session failures, timeouts, MCP protocol or malformed responses, HTTP 408/429/5xx, explicit temporary/rate-limit/retryable failures, or an otherwise unclassified backend `isError`. A valid success, including zero search hits, never falls back. Local validation, backend tool/page HTTP 400/401/403/404/422, known authentication, authorization, invalid-parameter, and permission failures, `Retryable: no`, caller cancellation, stdin closure, and shutdown stop the chain without another provider attempt. Each new call starts with Exa again; the model must not implement its own fallback. In auto, do not use direct Exa, direct Keenable, or direct You.com tools.
+
+Read the actual response's prepended `Provider: exa|keenable|youcom` and optional `Fallback: <from> failed (<code>)` lines, or `_meta.omagents.provider`, `_meta.omagents.fallback`, and `_meta.omagents.fallbacks`, for provider/fallback evidence; do not infer the backend from configuration. A You.com success after two eligible failures carries ordered two-fallback history in `fallbacks`. When all three providers fail, the error identifies every attempted provider in route order with bounded, redacted failure categories.
+
+Only calls through the OmAgents-registered Proxy have this failover guarantee. Host-native web tools and a user-overridden `websearch` server are not wrapped and are outside automatic failover. Report credential presence only; never print API key values or authorization headers, and do not replace redacted Proxy errors with raw backend payloads. Automatic routing can disclose the same query, optional `objective`, or target URL to the initial Exa attempt and then to eligible Keenable and You.com fallback attempts; You.com does not natively receive `objective`. Select an explicit provider when that disclosure is unacceptable.
 
 ## Commands
 
@@ -207,8 +220,8 @@ Shell-quoted output path: {task.output_path_quoted}
 Shell: {shell}
 
 Instructions:
-1. Use websearch_web_search_exa to find relevant sources. Include the current year in queries.
-2. For each promising source, use webfetch to read it.
+1. Use the web route in the actual dispatch prompt: `websearch_search` for auto, `websearch_web_search_exa` for explicit Exa, `keenable_search_web_pages` for explicit Keenable, or `youdotcom_you-search` for explicit You.com. Include the current year in queries.
+2. For each promising source, use the corresponding fetch tool: `websearch_fetch` for auto, `webfetch` for explicit Exa, `keenable_fetch_page_content` for explicit Keenable, or `youdotcom_you-extract` for explicit You.com. In auto, the Proxy—not the model—owns any fallback.
 3. Extract data for EACH field listed above.
 4. Mark uncertain values with [uncertain].
 5. If information is missing or contradictory, do additional targeted searches (up to 3 iterations).

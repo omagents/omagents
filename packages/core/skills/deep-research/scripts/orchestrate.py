@@ -257,6 +257,56 @@ def _resume_invocation(layout: ResearchLayout) -> str:
     )
 
 
+def _search_provider() -> str:
+    """Resolve the configured web provider, preserving the zero-config auto default."""
+    provider = os.environ.get("OMAGENTS_SEARCH_PROVIDER") or "auto"
+    if provider not in {"auto", "exa", "keenable", "youcom"}:
+        raise LayoutError(
+            f'Unsupported OMAGENTS_SEARCH_PROVIDER "{provider}"; expected "auto", "exa", "keenable", or "youcom"'
+        )
+    return provider
+
+
+def _search_tool_instruction(provider: str) -> str:
+    """Embed unambiguous provider routing in prompts consumed by fresh host children."""
+    if provider == "auto":
+        return (
+            "For web research, use only the local Search MCP Proxy. Search with "
+            "`websearch_search` on OpenCode or `mcp__websearch__search` on Codex/DSH, "
+            "then fetch promising sources with `websearch_fetch` on OpenCode or "
+            "`mcp__websearch__fetch` on Codex/DSH. The Proxy follows Exa → Keenable → "
+            "You.com and programmatically makes at most one attempt per eligible position, "
+            "advancing only after a fallback-eligible failure at that position; do not "
+            "perform provider fallback yourself. Do not use direct Exa, direct Keenable, "
+            "or direct You.com tools. Do not use native web search/fetch tools: "
+            "`websearch_web_search_exa`, `webfetch`, `web_search`, or `web_fetch`."
+        )
+    if provider == "youcom":
+        return (
+            "For web research, use only You.com tools. Search with `youdotcom_you-search` "
+            "on OpenCode or `mcp__youdotcom__you-search` on Codex/DSH, then fetch promising "
+            "sources with `youdotcom_you-extract` on OpenCode or "
+            "`mcp__youdotcom__you-extract` on Codex/DSH. Do not use Exa, Keenable, the "
+            "Search MCP Proxy, or native web search/fetch tools."
+        )
+    if provider == "keenable":
+        return (
+            "For web research, use only Keenable tools. Search with "
+            "`keenable_search_web_pages` on OpenCode or `mcp__keenable__search_web_pages` "
+            "on Codex/DSH, then fetch promising sources with `keenable_fetch_page_content` "
+            "on OpenCode or `mcp__keenable__fetch_page_content` on Codex/DSH. "
+            "Do not use Exa. Do not use native web search/fetch tools: "
+            "`websearch_web_search_exa`, `webfetch`, `web_search`, or `web_fetch`."
+        )
+    return (
+        "For web research, use only Exa tools. Search with `websearch_web_search_exa` "
+        "on OpenCode or `web_search` on Codex/DSH, then fetch promising sources with "
+        "`webfetch` on OpenCode or `web_fetch` on Codex/DSH. Do not use Keenable tools: "
+        "`keenable_search_web_pages`, `keenable_fetch_page_content`, "
+        "`mcp__keenable__search_web_pages`, or `mcp__keenable__fetch_page_content`."
+    )
+
+
 def _research_plan(layout: ResearchLayout) -> dict[str, Any]:
     """Load the canonical plan that supplies fresh children with full context."""
     try:
@@ -275,6 +325,7 @@ def _subagent_dispatch(
     plan: dict[str, Any],
 ) -> dict[str, Any]:
     """Describe one host-neutral delegation and its complete child prompt."""
+    provider = _search_provider()
     task_id = task["task_id"]
     output_path = Path(task["output_path"])
     validate_invocation = (
@@ -316,7 +367,7 @@ def _subagent_dispatch(
         f"Shell-quoted output path: {task['output_path_quoted']}",
         f"Shell: {shell_name()}",
         "",
-        "Use the host's available web, GitHub, or codebase research tools appropriate to the task type. Read key sources, extract every requested field, cite original sources with publication dates when available, mark uncertainty explicitly, and perform targeted follow-up searches for missing or contradictory evidence.",
+        f"Use the research tools appropriate to the task type. {_search_tool_instruction(provider)} For GitHub or codebase tasks, use the corresponding repository or local-code tools. Read key sources, extract every requested field, cite original sources with publication dates when available, mark uncertainty explicitly, and perform targeted follow-up searches for missing or contradictory evidence.",
         "Write one JSON object to the exact output path with this shape:",
         json.dumps({
             "type": task.get("type", "web"),
@@ -343,6 +394,7 @@ def _subagent_dispatch(
     ])
     return {
         "action": "dispatch_subagent",
+        "search_provider": provider,
         "description": f"Research {task_id}",
         "prompt": prompt,
         "name": task_id,
@@ -370,6 +422,7 @@ def output_dispatch_instructions(
         for task in tasks_with_paths
     ]
     common = {
+        "search_provider": _search_provider(),
         "workspace": str(layout.workspace),
         "run_id": layout.run_id,
         "findings_dir": str(layout.findings_dir),
@@ -408,12 +461,14 @@ def output_pre_research_instructions(
     task_data: dict[str, Any], workspace: Path, layout: ResearchLayout
 ) -> None:
     """Output JSON instructions for the agent to do pre-research search."""
+    provider = _search_provider()
     date_str = _current_date_string()
     year_str = _current_year()
     task_id = task_data.get("task_id", "pre-1")
     output_path = layout.pre_findings_dir / f"{task_id}.json"
     print(json.dumps({
         "action": "pre_research_search",
+        "search_provider": provider,
         "workspace": str(layout.workspace),
         "run_id": layout.run_id,
         "pre_findings_dir": str(layout.pre_findings_dir),
@@ -427,7 +482,8 @@ def output_pre_research_instructions(
         "task": task_data,
         "instruction": (
             f"Current date: {date_str}. "
-            "Use the web search tool to search for the MOST RECENT information about the research topic. "
+            f"{_search_tool_instruction(provider)} "
+            "Search for the MOST RECENT information about the research topic. "
             f"Include '{year_str}' or '{date_str}' in your search queries to get current results. "
             "Do NOT rely on your training data - it may be outdated. "
             "Extract key entities (models, frameworks, projects, etc.) with their latest versions, "

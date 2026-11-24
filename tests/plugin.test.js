@@ -8,6 +8,14 @@ import { spawnSync } from "node:child_process"
 const ROOT = path.resolve(import.meta.dirname, "..")
 const SKILLS_DIR = path.join(ROOT, "packages", "core", "skills")
 const PLUGINS_DIR = path.join(ROOT, "packages", "opencode", "src")
+const SEARCH_PROXY_ENTRY = path.join(
+  ROOT,
+  "packages",
+  "core",
+  "mcp-servers",
+  "search-proxy",
+  "index.mjs"
+)
 
 test("plugin entry point exists", () => {
   assert.ok(fs.existsSync(path.join(PLUGINS_DIR, "index.js")))
@@ -117,7 +125,7 @@ test("index.js leaves conditional github/grep_app fallback logic to Core", () =>
   )
 })
 
-function getRegisteredMcps(env) {
+function getRegisteredMcps(env, configuredMcps = {}) {
   const script = `
     import fs from "node:fs";
     import os from "node:os";
@@ -128,14 +136,26 @@ function getRegisteredMcps(env) {
       jobStorePath: path.join(storage, "job-board.json"),
       tuiStatePath: path.join(storage, "tui-state.json")
     } });
-    const config = { skills: { paths: [] }, mcp: {} };
+    const config = { skills: { paths: [] }, mcp: ${JSON.stringify(configuredMcps)} };
     await p.config(config);
     console.log(JSON.stringify(config.mcp));
     fs.rmSync(storage, { recursive: true, force: true });
   `
+  const childEnv = {
+    ...process.env,
+    OMAGENTS_SEARCH_PROVIDER: "auto",
+    EXA_API_KEY: "",
+    KEENABLE_API_KEY: "",
+    YDC_API_KEY: "",
+    ...env,
+    SHELL: "omagents-test-shell",
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) delete childEnv[key]
+  }
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
     cwd: ROOT,
-    env: { ...process.env, ...env, SHELL: "omagents-test-shell" },
+    env: childEnv,
   })
   if (result.status !== 0) {
     throw new Error(result.stderr.toString() || "Child process failed")
@@ -173,8 +193,11 @@ test("context7 registers without environment when CONTEXT7_API_KEY is unset", ()
   assert.strictEqual(mcps.context7.environment, undefined)
 })
 
-test("with EXA_API_KEY, websearch stays remote and uses x-api-key authentication", () => {
-  const mcps = getRegisteredMcps({ EXA_API_KEY: "fake-exa-key-for-test" })
+test("explicit Exa with EXA_API_KEY stays remote and uses x-api-key authentication", () => {
+  const mcps = getRegisteredMcps({
+    OMAGENTS_SEARCH_PROVIDER: "exa",
+    EXA_API_KEY: "fake-exa-key-for-test",
+  })
   assert.strictEqual(mcps.websearch.type, "remote", "websearch should stay remote with EXA_API_KEY")
   assert.strictEqual(mcps.websearch.url, "https://mcp.exa.ai/mcp")
   assert.strictEqual(mcps.websearch.headers["x-api-key"], "fake-exa-key-for-test")
@@ -183,10 +206,123 @@ test("with EXA_API_KEY, websearch stays remote and uses x-api-key authentication
   assert.strictEqual(mcps.websearch.environment, undefined)
 })
 
-test("without EXA_API_KEY, websearch uses the anonymous remote exa endpoint", () => {
-  const mcps = getRegisteredMcps({ EXA_API_KEY: "" })
+test("explicit Exa without EXA_API_KEY uses the anonymous remote exa endpoint", () => {
+  const mcps = getRegisteredMcps({ OMAGENTS_SEARCH_PROVIDER: "exa", EXA_API_KEY: "" })
   assert.strictEqual(mcps.websearch.type, "remote", "websearch should stay remote without a key")
   assert.strictEqual(mcps.websearch.url, "https://mcp.exa.ai/mcp")
   assert.strictEqual(mcps.websearch.headers, undefined)
   assert.strictEqual(mcps.websearch.environment, undefined)
+})
+
+test("default, empty, and auto provider selection register local websearch", () => {
+  for (const [selection, provider] of [
+    ["default", undefined],
+    ["empty", ""],
+    ["auto", "auto"],
+  ]) {
+    const mcps = getRegisteredMcps({
+      OMAGENTS_SEARCH_PROVIDER: provider,
+      EXA_API_KEY: "",
+      KEENABLE_API_KEY: "",
+    })
+    assert.deepStrictEqual(
+      mcps.websearch,
+      {
+        type: "local",
+        command: ["node", SEARCH_PROXY_ENTRY],
+        enabled: true,
+      },
+      selection
+    )
+  }
+})
+
+test("auto websearch passes optional search credentials to the local proxy", () => {
+  const mcps = getRegisteredMcps({
+    OMAGENTS_SEARCH_PROVIDER: "auto",
+    EXA_API_KEY: "auto-exa-key",
+    KEENABLE_API_KEY: "auto-keenable-key",
+    YDC_API_KEY: "auto-youcom-key",
+  })
+  assert.deepStrictEqual(mcps.websearch, {
+    type: "local",
+    command: ["node", SEARCH_PROXY_ENTRY],
+    environment: {
+      EXA_API_KEY: "auto-exa-key",
+      KEENABLE_API_KEY: "auto-keenable-key",
+      YDC_API_KEY: "auto-youcom-key",
+    },
+    enabled: true,
+  })
+})
+
+test("OpenCode V1 does not override a user-configured websearch", () => {
+  const custom = {
+    type: "remote",
+    url: "https://example.com/custom-websearch",
+    oauth: false,
+  }
+  const mcps = getRegisteredMcps({ OMAGENTS_SEARCH_PROVIDER: "auto" }, { websearch: custom })
+  assert.deepStrictEqual(mcps.websearch, custom)
+})
+
+test("Keenable provider registers the keyless endpoint without Exa", () => {
+  const mcps = getRegisteredMcps({
+    OMAGENTS_SEARCH_PROVIDER: "keenable",
+    EXA_API_KEY: "unused-exa-key",
+    KEENABLE_API_KEY: "",
+  })
+  assert.deepStrictEqual(mcps.keenable, {
+    type: "remote",
+    url: "https://api.keenable.ai/mcp-public",
+    oauth: false,
+    enabled: true,
+  })
+  assert.strictEqual(mcps.websearch, undefined)
+})
+
+test("You.com provider registers the keyed direct endpoint without the proxy", () => {
+  const mcps = getRegisteredMcps({
+    OMAGENTS_SEARCH_PROVIDER: "youcom",
+    EXA_API_KEY: "unused-exa-key",
+    KEENABLE_API_KEY: "unused-keenable-key",
+    YDC_API_KEY: "direct-youcom-key",
+  })
+  assert.deepStrictEqual(mcps.youdotcom, {
+    type: "remote",
+    url: "https://api.you.com/mcp",
+    oauth: false,
+    headers: { Authorization: "Bearer direct-youcom-key" },
+    enabled: true,
+  })
+  assert.strictEqual(mcps.websearch, undefined)
+  assert.strictEqual(mcps.keenable, undefined)
+})
+
+test("You.com provider registers the keyless direct endpoint without authentication", () => {
+  const mcps = getRegisteredMcps({
+    OMAGENTS_SEARCH_PROVIDER: "youcom",
+    YDC_API_KEY: "",
+  })
+  assert.deepStrictEqual(mcps.youdotcom, {
+    type: "remote",
+    url: "https://api.you.com/mcp/free",
+    oauth: false,
+    enabled: true,
+  })
+  assert.strictEqual(mcps.websearch, undefined)
+  assert.strictEqual(mcps.keenable, undefined)
+})
+
+test("OpenCode V1 does not override a user-configured youdotcom", () => {
+  const custom = {
+    type: "remote",
+    url: "https://example.com/custom-youcom",
+    oauth: false,
+  }
+  const mcps = getRegisteredMcps(
+    { OMAGENTS_SEARCH_PROVIDER: "youcom", YDC_API_KEY: "unused-youcom-key" },
+    { youdotcom: custom }
+  )
+  assert.deepStrictEqual(mcps.youdotcom, custom)
 })

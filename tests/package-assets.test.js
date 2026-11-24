@@ -9,6 +9,14 @@ import { runNpm } from "./npm-launcher.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
 const CORE_PATHS = getCorePaths()
+const SEARCH_PROXY_MODULES = [
+  "backends.mjs",
+  "errors.mjs",
+  "index.mjs",
+  "remote-client.mjs",
+  "router.mjs",
+  "stdio-server.mjs",
+]
 const SUPERPOWERS_SKILLS = [
   "brainstorming",
   "test-driven-development",
@@ -52,6 +60,93 @@ test("workspace-packed Core bundles the pinned Superpowers plugin and all 15 ski
     assert.ok(packedPaths.has(bundledPath), `Core tarball must contain ${bundledPath}`)
   }
   assert.ok(artifact.bundled.includes("superpowers"), "npm must bundle Superpowers itself")
+})
+
+test("Core npm pack includes all six self-contained search proxy modules", () => {
+  const result = withCorePackLock(() =>
+    runNpm(["pack", "--workspace", "@omagents/core", "--dry-run", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  )
+
+  assert.equal(result.status, 0, result.stderr || result.stdout || result.error?.message)
+  const [artifact] = JSON.parse(result.stdout)
+  const packedPaths = new Set(artifact.files.map((file) => file.path))
+  for (const name of SEARCH_PROXY_MODULES) {
+    const relativePath = `mcp-servers/search-proxy/${name}`
+    assert.ok(packedPaths.has(relativePath), `Core tarball must contain ${relativePath}`)
+  }
+})
+
+test("clean-room environments scrub all search credentials and live smoke covers fallback", () => {
+  const packed = fs.readFileSync(path.join(ROOT, "scripts", "test-packed-installs.js"), "utf8")
+  const harness = fs.readFileSync(path.join(ROOT, "scripts", "packed-harness.js"), "utf8")
+  const browser = fs.readFileSync(
+    path.join(ROOT, "packages", "dsh", "test", "browser-job-board.spec.ts"),
+    "utf8"
+  )
+  const live = fs.readFileSync(
+    path.join(ROOT, "packages", "core", "test", "search-proxy-live.test.js"),
+    "utf8"
+  )
+
+  function objectAfter(source, marker, fromIndex = 0) {
+    const markerIndex = source.indexOf(marker, fromIndex)
+    assert.notEqual(markerIndex, -1, `missing source marker: ${marker}`)
+    const open = source.indexOf("{", markerIndex + marker.length)
+    assert.notEqual(open, -1, `missing object after source marker: ${marker}`)
+    let depth = 0
+    for (let index = open; index < source.length; index += 1) {
+      if (source[index] === "{") depth += 1
+      if (source[index] === "}") {
+        depth -= 1
+        if (depth === 0) return source.slice(open, index + 1)
+      }
+    }
+    assert.fail(`unclosed object after source marker: ${marker}`)
+  }
+
+  const missingCredentials = []
+  function assertEnvironment(block, label) {
+    for (const key of ["EXA_API_KEY", "KEENABLE_API_KEY", "YDC_API_KEY"]) {
+      if (!new RegExp(`\\b${key}:\\s*""`).test(block)) {
+        missingCredentials.push(`${label}: ${key}`)
+      }
+    }
+  }
+
+  const handshake = objectAfter(packed, "function assertSearchProxyHandshake(entry)")
+  assertEnvironment(objectAfter(handshake, "env:"), "packed Proxy handshake")
+  const cli = objectAfter(packed, "function runCli(packageName, relativeCli, cwd)")
+  assertEnvironment(objectAfter(cli, "env:"), "packed CLI")
+  const probe = objectAfter(packed, "async function runProbe(name, source, cwd)")
+  assertEnvironment(objectAfter(probe, "env:"), "outer packed probe")
+  const offline = objectAfter(harness, "function offlineEnvironment(home)")
+  assertEnvironment(objectAfter(offline, "return"), "offlineEnvironment()")
+  const host = objectAfter(browser, "async function startHost(summary, port)")
+  assertEnvironment(objectAfter(host, "values:"), "browser Host launch")
+  const outerBrowserStart = browser.indexOf("const previousEnv = new Map()")
+  assert.notEqual(outerBrowserStart, -1, "missing outer browser environment scope")
+  assertEnvironment(
+    objectAfter(browser, "const env =", outerBrowserStart),
+    "outer browser environment"
+  )
+  const anonymous = objectAfter(live, "function anonymousEnvironment()")
+  assertEnvironment(objectAfter(anonymous, "return"), "anonymous live environment")
+  assert.deepEqual(
+    missingCredentials,
+    [],
+    "every applicable environment block must explicitly clear all three search credentials"
+  )
+
+  assert.match(live, /forced Exa and Keenable transport failures reach anonymous live You\.com/)
+  assert.match(live, /config\.provider === "exa" \|\| config\.provider === "keenable"/)
+  assert.match(
+    live,
+    /assert\.deepEqual\(\s*metadata\.fallbacks,\s*\[\s*\{ from: "exa", code: "transport" \},\s*\{ from: "keenable", code: "transport" \},?\s*\],?\s*\)/
+  )
 })
 
 test("release verification exposes aligned pack, clean-room, and browser automation", () => {

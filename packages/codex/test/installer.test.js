@@ -12,6 +12,14 @@ const ROOT = path.resolve(import.meta.dirname, "..", "..", "..")
 const PACKAGE_NAME = "@omagents/omagents-codex"
 const VERSION = "0.15.0"
 const OLD_CODEX_COMMAND = "npx @omagents/omagents" + " codex"
+const SEARCH_PROXY_MODULES = [
+  "backends.mjs",
+  "errors.mjs",
+  "index.mjs",
+  "remote-client.mjs",
+  "router.mjs",
+  "stdio-server.mjs",
+]
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -65,7 +73,10 @@ function runCli(fixture, args, { cwd, home, env = {} }) {
     HOME: home,
     USERPROFILE: home,
     GITHUB_TOKEN: "",
+    OMAGENTS_SEARCH_PROVIDER: "auto",
     EXA_API_KEY: "",
+    KEENABLE_API_KEY: "",
+    YDC_API_KEY: "",
     CONTEXT7_API_KEY: "",
     ...env,
   }
@@ -94,6 +105,69 @@ function listFiles(directory) {
     const entryPath = path.join(directory, entry.name)
     return entry.isDirectory() ? listFiles(entryPath) : [entryPath]
   })
+}
+
+function assertCompleteProxy(directory, sourceDirectory) {
+  assert.equal(fs.existsSync(directory), true, `Proxy asset directory must exist: ${directory}`)
+  assert.deepEqual(fs.readdirSync(directory).sort(), [...SEARCH_PROXY_MODULES].sort())
+  for (const name of SEARCH_PROXY_MODULES) {
+    assert.equal(
+      fs.readFileSync(path.join(directory, name), "utf8"),
+      fs.readFileSync(path.join(sourceDirectory, name), "utf8"),
+      `${name} must be copied verbatim from the packed Core runtime`
+    )
+  }
+}
+
+function runProxyHandshake(entry, nonexistentNpmCache) {
+  const requests = [
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "packed-codex-installer-test", version: "1.0.0" },
+      },
+    },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+  ]
+  const result = spawnSync(process.execPath, [entry], {
+    input: `${requests.map((request) => JSON.stringify(request)).join("\n")}\n`,
+    encoding: "utf8",
+    timeout: 10_000,
+    env: {
+      ...process.env,
+      NODE_PATH: "",
+      NODE_OPTIONS: "",
+      npm_config_cache: nonexistentNpmCache,
+      NPM_CONFIG_CACHE: nonexistentNpmCache,
+      OMAGENTS_SEARCH_PROVIDER: "auto",
+      EXA_API_KEY: "",
+      KEENABLE_API_KEY: "",
+      YDC_API_KEY: "",
+    },
+  })
+  assert.equal(
+    result.status,
+    0,
+    `relocated packed Proxy failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}\nerror: ${result.error || "none"}`
+  )
+  assert.equal(result.stderr, "")
+  const responses = result.stdout
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+  assert.equal(responses.length, 2)
+  assert.equal(responses[0].id, 1)
+  assert.equal(responses[0].result.protocolVersion, "2025-06-18")
+  assert.equal(responses[1].id, 2)
+  assert.deepEqual(
+    responses[1].result.tools.map((tool) => tool.name),
+    ["search", "fetch"]
+  )
 }
 
 describe("isolated standalone Codex package", () => {
@@ -125,6 +199,7 @@ describe("isolated standalone Codex package", () => {
     fixture = {
       root,
       artifact: codex.artifact,
+      corePackageDir: path.join(installDir, "node_modules", "@omagents", "core"),
       packageDir: path.join(installDir, "node_modules", "@omagents", "omagents-codex"),
       cli: path.join(
         installDir,
@@ -223,7 +298,11 @@ describe("isolated standalone Codex package", () => {
     })
     assert.deepEqual(mcp.mcpServers.grep_app, { url: "https://mcp.grep.app" })
     assert.equal(mcp.mcpServers.github, undefined)
-    assert.equal(mcp.mcpServers.websearch.url, "https://mcp.exa.ai/mcp")
+    assert.deepEqual(mcp.mcpServers.websearch, {
+      command: "node",
+      args: [path.join(pluginRoot, "mcp-servers", "search-proxy", "index.mjs")],
+    })
+    assert.equal(mcp.mcpServers.keenable, undefined)
 
     const configPath = path.join(tempHome, ".codex", "config.toml")
     const config = fs.readFileSync(configPath, "utf8")
@@ -231,6 +310,80 @@ describe("isolated standalone Codex package", () => {
     const secondRun = runCli(fixture, [], { cwd: tempProject, home: tempHome })
     assertCliSuccess(secondRun)
     assert.equal(fs.readFileSync(configPath, "utf8").match(/# >>> omagents >>>/g).length, 1)
+  })
+
+  test("actual packed CLI auto installs a complete relocatable proxy without TypeScript or a build step", (t) => {
+    const tempProject = makeTempDir(t, "omagents codex project 空间 ")
+    const tempHome = path.join(
+      makeTempDir(t, "omagents codex home 空间 "),
+      "home with spaces 日本語"
+    )
+    fs.mkdirSync(path.join(tempHome, ".codex"), { recursive: true })
+
+    const result = runCli(fixture, [], {
+      cwd: tempProject,
+      home: tempHome,
+      env: {
+        OMAGENTS_SEARCH_PROVIDER: "auto",
+        EXA_API_KEY: "packed-auto-exa-secret",
+        KEENABLE_API_KEY: "packed-auto-keenable-secret",
+        YDC_API_KEY: "packed-auto-youcom-secret",
+      },
+    })
+    assertCliSuccess(result)
+
+    const pluginRoot = installedPluginRoot(tempHome)
+    const proxyDir = path.join(pluginRoot, "mcp-servers", "search-proxy")
+    const copiedEntry = path.join(proxyDir, "index.mjs")
+    const sourceProxyDir = path.join(fixture.corePackageDir, "mcp-servers", "search-proxy")
+    const mcp = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"))
+    assert.deepEqual(mcp.mcpServers.websearch, {
+      command: "node",
+      args: [copiedEntry],
+      env: {
+        EXA_API_KEY: "packed-auto-exa-secret",
+        KEENABLE_API_KEY: "packed-auto-keenable-secret",
+        YDC_API_KEY: "packed-auto-youcom-secret",
+      },
+    })
+    assert.equal(mcp.mcpServers.keenable, undefined)
+    assertCompleteProxy(proxyDir, sourceProxyDir)
+
+    const configuredEntry = mcp.mcpServers.websearch.args[0]
+    assert.equal(path.isAbsolute(configuredEntry), true)
+    assert.equal(configuredEntry.includes(ROOT), false)
+    assert.equal(configuredEntry.includes(fixture.corePackageDir), false)
+    assert.equal(configuredEntry.includes(fixture.packageDir), false)
+    assert.doesNotMatch(configuredEntry, /[\\/](?:_?npx)[\\/]/i)
+
+    const relocatedParent = path.join(
+      makeTempDir(t, "omagents packed relocation 空间 "),
+      "another copy 日本語"
+    )
+    const relocatedProxy = path.join(relocatedParent, "search-proxy")
+    fs.cpSync(proxyDir, relocatedProxy, { recursive: true })
+    assertCompleteProxy(relocatedProxy, sourceProxyDir)
+
+    const renamedPackages = []
+    try {
+      for (const packageDir of [fixture.corePackageDir, fixture.packageDir]) {
+        const unavailableDir = `${packageDir}.unavailable-${process.pid}`
+        fs.renameSync(packageDir, unavailableDir)
+        renamedPackages.push([packageDir, unavailableDir])
+      }
+      assert.equal(fs.existsSync(fixture.corePackageDir), false)
+      assert.equal(fs.existsSync(fixture.packageDir), false)
+      runProxyHandshake(
+        path.join(relocatedProxy, "index.mjs"),
+        path.join(relocatedParent, "nonexistent npm cache")
+      )
+    } finally {
+      for (const [packageDir, unavailableDir] of renamedPackages.reverse()) {
+        if (fs.existsSync(unavailableDir)) fs.renameSync(unavailableDir, packageDir)
+      }
+    }
+    assert.equal(fs.existsSync(fixture.corePackageDir), true)
+    assert.equal(fs.existsSync(fixture.packageDir), true)
   })
 
   test("prints help without installing", (t) => {

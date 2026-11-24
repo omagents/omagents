@@ -90,6 +90,10 @@ async function startHost(summary, port) {
         USERPROFILE: summary.home,
         DSH_HOME: summary.dshHome,
         DSH_TELEMETRY_DISABLED: "1",
+        OMAGENTS_SEARCH_PROVIDER: "auto",
+        EXA_API_KEY: "",
+        KEENABLE_API_KEY: "",
+        YDC_API_KEY: "",
       },
     },
   ])
@@ -106,15 +110,44 @@ async function startHost(summary, port) {
     assert.equal(runtime.health.host.status, "ready")
     assert.equal(runtime.health.persistence.status, "ready")
     await waitFor(
-      () => ctx.tools.get("mcp__agentmemory__echo") && ctx.tools.get("mcp__websearch__echo"),
+      () =>
+        ctx.tools.get("mcp__agentmemory__echo") &&
+        ctx.tools.get("mcp__websearch__search") &&
+        ctx.tools.get("mcp__websearch__fetch"),
       "local MCP registration"
     )
     const mcpRows = [...ctx.loader.entries()].filter(
       (entry) => entry.options.name === "@deepseek-ai/dsh-mcp-client"
     )
-    assert.equal(mcpRows.length, 5)
+    assert.equal(mcpRows.length, 4)
     assert.ok(mcpRows.every((entry) => entry.options.config.transport === "stdio"))
+    assert.ok(mcpRows.every((entry) => entry.options.id.startsWith("browser-local-mcp-")))
     assert.ok(mcpRows.every((entry) => entry.options.config.command === process.execPath))
+
+    // The real Web composition contributes built-ins through its native MCP
+    // manager rather than adding another root Loader row.
+    const mcpManager = ctx.get("mcpManager")
+    const managedProxy = mcpManager.list().find((entry) => entry.name === "websearch")
+    assert.equal(managedProxy?.configured, true)
+    assert.equal(managedProxy?.status?.state, "connected")
+    assert.equal(managedProxy?.status?.toolCount, 2)
+    const proxyRow = mcpManager.entries().websearch
+    assert.ok(proxyRow, "the built-in websearch row must come from the packed Search Proxy")
+    const packedProxyEntry = path.join(
+      summary.profileDirectory,
+      "node_modules",
+      "@omagents",
+      "core",
+      "mcp-servers",
+      "search-proxy",
+      "index.mjs"
+    )
+    assert.ok(path.isAbsolute(packedProxyEntry))
+    assert.equal(proxyRow.transport, "stdio")
+    assert.equal(proxyRow.command, "node")
+    assert.deepEqual(proxyRow.args, [packedProxyEntry])
+    const localMcpRowCount = mcpRows.length + 1
+    assert.equal(localMcpRowCount, 5)
     console.log(
       "[browser] capability health",
       JSON.stringify(
@@ -139,7 +172,7 @@ async function startHost(summary, port) {
       profile,
       "node_modules/@deepseek-ai/dsh-client-connection/lib/index.js"
     )
-    return { ctx, shutdown, runtime, url, scopeTarget, Peer, mcpRows: mcpRows.length }
+    return { ctx, shutdown, runtime, url, scopeTarget, Peer, mcpRows: localMcpRowCount }
   } catch (error) {
     await within(running.ctx.fiber.dispose())
     throw error
@@ -617,6 +650,8 @@ test(
       DEEPSEEK_API_KEY: "",
       GITHUB_TOKEN: "",
       EXA_API_KEY: "",
+      KEENABLE_API_KEY: "",
+      YDC_API_KEY: "",
       CONTEXT7_API_KEY: "",
       NODE_PATH: "",
     }

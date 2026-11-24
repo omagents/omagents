@@ -28,8 +28,8 @@
     "test:browser": "node scripts/test-browser.js",
     "release:check": "node scripts/check-release.js",
     "test": "node --test tests/*.test.js && npm test --workspaces --if-present",
-    "format": "prettier --write packages/core/src/*.js packages/core/src/*/*.js packages/core/hooks/*.js packages/core/scripts/*.js packages/opencode/src/*.js packages/opencode/bin/*.js packages/codex/src/*.js packages/codex/bin/*.js packages/codex/test/*.js tests/*.js scripts/*.js",
-    "format:check": "prettier --check packages/core/src/*.js packages/core/src/*/*.js packages/core/hooks/*.js packages/core/scripts/*.js packages/opencode/src/*.js packages/opencode/bin/*.js packages/codex/src/*.js packages/codex/bin/*.js packages/codex/test/*.js tests/*.js scripts/*.js"
+    "format": "prettier --write packages/core/src/*.js packages/core/src/*/*.js packages/core/hooks/*.js packages/core/scripts/*.js packages/core/mcp-servers/search-proxy/*.mjs packages/opencode/src/*.js packages/opencode/bin/*.js packages/codex/src/*.js packages/codex/bin/*.js packages/codex/test/*.js tests/*.js scripts/*.js",
+    "format:check": "prettier --check packages/core/src/*.js packages/core/src/*/*.js packages/core/hooks/*.js packages/core/scripts/*.js packages/core/mcp-servers/search-proxy/*.mjs packages/opencode/src/*.js packages/opencode/bin/*.js packages/codex/src/*.js packages/codex/bin/*.js packages/codex/test/*.js tests/*.js scripts/*.js"
   },
   "devDependencies": {
     "playwright": "^1.65.0",
