@@ -1,6 +1,9 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { PassThrough } from "node:stream"
 import { fileURLToPath } from "node:url"
 
@@ -230,6 +233,48 @@ test("the executable negotiates MCP, lists exact generic tools, and closes with 
   assert.deepEqual(await within(processHandle.exit), { code: 0, signal: null })
   assertProtocolOnly(processHandle.reader, processHandle.stderr())
 })
+
+test(
+  "the executable negotiates MCP through a symlinked entry path",
+  { skip: process.platform === "win32" ? "file symlinks may require elevated privileges" : false },
+  (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omagents-proxy-link-"))
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+    const linkedEntry = path.join(directory, "index.mjs")
+    fs.symlinkSync(ENTRY, linkedEntry, "file")
+
+    const requests = [
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-06-18", capabilities: {} },
+      },
+      { jsonrpc: "2.0", id: 2, method: "tools/list" },
+    ]
+    const result = spawnSync(process.execPath, [linkedEntry], {
+      input: `${requests.map((request) => JSON.stringify(request)).join("\n")}\n`,
+      encoding: "utf8",
+      env: { ...process.env, EXA_API_KEY: "", KEENABLE_API_KEY: "", YDC_API_KEY: "" },
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(result.stderr, "")
+    const responses = result.stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+    assert.deepEqual(
+      responses.map((response) => response.id),
+      [1, 2]
+    )
+    assert.equal(responses[0].result.protocolVersion, "2025-06-18")
+    assert.deepEqual(
+      responses[1].result.tools.map((tool) => tool.name),
+      ["search", "fetch"]
+    )
+  }
+)
 
 test("LF and CRLF requests support ping, notifications, protocol errors, and input validation", async (t) => {
   const calls = { ensureReady: 0, callTool: 0 }

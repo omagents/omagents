@@ -895,7 +895,7 @@ output_dispatch_instructions(tasks[:1], layout.workspace, layout)
 print("---BATCH---")
 output_dispatch_instructions(tasks, layout.workspace, layout)
 `
-  const result = runPython("-c", [source], project)
+  const result = runPython("-c", [source], project, 0, LEGACY_CONSOLE)
   const [singleOutput, batchOutput] = result.stdout.split("---BATCH---")
   const single = dispatchFrom(singleOutput)
   const batch = dispatchFrom(batchOutput)

@@ -443,7 +443,7 @@ def output_dispatch_instructions(
                 "Translate dispatch_subagent into the current host's native asynchronous subagent mechanism. "
                 f"After the child completes and its findings are validated, resume with: {_resume_invocation(layout)}"
             ),
-        }, indent=2, ensure_ascii=False))
+        }, indent=2, ensure_ascii=True))
     else:
         print(json.dumps({
             "action": "dispatch_subagents_batch",
@@ -454,7 +454,7 @@ def output_dispatch_instructions(
                 "Translate every dispatch_subagent entry into the current host's native asynchronous subagent mechanism and start independent entries concurrently. "
                 f"After all children complete and their findings are validated, resume with: {_resume_invocation(layout)}"
             ),
-        }, indent=2, ensure_ascii=False))
+        }, indent=2, ensure_ascii=True))
 
 
 def output_pre_research_instructions(
@@ -499,7 +499,7 @@ def output_pre_research_instructions(
             "sources": ["https://..."],
             "summary": "Brief overview of the current landscape",
         },
-    }, indent=2, ensure_ascii=False))
+    }, indent=2, ensure_ascii=True))
 
 
 # ---------------------------------------------------------------------------
