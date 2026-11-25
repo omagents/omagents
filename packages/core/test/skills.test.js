@@ -114,7 +114,7 @@ test("deep research renders auto provider guidance on every host", () => {
     dsh: ["mcp__websearch__search", "mcp__websearch__fetch"],
   }
   const privacyGuidance =
-    "Automatic routing can disclose the same query, optional `objective`, or target URL to the initial Exa attempt and then to eligible Keenable and You.com fallback attempts; You.com does not natively receive `objective`. Select an explicit provider when that disclosure is unacceptable."
+    "Automatic routing can disclose the same query, optional `objective`, or target URL to Exa, Keenable, and You.com as eligible provider attempts occur; You.com does not natively receive `objective`. Select an explicit provider when that disclosure is unacceptable."
   const loosePrivacyGuidance =
     "Fallback can send the same search or URL to Exa, Keenable, and You.com after eligible failures; select an explicit provider when that disclosure is unacceptable."
   const staleGuidance = [
@@ -130,6 +130,8 @@ test("deep research renders auto provider guidance on every host", () => {
     "fallback-eligible",
     "zero search hits",
     "Exa → Keenable → You.com",
+    "Keenable → You.com → Exa",
+    "same Proxy process",
     "at most one attempt per eligible position",
     "Provider:",
     "Provider: exa|keenable|youcom",
@@ -215,6 +217,8 @@ test("doctor renders auto provider guidance on every host", () => {
     "fallback-eligible",
     "zero search hits",
     "Exa → Keenable → You.com",
+    "Keenable → You.com → Exa",
+    "same Proxy process",
     "at most one attempt per eligible position",
     "Provider:",
     "Provider: exa|keenable|youcom",

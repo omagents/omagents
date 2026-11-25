@@ -49,7 +49,7 @@ export GITHUB_TOKEN="your-github-token"
 - **`CONTEXT7_API_KEY`**：ローカル`@upstash/context7-mcp` serverのレート制限を緩和するオプションの認証情報です。
 - **`GITHUB_TOKEN`**：GitHub Copilot MCPを有効にします。未設定の場合、OmAgentsは`mcp.grep.app`で公開コードを検索します。
 
-`auto`では、1つのローカル`websearch` Search MCP Proxyが**Exa → Keenable → You.com**の順で動作します。最初にExaを呼び出し、フォールバック対象のExa失敗後にのみKeenableを最大1回試行し、その後フォールバック対象のKeenable失敗時にのみYou.comを最大1回試行します。成功した空の結果、認証または権限の失敗、無効なパラメータ、明示的な再試行不可の失敗、呼び出し元のキャンセルではフォールバックしません。各providerの試行は最大1回で、バックエンド試行ごとに30秒の上限には遅延初期化とツール呼び出しが含まれます。3回すべてを試行する呼び出しでは約90秒のバックエンド上限となり、わずかなローカル処理時間は含みません。
+`auto`では、1つのローカル`websearch` Search MCP Proxyが初期には**Exa → Keenable → You.com**の順で動作します。最初にExaを呼び出し、フォールバック対象のExa失敗後にのみKeenableを最大1回試行し、その後フォールバック対象のKeenable失敗時にのみYou.comを最大1回試行します。フォールバック対象のExa失敗が発生すると、同じProxyプロセスでは、その後のすべての呼び出し（そのプロセスを共有する他のsessionからの呼び出しを含む）で**Keenable → You.com → Exa**の順を使用します。Proxyを再作成すると（通常はホストserviceの再起動）、初期順序に戻ります。この状態はメモリ内だけに保持され、クールダウンはありません。成功した空の結果、認証または権限の失敗、無効なパラメータ、明示的な再試行不可の失敗、呼び出し元のキャンセルでは、フォールバックも順序変更も行いません。各providerの試行は呼び出しごとに最大1回で、バックエンド試行ごとに30秒の上限には遅延初期化とツール呼び出しが含まれます。3回すべてを試行する呼び出しでは約90秒のバックエンド上限となり、わずかなローカル処理時間は含みません。
 
 Proxyは汎用の`search`と`fetch`を公開し、`fetch`は厳密に1つの`http`または`https` URLを受け付けます。OpenCodeでは`websearch_search`と`websearch_fetch`、CodexとDSHでは`mcp__websearch__search`と`mcp__websearch__fetch`という名前になります。明示的な`exa`、`keenable`、`youcom`は、直接登録とproviderネイティブのツール名を保持します。You.comの直接登録では`youdotcom`と`you-search`/`you-extract`を使用します。
 

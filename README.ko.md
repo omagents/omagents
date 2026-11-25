@@ -49,7 +49,7 @@ export GITHUB_TOKEN="your-github-token"
 - **`CONTEXT7_API_KEY`**: 로컬 `@upstash/context7-mcp` server의 rate limit을 완화하는 선택적 자격 증명입니다.
 - **`GITHUB_TOKEN`**: GitHub Copilot MCP를 활성화합니다. 설정하지 않으면 OmAgents가 `mcp.grep.app`으로 공개 코드를 검색합니다.
 
-`auto`에서는 하나의 로컬 `websearch` Search MCP Proxy가 **Exa → Keenable → You.com** 순서로 동작합니다. 먼저 Exa를 호출하고 fallback 대상 Exa 실패 후에만 Keenable을 최대 한 번 시도한 다음, fallback 대상 Keenable 실패 후에만 You.com을 최대 한 번 시도합니다. 성공적인 빈 결과, 인증 또는 권한 실패, 잘못된 매개변수, 명시적인 재시도 불가 실패, 호출자 취소는 fallback을 유발하지 않습니다. 각 provider는 최대 한 번만 시도하며 백엔드 시도당 30초 제한에는 지연 초기화와 도구 호출이 포함됩니다. 세 번 모두 시도하는 호출은 약 90초의 백엔드 상한을 가지며 약간의 로컬 처리 시간은 제외됩니다.
+`auto`에서는 하나의 로컬 `websearch` Search MCP Proxy가 초기에 **Exa → Keenable → You.com** 순서로 동작합니다. 먼저 Exa를 호출하고 fallback 대상 Exa 실패 후에만 Keenable을 최대 한 번 시도한 다음, fallback 대상 Keenable 실패 후에만 You.com을 최대 한 번 시도합니다. fallback 대상 Exa 실패가 발생하면 같은 Proxy 프로세스의 이후 모든 호출(해당 프로세스를 공유하는 다른 session의 호출 포함)은 **Keenable → You.com → Exa** 순서를 사용합니다. Proxy를 다시 만들면(일반적으로 호스트 service 재시작) 초기 순서로 돌아갑니다. 이 상태는 메모리에만 유지되며 cooldown이 없습니다. 성공적인 빈 결과, 인증 또는 권한 실패, 잘못된 매개변수, 명시적인 재시도 불가 실패, 호출자 취소는 fallback이나 순서 변경을 유발하지 않습니다. 각 provider는 호출당 최대 한 번만 시도하며 백엔드 시도당 30초 제한에는 지연 초기화와 도구 호출이 포함됩니다. 세 번 모두 시도하는 호출은 약 90초의 백엔드 상한을 가지며 약간의 로컬 처리 시간은 제외됩니다.
 
 Proxy는 범용 `search` 및 `fetch` 도구를 제공하며 `fetch`는 정확히 하나의 `http` 또는 `https` URL을 받습니다. OpenCode에서는 `websearch_search` 및 `websearch_fetch`, Codex와 DSH에서는 `mcp__websearch__search` 및 `mcp__websearch__fetch`로 표시됩니다. 명시적 `exa`, `keenable` 및 `youcom`은 직접 등록과 provider 네이티브 도구 이름을 유지합니다. You.com 직접 등록은 `youdotcom`과 `you-search`/`you-extract`를 사용합니다.
 

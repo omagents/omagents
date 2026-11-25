@@ -728,8 +728,42 @@ test("invalid generic arguments return invalid_params without backend requests",
   assert.equal(keenable.requests.length, 0)
 })
 
-test("each new generic call restarts at Exa without sticky You.com routing", async (t) => {
+test("an eligible Exa failure deprioritizes Exa until the router is recreated", async (t) => {
+  const { router, exa, keenable, youcom } = await setup(t, {
+    exa: {
+      callTool: () => ({
+        isError: true,
+        content: [{ type: "text", text: "Temporary Exa failure" }],
+      }),
+    },
+  })
+
+  const first = await router.callTool("search", { query: "initial Exa failure" })
+  assert.deepEqual(first._meta.omagents, {
+    provider: "keenable",
+    fallback: { from: "exa", code: "backend_error" },
+  })
+
+  for (const query of ["keep Exa last", "still keep Exa last"]) {
+    const result = await router.callTool("search", { query })
+    assert.deepEqual(result._meta.omagents, { provider: "keenable", fallback: null })
+  }
+  assert.equal(toolCalls(exa).length, 1)
+  assert.equal(toolCalls(keenable).length, 3)
+  assert.equal(youcom.requests.length, 0)
+
+  const restarted = await setup(t)
+  const direct = await restarted.router.callTool("search", { query: "new Proxy process" })
+  assert.deepEqual(direct._meta.omagents, { provider: "exa", fallback: null })
+  assert.equal(toolCalls(restarted.exa).length, 1)
+  assert.equal(restarted.keenable.requests.length, 0)
+  assert.equal(restarted.youcom.requests.length, 0)
+})
+
+test("the deprioritized route tries Keenable and You.com before Exa", async (t) => {
   let exaCallCount = 0
+  let keenableCallCount = 0
+  const attempts = []
   const { router, exa, keenable, youcom } = await setup(t, {
     exa: {
       callTool: () => {
@@ -744,32 +778,48 @@ test("each new generic call restarts at Exa without sticky You.com routing", asy
       },
     },
     keenable: {
+      callTool: () => {
+        keenableCallCount += 1
+        if (keenableCallCount === 1) {
+          return { content: [{ type: "text", text: "Initial Keenable success" }] }
+        }
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Temporary Keenable failure" }],
+        }
+      },
+    },
+    youcom: {
       callTool: () => ({
         isError: true,
-        content: [{ type: "text", text: "Temporary Keenable failure" }],
+        content: [{ type: "text", text: "Temporary You.com failure" }],
       }),
+    },
+    onToolResult(provider, promise) {
+      attempts.push(provider)
+      return promise
     },
   })
 
-  const first = await router.callTool("search", { query: "use all three providers" })
+  const first = await router.callTool("search", { query: "activate Exa deprioritization" })
   assert.deepEqual(first._meta.omagents, {
-    provider: "youcom",
+    provider: "keenable",
     fallback: { from: "exa", code: "backend_error" },
-    fallbacks: [
-      { from: "exa", code: "backend_error" },
-      { from: "keenable", code: "backend_error" },
-    ],
   })
+  attempts.length = 0
 
-  const second = await router.callTool("search", { query: "restart at Exa" })
-  assert.deepEqual(second._meta.omagents, { provider: "exa", fallback: null })
-  assert.equal("fallbacks" in second._meta.omagents, false)
+  const second = await router.callTool("search", { query: "Exa remains the last resort" })
+  assert.deepEqual(attempts, ["keenable", "youcom", "exa"])
+  assert.deepEqual(second._meta.omagents, {
+    provider: "exa",
+    fallback: { from: "keenable", code: "backend_error" },
+  })
   assert.equal(toolCalls(exa).length, 2)
-  assert.equal(toolCalls(keenable).length, 1)
+  assert.equal(toolCalls(keenable).length, 2)
   assert.equal(toolCalls(youcom).length, 1)
 })
 
-test("session 404 falls back and a later call reinitializes Exa first", async (t) => {
+test("session 404 falls back and later calls keep using Keenable without reinitializing Exa", async (t) => {
   let exaCallCount = 0
   const { router, exa, keenable } = await setup(t, {
     exa: {
@@ -790,11 +840,11 @@ test("session 404 falls back and a later call reinitializes Exa first", async (t
   })
   assert.equal(toolCalls(keenable).length, 1)
 
-  const direct = await router.callTool("search", { query: "use Exa again" })
-  assert.deepEqual(direct._meta.omagents, { provider: "exa", fallback: null })
-  assert.equal(toolCalls(exa).length, 2)
-  assert.equal(requests(exa, "initialize").length, 2)
-  assert.equal(toolCalls(keenable).length, 1)
+  const direct = await router.callTool("search", { query: "keep Exa deprioritized" })
+  assert.deepEqual(direct._meta.omagents, { provider: "keenable", fallback: null })
+  assert.equal(toolCalls(exa).length, 1)
+  assert.equal(requests(exa, "initialize").length, 1)
+  assert.equal(toolCalls(keenable).length, 2)
 })
 
 test("delayed A/S1 failure cannot invalidate C/S2 while initializing or ready", async (t) => {
@@ -816,7 +866,7 @@ test("delayed A/S1 failure cannot invalidate C/S2 while initializing or ready", 
       })
       let initializeCount = 0
       let sessionCount = 0
-      const { router, exa, keenable } = await setup(t, {
+      const { router, exa, keenable, youcom } = await setup(t, {
         exa: {
           sessionId: () => `S${++sessionCount}`,
           onRequest: async ({ body, req }) => {
@@ -851,6 +901,23 @@ test("delayed A/S1 failure cannot invalidate C/S2 while initializing or ready", 
             return undefined
           },
         },
+        keenable: {
+          callTool: (params) => {
+            if (["C/S2", "D/S2"].includes(params.arguments.query)) {
+              return {
+                isError: true,
+                content: [{ type: "text", text: "Temporary Keenable failure" }],
+              }
+            }
+            return { content: [{ type: "text", text: "Keenable backend content" }] }
+          },
+        },
+        youcom: {
+          callTool: () => ({
+            isError: true,
+            content: [{ type: "text", text: "Temporary You.com failure" }],
+          }),
+        },
       })
 
       const a = router.callTool("search", { query: "A/S1" })
@@ -878,10 +945,15 @@ test("delayed A/S1 failure cannot invalidate C/S2 while initializing or ready", 
           fallback: { from: "exa", code: "transport" },
         })
       }
-      assert.deepEqual(cResult._meta.omagents, { provider: "exa", fallback: null })
-      assert.deepEqual(dResult._meta.omagents, { provider: "exa", fallback: null })
+      for (const result of [cResult, dResult]) {
+        assert.deepEqual(result._meta.omagents, {
+          provider: "exa",
+          fallback: { from: "keenable", code: "backend_error" },
+        })
+      }
       assert.equal(requests(exa, "initialize").length, 2)
-      assert.equal(toolCalls(keenable).length, 2)
+      assert.equal(toolCalls(keenable).length, 4)
+      assert.equal(toolCalls(youcom).length, 2)
       const exaCalls = toolCalls(exa)
       assert.equal(exaCalls.length, 4)
       for (const query of ["A/S1", "B/S1"]) {
@@ -1083,7 +1155,7 @@ test("third fallback search and fetch mappings use You.com's exact argument name
       },
     ]
   )
-  assert.equal(toolCalls(exa).length, 2)
+  assert.equal(toolCalls(exa).length, 1)
   assert.equal(toolCalls(keenable).length, 2)
 })
 

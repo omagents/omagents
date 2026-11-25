@@ -49,7 +49,7 @@ export GITHUB_TOKEN="your-github-token"
 - **`CONTEXT7_API_KEY`**：本地 `@upstash/context7-mcp` server 的可选速率限制凭据。
 - **`GITHUB_TOKEN`**：启用 GitHub Copilot MCP。未设置时，OmAgents 使用 `mcp.grep.app` 搜索公开代码。
 
-在 `auto` 下，一个本地 `websearch` Search MCP Proxy 按 **Exa → Keenable → You.com** 顺序调用：先调用 Exa，并且只在出现符合回退条件的 Exa 失败后最多尝试一次 Keenable，随后只在出现符合回退条件的 Keenable 失败后最多尝试一次 You.com。成功的空结果、身份验证或权限失败、无效参数、明确标记的不可重试失败以及调用方取消都不会触发回退。每个 provider 最多尝试一次，每个后端尝试 30 秒的上限包括延迟初始化和工具调用。完整三次尝试的调用因此具有约 90 秒的后端总上限，不含少量本地处理时间。
+在 `auto` 下，一个本地 `websearch` Search MCP Proxy 初始按 **Exa → Keenable → You.com** 顺序调用：先调用 Exa，并且只在出现符合回退条件的 Exa 失败后最多尝试一次 Keenable，随后只在出现符合回退条件的 Keenable 失败后最多尝试一次 You.com。一旦出现符合回退条件的 Exa 失败，同一 Proxy 进程此后的所有调用（包括共享该进程的其他 session）都改为 **Keenable → You.com → Exa**。重建 Proxy（通常通过重启宿主 service）后恢复初始顺序；该状态仅保存在内存中，没有冷却时间。成功的空结果、身份验证或权限失败、无效参数、明确标记的不可重试失败以及调用方取消都不会触发回退或改变顺序。每次调用中每个 provider 最多尝试一次，每个后端尝试 30 秒的上限包括延迟初始化和工具调用。完整三次尝试的调用因此具有约 90 秒的后端总上限，不含少量本地处理时间。
 
 Proxy 提供通用的 `search` 和 `fetch` 工具；`fetch` 只接受恰好一个 `http` 或 `https` URL。OpenCode 中的名称是 `websearch_search` 和 `websearch_fetch`；Codex 和 DSH 中的名称是 `mcp__websearch__search` 和 `mcp__websearch__fetch`。显式 `exa`、`keenable` 和 `youcom` 保留其直连注册和 provider 原生工具名称；You.com 直连使用 `youdotcom` 以及 `you-search` 和 `you-extract`。
 

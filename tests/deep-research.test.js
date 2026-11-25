@@ -543,6 +543,9 @@ function assertAutoProxyPrompt(prompt) {
   }
   assert.match(prompt, /local Search MCP Proxy/i)
   assert.match(prompt, /Exa → Keenable → You\.com/)
+  assert.match(prompt, /Keenable → You\.com → Exa/)
+  assert.match(prompt, /same Proxy process/i)
+  assert.match(prompt, /until the Proxy is recreated/i)
   assert.match(prompt, /at most one attempt per eligible position/i)
   assert.match(prompt, /after a fallback-eligible failure at that position/i)
   assert.match(prompt, /do not perform provider fallback yourself/i)

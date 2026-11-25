@@ -23,7 +23,7 @@ function deepFreeze(value) {
 export const SEARCH_PROXY_TOOLS = deepFreeze([
   {
     name: "search",
-    description: "Search the web through Exa with eligible Keenable and You.com fallback",
+    description: "Search the web with automatic Exa, Keenable, and You.com routing",
     inputSchema: {
       type: "object",
       properties: {
@@ -37,7 +37,7 @@ export const SEARCH_PROXY_TOOLS = deepFreeze([
   },
   {
     name: "fetch",
-    description: "Fetch one HTTP(S) URL through Exa with eligible Keenable and You.com fallback",
+    description: "Fetch one HTTP(S) URL with automatic Exa, Keenable, and You.com routing",
     inputSchema: {
       type: "object",
       properties: {
@@ -177,6 +177,7 @@ export function createSearchRouter({
   }
   const closeController = new AbortController()
   let closed = false
+  let exaDeprioritized = false
   let closePromise
 
   const throwIfCancelled = (callerSignal) => {
@@ -256,7 +257,10 @@ export function createSearchRouter({
       }
 
       const failures = []
-      for (const provider of ["exa", "keenable", "youcom"]) {
+      const providers = exaDeprioritized
+        ? ["keenable", "youcom", "exa"]
+        : ["exa", "keenable", "youcom"]
+      for (const provider of providers) {
         throwIfCancelled(signal)
         const attempt = await runAttempt(provider, kind, invocationInput, signal, sensitiveValues)
         throwIfCancelled(signal)
@@ -264,6 +268,9 @@ export function createSearchRouter({
           return successfulResult(attempt.result, provider, failures)
         }
         failures.push({ provider, failure: attempt.failure })
+        if (provider === "exa" && attempt.failure.fallbackEligible) {
+          exaDeprioritized = true
+        }
         if (!attempt.failure.fallbackEligible) {
           break
         }

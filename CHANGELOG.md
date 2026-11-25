@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1] - 2026-11-25
+
+### Changed
+
+- **Process-scoped Exa deprioritization**: automatic Search Proxy calls still start with Exa → Keenable → You.com, but a fallback-eligible Exa failure moves Exa to the end of the route for every later call in the same Proxy process. Subsequent calls use Keenable → You.com → Exa across sessions sharing that process until the Proxy is recreated; the state is memory-only and has no cooldown or persistence. Generic tool descriptions now use provider-neutral routing language.
+
 ## [0.16.0] - 2026-11-25
 
 ### Added

@@ -15,7 +15,7 @@ const ENTRY = fileURLToPath(new URL("../mcp-servers/search-proxy/index.mjs", imp
 const EXPECTED_TOOLS = [
   {
     name: "search",
-    description: "Search the web through Exa with eligible Keenable and You.com fallback",
+    description: "Search the web with automatic Exa, Keenable, and You.com routing",
     inputSchema: {
       type: "object",
       properties: {
@@ -29,7 +29,7 @@ const EXPECTED_TOOLS = [
   },
   {
     name: "fetch",
-    description: "Fetch one HTTP(S) URL through Exa with eligible Keenable and You.com fallback",
+    description: "Fetch one HTTP(S) URL with automatic Exa, Keenable, and You.com routing",
     inputSchema: {
       type: "object",
       properties: {
