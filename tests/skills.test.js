@@ -210,6 +210,11 @@ test("privilege-escalation skill renders host-neutral guidance for every host", 
       )
     }
     assert.match(rendered.body, /absolute path/i)
+    assert.match(
+      rendered.body,
+      /Run `doas -n <command>`/,
+      `privilege-escalation decision tree must use the non-interactive doas -n form for ${host}`
+    )
     const pkexecRules = rendered.body.slice(
       rendered.body.indexOf("## pkexec Rules"),
       rendered.body.indexOf("## run0 and doas")

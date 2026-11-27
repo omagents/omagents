@@ -34,7 +34,7 @@ Else does `command -v pkexec` find pkexec?
 Else does `command -v run0` find run0 (systemd 256+)?
   → Run `run0 <command>`.
 Else does `command -v doas` find doas?
-  → Run `doas <command>`.
+  → Run `doas -n <command>`.
 Else
   → Print the exact command for the user to run manually. Stop.
 ```
