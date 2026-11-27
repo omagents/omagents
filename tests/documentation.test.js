@@ -196,6 +196,31 @@ test("search provider guidance stays synchronized across READMEs and credential 
   }
 })
 
+test("built-in OpenCode websearch guidance stays synchronized across READMEs and agent docs", () => {
+  const preservedPhrases = {
+    "README.md": "is never overwritten",
+    "README.zh-cn.md": "决不会被覆盖",
+    "README.ja.md": "決して上書きされません",
+    "README.ko.md": "절대 변경되지 않습니다",
+  }
+  for (const file of READMES) {
+    const text = read(file)
+    for (const required of [
+      '"websearch": false',
+      "`--keep-websearch`",
+      "`websearch_search`",
+      preservedPhrases[file],
+    ]) {
+      assert.ok(text.includes(required), `${file} omits ${required}`)
+    }
+  }
+  for (const file of ["AGENTS.md", "packages/opencode/AGENTS.md"]) {
+    const text = read(file)
+    assert.ok(text.includes('"websearch": false'), file)
+    assert.ok(text.includes("--keep-websearch"), file)
+  }
+})
+
 const README_YOUCOM_CONTRACT = {
   "README.md": {
     providerList: "supports `auto`, `exa`, `keenable`, and `youcom`;",

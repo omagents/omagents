@@ -55,7 +55,9 @@ Proxy 提供通用的 `search` 和 `fetch` 工具；`fetch` 只接受恰好一�
 
 在 You.com 尝试中，通用 search 映射到 `you-search`：将 `query` 原样转发，并将 `maxResults` 映射为 `count`（默认 10，范围 1–50）。通用 fetch 只向 `you-extract` 传递 `url`，使用 keyed/keyless 的共同参数子集。You.com 没有与 `objective` 或 `maxCharacters` 直接对应的参数；Proxy 仅在该尝试中忽略它们，不会在本地改写查询或截断响应。Exa 和 Keenable 的成功元数据保持不变。You.com 在两次符合回退条件的失败后成功时，会报告 `provider: "youcom"`，保留描述首次失败的 `fallback`，并添加有序的 `fallbacks` 元数据，同时为每次此前符合回退条件的失败添加一行可读的 `Fallback`。
 
-**隐私与退出自动回退：**自动回退可能将相同的搜索查询、可选 `objective` 或目标 URL 披露给 Exa、Keenable 和 You.com。具体而言，符合回退条件的 Exa 失败可能将相同的搜索查询或 URL 发送给 Keenable；未配置 Keenable 密钥时，还适用其公共层日志记录。随后符合回退条件的 Keenable 失败可能再将查询或 URL 发送给 You.com。You.com 不会将 `objective` 作为原生参数接收，但此前的 provider 可能已经接收。要保留直连 Exa 行为并防止自动回退，请显式选择 `exa`；显式 `keenable` 和 `youcom` 也是单 provider 退出选项，均绕过 Proxy。只有通过内置 Proxy 的调用才具有此回退保证：OmAgents 无法禁用的宿主原生 Web 工具不在保证范围内；用户自定义的 `websearch` 或 `youdotcom` MCP 仍归用户所有、优先于内置注册，并且不会被包装。
+**OpenCode 内置 websearch：**OpenCode 2.x 还自带一个 `websearch` 工具，名称与 Proxy 的 `websearch_search` 和 `websearch_fetch` 十分接近，agent 可能选错，且内置工具没有 OmAgents 回退保障。因此安装器在解析出的 `opencode.json` 不含 `websearch` 键时写入 `"websearch": false`，移除内置工具，让 Proxy 的路由工具成为唯一的 websearch。已显式设置的 `websearch` 值决不会被覆盖；传入 `--keep-websearch` 可跳过该默认行为；删除该键（或自行改回）并在重启后即可恢复内置工具。OpenCode 1.x 没有内置 websearch 工具，该设置在 1.x 上不起作用。OpenCode 的 `webfetch` 不受影响。
+
+**隐私与退出自动回退：**自动回退可能将相同的搜索查询、可选 `objective` 或目标 URL 披露给 Exa、Keenable 和 You.com。具体而言，符合回退条件的 Exa 失败可能将相同的搜索查询或 URL 发送给 Keenable；未配置 Keenable 密钥时，还适用其公共层日志记录。随后符合回退条件的 Keenable 失败可能再将查询或 URL 发送给 You.com。You.com 不会将 `objective` 作为原生参数接收，但此前的 provider 可能已经接收。要保留直连 Exa 行为并防止自动回退，请显式选择 `exa`；显式 `keenable` 和 `youcom` 也是单 provider 退出选项，均绕过 Proxy。只有通过内置 Proxy 的调用才具有此回退保证：宿主原生 Web 工具不在保证范围内（插件无法在运行时禁用它们；对 OpenCode，安装器会按上文说明改为将内置 `websearch` 工具从工具集中移除）；用户自定义的 `websearch` 或 `youdotcom` MCP 仍归用户所有、优先于内置注册，并且不会被包装。
 
 **Codex 配置时机：** Codex 会在安装器运行时固化 provider 和凭据配置。请在安装前设置环境变量；更改 provider 或密钥（包括 `YDC_API_KEY`）后，请重新运行安装器，例如 `OMAGENTS_SEARCH_PROVIDER="keenable" npx @omagents/omagents-codex`，然后使用相同环境重启 Codex。重新安装会刷新复制的 Proxy，并替换过期的 provider 条目和凭据。
 

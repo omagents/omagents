@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Built-in OpenCode websearch defaulting:** the OpenCode installer now writes `"websearch": false` into the resolved `opencode.json` when that key is absent, removing OpenCode 2.x's built-in `websearch` tool so agents reach the automatic Search Proxy's `websearch_search`/`websearch_fetch` instead of a same-named host tool without OmAgents failover. The default is also applied when the plugin is already installed, so rerunning the installer upgrades existing installs without manual config edits. An explicit `websearch` value is never overwritten, `--keep-websearch` skips the default, OpenCode 1.x (which has no built-in websearch tool) treats the key as inert, and all four README languages document the behavior.
+
 ## [0.16.2] - 2026-11-27
 
 ### Changed

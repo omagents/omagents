@@ -8,7 +8,7 @@
 npx @omagents/omagents
 ```
 
-The installer takes no positional argument. Only conventional `--help` and `--version` options are supported; unknown arguments fail. Do not add a Codex or other host dispatcher to this package. Core is an automatic dependency, not a separate user install.
+The installer takes no positional argument. Only conventional `--help`, `--version`, and `--keep-websearch` options are supported; unknown arguments fail. By default the installer writes `"websearch": false` into the resolved `opencode.json` when that key is absent, removing OpenCode 2.x's built-in `websearch` tool so the Proxy's `websearch_search`/`websearch_fetch` are the only websearch (the key is inert on OpenCode 1.x, which has no built-in websearch tool). An explicit `websearch` value is never overwritten, `--keep-websearch` skips the default, and the default is also applied when the plugin is already installed so reruns upgrade existing configs. Do not add a Codex or other host dispatcher to this package. Core is an automatic dependency, not a separate user install.
 
 ## Plugin Contract
 

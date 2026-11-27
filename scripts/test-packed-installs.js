@@ -138,6 +138,7 @@ const openCodeSurface = path.join(home, "opencode-project")
 runCli("@omagents/omagents", "bin/install.js", openCodeSurface)
 const openCodeConfig = JSON.parse(fs.readFileSync(path.join(openCodeSurface, "opencode.json"), "utf8"))
 assert.deepEqual(openCodeConfig.plugin, ["@omagents/omagents"])
+assert.equal(openCodeConfig.websearch, false, "packed installer must default built-in websearch off")
 
 const codexSurface = path.join(home, "codex-project")
 fs.mkdirSync(path.join(home, ".codex"), { recursive: true })

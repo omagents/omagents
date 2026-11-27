@@ -30,7 +30,8 @@ function findOpencodeConfig() {
   return path.join(process.cwd(), "opencode.json")
 }
 
-export async function setupOpencode() {
+export async function setupOpencode(options = {}) {
+  const keepWebsearch = options.keepWebsearch === true
   const configPath = findOpencodeConfig()
   const configDir = path.dirname(configPath)
 
@@ -55,6 +56,19 @@ export async function setupOpencode() {
     }
   }
 
+  // OpenCode 2.x ships a built-in websearch tool whose name is close to the
+  // Proxy's websearch_search/websearch_fetch, and agents can pick the wrong
+  // one. When the config has no explicit websearch setting, disable the
+  // built-in tool so the Proxy's routed tools are the only websearch. An
+  // explicit value (false or a provider object) is the user's choice and is
+  // never overwritten; --keep-websearch skips this default. OpenCode 1.x has
+  // no built-in websearch tool, so the key is inert there.
+  const hasWebsearchSetting = Object.hasOwn(config, "websearch")
+  const disableWebsearch = !keepWebsearch && !hasWebsearchSetting
+  if (disableWebsearch) {
+    config.websearch = false
+  }
+
   // OpenCode V2 renamed the config key "plugin" -> "plugins". V2 still
   // normalizes the V1 key, so writing "plugin" works on both — but when the
   // file already uses the native V2 key, add there instead of mixing styles.
@@ -76,6 +90,13 @@ export async function setupOpencode() {
   const alreadyInstalled = config.plugin?.some(isOmagents) || config.plugins?.some(isOmagents)
 
   if (alreadyInstalled) {
+    if (disableWebsearch) {
+      fs.mkdirSync(configDir, { recursive: true })
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8")
+      logWebsearchDefault(configPath)
+    } else if (!keepWebsearch && hasWebsearchSetting) {
+      console.log("[omagents] OpenCode websearch setting left untouched.")
+    }
     console.log(`[omagents] Already in ${configPath}`)
     console.log("[omagents] Restart OpenCode to activate.")
     return
@@ -89,7 +110,19 @@ export async function setupOpencode() {
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8")
 
   console.log(`[omagents] Added "${pkgName}" to ${configPath}`)
+  if (disableWebsearch) {
+    logWebsearchDefault(configPath)
+  }
   console.log("[omagents] Restart OpenCode to activate.")
+}
+
+function logWebsearchDefault(configPath) {
+  console.log(
+    `[omagents] Disabled OpenCode's built-in websearch in ${configPath} (the automatic Search Proxy websearch_search/websearch_fetch remain).`
+  )
+  console.log(
+    "[omagents] Pass --keep-websearch to keep the built-in tool, or delete the websearch key to restore it."
+  )
 }
 
 function printHelp() {
@@ -98,8 +131,12 @@ function printHelp() {
 Install OmAgents for OpenCode without a positional host argument.
 
 Options:
-  --help     Show this help message
-  --version  Show the package version`)
+  --help            Show this help message
+  --version         Show the package version
+  --keep-websearch  Keep OpenCode's built-in websearch tool; by default the
+                    installer writes "websearch": false into opencode.json when
+                    that key is absent so the Search Proxy's websearch_search
+                    and websearch_fetch are the only websearch tools`)
 }
 
 async function main(args) {
@@ -116,6 +153,11 @@ async function main(args) {
   if (args.length === 1 && args[0] === "--version") {
     const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"))
     console.log(pkg.version)
+    return
+  }
+
+  if (args.length === 1 && args[0] === "--keep-websearch") {
+    await setupOpencode({ keepWebsearch: true })
     return
   }
 
