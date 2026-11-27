@@ -24,6 +24,10 @@ export async function checkRelease({
     await runNpmCommand(args, { cwd: root, echo })
   }
 
+  // Formatting runs first: it is the cheapest failure mode and the one the
+  // CI workflow checks separately from the release gate, so unformatted code
+  // must fail the gate before any build or test time is spent.
+  await runStep(["run", "format:check"])
   await runStep(["run", "build", "--workspace", "@omagents/omagents-dsh"])
   await runStep(["test"])
   await runStep(["run", "pack:all"])

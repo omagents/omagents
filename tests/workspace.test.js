@@ -35,6 +35,22 @@ test("OpenCode depends on Core and Core bundles pinned Superpowers assets", () =
   assert.ok(core.bundledDependencies.includes("superpowers"))
 })
 
+test("formatting checks stay wired into CI and the release gate from one source", () => {
+  const root = readJson("package.json")
+  const gate = fs.readFileSync(path.join(ROOT, "scripts", "check-release.js"), "utf8")
+  const ci = fs.readFileSync(path.join(ROOT, ".github", "workflows", "ci.yml"), "utf8")
+
+  assert.ok(
+    root.scripts["format:check"].includes(".opencode/plugins/*.js"),
+    "format:check must cover .opencode/plugins like CI"
+  )
+  assert.ok(gate.includes('"format:check"'), "release gate must run the format check")
+  assert.ok(
+    ci.includes("npm run format:check"),
+    "CI must use the shared format:check script instead of a duplicated glob list"
+  )
+})
+
 test("every workspace with tests is discovered exactly once, including Codex", () => {
   const root = readJson("package.json")
   assert.doesNotMatch(root.scripts.test, /packages\/codex\/test/)

@@ -201,6 +201,7 @@ test("release checker runs build, full tests, inspected packs, clean-room instal
   })
 
   assert.deepEqual(events, [
+    "npm run format:check",
     "npm run build --workspace @omagents/omagents-dsh",
     "npm test",
     "npm run pack:all",
