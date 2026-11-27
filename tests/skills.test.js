@@ -173,10 +173,10 @@ test("DSH parallel skill never contains the OpenCode background argument", () =>
   assert.doesNotMatch(renderSkillForHost(definition, "dsh").content, /background:\s*true/)
 })
 
-test("DSH discovers all 33 skills and renders every skill without wrong-host control flow", () => {
+test("DSH discovers all 34 skills and renders every skill without wrong-host control flow", () => {
   const definitions = listSkillDefinitions({ host: "dsh" })
-  assert.equal(definitions.length, 33)
-  assert.equal(definitions.filter((skill) => skill.source === "omagents").length, 18)
+  assert.equal(definitions.length, 34)
+  assert.equal(definitions.filter((skill) => skill.source === "omagents").length, 19)
   assert.equal(definitions.filter((skill) => skill.source === "superpowers").length, 15)
 
   for (const definition of definitions) {
@@ -193,6 +193,40 @@ test("DSH discovers all 33 skills and renders every skill without wrong-host con
       `${definition.name} leaked OpenCode tool names into DSH`
     )
     assertDshResourceCommands(rendered.content, definition)
+  }
+})
+
+test("privilege-escalation skill renders host-neutral guidance for every host", () => {
+  for (const host of HOSTS) {
+    const definition = listSkillDefinitions({ host }).find(
+      (skill) => skill.name === "privilege-escalation"
+    )
+    assert.ok(definition, `missing privilege-escalation for ${host}`)
+    const rendered = renderSkillForHost(definition, host)
+    for (const required of ["sudo -n", "pkexec", "run0", "doas", "tee"]) {
+      assert.ok(
+        rendered.body.includes(required),
+        `privilege-escalation must cover ${required} for ${host}`
+      )
+    }
+    assert.match(rendered.body, /absolute path/i)
+    const pkexecRules = rendered.body.slice(
+      rendered.body.indexOf("## pkexec Rules"),
+      rendered.body.indexOf("## run0 and doas")
+    )
+    assert.ok(pkexecRules.length > 0, `privilege-escalation must have pkexec rules for ${host}`)
+    assert.match(pkexecRules, /absolute/i, `pkexec rules must mandate absolute paths for ${host}`)
+    assert.ok(
+      rendered.body.includes("--disable-internal-agent"),
+      `privilege-escalation must teach the non-interactive pkexec form for ${host}`
+    )
+    assert.doesNotMatch(
+      rendered.body,
+      /a bare command name fails|scrubs the environment/,
+      `pkexec path guidance must not carry the disproven bare-name/PATH-scrub claim for ${host}`
+    )
+    assert.doesNotMatch(rendered.body, /\b257\b/, `run0 shipped in systemd 256 for ${host}`)
+    assert.doesNotMatch(rendered.content, /OPENCODE_|\bwebfetch\b/)
   }
 })
 
@@ -235,7 +269,7 @@ test("material DSH workflows use full overrides and native tool mappings", () =>
 
   const doctor = renderSkillForHost(byName.doctor, "dsh").content
   assert.match(doctor, /@omagents\/omagents-dsh/)
-  assert.match(doctor, /33/)
+  assert.match(doctor, /34/)
   assert.match(doctor, /native `subagent`|native DSH `subagent`/)
   const normalizeDoctorPath = (value) => value.replaceAll("\\", "/")
   assert.ok(
@@ -355,6 +389,7 @@ test("expected skills are present", () => {
   const expected = [
     "deep-research",
     "parallel-execution",
+    "privilege-escalation",
     "agents-python-tools",
     "markitdown-converter",
     "playwright-web-scraping",

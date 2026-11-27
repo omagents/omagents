@@ -1,0 +1,4 @@
+interface:
+  display_name: "Privilege Escalation"
+  short_description: "Run root commands without a TTY"
+  default_prompt: "Use $privilege-escalation to pick a non-interactive privilege escalation tool before running a command that needs root."

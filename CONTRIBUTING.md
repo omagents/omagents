@@ -30,7 +30,7 @@ omagents/
 │   ├── core/                       # @omagents/core; automatic shared dependency
 │   │   ├── src/                    # Job Board, storage, MCP, skills, asset paths
 │   │   ├── hooks/                  # Shared Python environment management
-│   │   ├── skills/                 # 18 OmAgents skills and shared scripts
+│   │   ├── skills/                 # 19 OmAgents skills and shared scripts
 │   │   │   └── deep-research/
 │   │   │       ├── scripts/
 │   │   │       └── templates/      # Jinja2 templates; never a root templates/

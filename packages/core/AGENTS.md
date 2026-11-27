@@ -14,7 +14,7 @@ Core must remain host-neutral. Do not import OpenCode, Codex, DSH, Cordis, React
 - You.com resolution and adaptation: optional `YDC_API_KEY` selects keyed `https://api.you.com/mcp` with `Authorization: Bearer <YDC_API_KEY>` or keyless `https://api.you.com/mcp/free` without an Authorization header or OAuth flow, but never selects a provider. The [official You.com MCP documentation](https://you.com/docs/agents/mcp-server#choose-your-setup) advertises 100 queries/day for keyless use; this does not imply anonymous traffic or no provider logging. `you-search` forwards `query` and maps `maxResults` to `count`; `you-extract` receives only `url`. Unsupported `objective` and `maxCharacters` are omitted only for the You.com attempt without query rewriting or local truncation.
 - `src/paths.js`: packaged asset resolution through `import.meta.url`, never cwd, including `searchProxyDir` and `searchProxyEntry`. Superpowers resolution explicitly prefers the real workspace/app-hoisted installation, falls back to Core's bundled nested dependency, and remains stable across prepack materialization/postpack cleanup.
 - `hooks/`: persistent Python base and on-demand project overlay management.
-- `skills/`: 18 OmAgents skills, shared scripts, and research assets; pinned Superpowers supplies 15 process skills.
+- `skills/`: 19 OmAgents skills, shared scripts, and research assets; pinned Superpowers supplies 15 process skills.
 
 Execution and notification state are separate. Terminal states never regress, `interrupted` is not success, and cancellation admission alone is not `cancelled`. Consumers share one Board; do not create a second task database.
 

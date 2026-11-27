@@ -182,7 +182,7 @@ test(
     assert.ok(runtime)
     await within(
       root.skills.list().then((skills) => {
-        assert.equal(skills.length, 33)
+        assert.equal(skills.length, 34)
       }),
       "already-available skill registration"
     )
@@ -214,7 +214,7 @@ test(
         register(skill) {
           const registration = { name: skill.name, disposed: false }
           batch.registrations.push(registration)
-          if (batch.registrations.length === 33) batch.activated.resolve()
+          if (batch.registrations.length === 34) batch.activated.resolve()
           return () => {
             registration.disposed = true
           }
@@ -276,7 +276,7 @@ test(
       Promise.all([firstSkills.activated.promise, firstMcp.activated.promise]),
       "initial delayed capability activation"
     )
-    assert.equal(firstSkills.registrations.length, 33)
+    assert.equal(firstSkills.registrations.length, 34)
     assert.ok(firstMcp.registrations.length > 0)
     assert.equal(runtime.health.skills.status, "ready")
     assert.equal(runtime.health.mcp.status, "ready")
@@ -292,7 +292,7 @@ test(
       Promise.all([secondSkills.activated.promise, secondMcp.activated.promise]),
       "capability reactivation"
     )
-    assert.equal(secondSkills.registrations.length, 33)
+    assert.equal(secondSkills.registrations.length, 34)
     assert.equal(secondMcp.registrations.length, firstMcp.registrations.length)
     assert.ok(firstSkills.registrations.every((skill) => skill.disposed))
     assert.ok(firstMcp.registrations.every((mcp) => mcp.disposed))
@@ -363,7 +363,7 @@ test("Loader teardown composes capability disposers and blocks late Python healt
   await entry.fiber.await()
   const runtime = (entry.fiber.ctx as Context & { omagents?: DshRuntime }).omagents
   assert.ok(runtime)
-  assert.equal(skills.length, 33)
+  assert.equal(skills.length, 34)
   assert.ok(mcps.length > 0)
 
   await entry.fiber.dispose()

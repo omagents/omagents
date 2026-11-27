@@ -1,6 +1,6 @@
 # @omagents/omagents-dsh
 
-Complete DeepSeek Harness integration for OmAgents: 33 skills, native asynchronous subagent lifecycle tracking, durable recovery, `/ps`, `parallel_status`, `cancel_task`, an authorized Remote watch stream, and a native React Web Job Board. The package contains both the Host and Web Client; it is not a skills-only plugin.
+Complete DeepSeek Harness integration for OmAgents: 34 skills, native asynchronous subagent lifecycle tracking, durable recovery, `/ps`, `parallel_status`, `cancel_task`, an authorized Remote watch stream, and a native React Web Job Board. The package contains both the Host and Web Client; it is not a skills-only plugin.
 
 ## Installation
 
@@ -20,7 +20,7 @@ Only `jinja2` is automatically provisioned. Optional Python tools are installed 
 
 ## Included Capabilities
 
-- **33 skills**: 18 OmAgents plus 15 Superpowers, rendered with DSH-native tool and delegation semantics.
+- **34 skills**: 19 OmAgents plus 15 Superpowers, rendered with DSH-native tool and delegation semantics.
 - **Native background execution**: asynchronous `subagent` without an OpenCode `background` argument, authoritative lifecycle tracking, and exactly-once parent-outcome delivery.
 - **Shared status and control**: `/ps`, `parallel_status`, and idempotent `cancel_task` use the same Core Board as the Web UI.
 - **Durable state**: profile-scoped `job-board.json`, restart reconciliation, pending-outcome recovery, and visible degraded-health diagnostics.

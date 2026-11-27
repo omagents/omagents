@@ -142,7 +142,7 @@ test("clean DSH composition routes the exact React request through real native t
   assert.equal(decision.kind, "enter")
   const catalog = decision.messages.find((message) => message.source.kind === "skill-catalog")
   assert.ok(catalog, "the native DSH skill catalog must be published without session opt-in")
-  assert.equal(catalog.source.entries.length, 33)
+  assert.equal(catalog.source.entries.length, 34)
 
   const backend = createDeterministicBackend(tools)
   const acceptance = await backend.complete({

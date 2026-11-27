@@ -8,7 +8,7 @@
 
 [English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-OmAgents is a multi-host agent toolkit for **OpenCode**, **Codex**, and **DeepSeek Harness (DSH)**. It bundles 18 OmAgents skills, 15 Superpowers skills, MCP servers, native background-agent integration, deep research, and Python tooling. A shared Core package keeps state and host-neutral behavior consistent.
+OmAgents is a multi-host agent toolkit for **OpenCode**, **Codex**, and **DeepSeek Harness (DSH)**. It bundles 19 OmAgents skills, 15 Superpowers skills, MCP servers, native background-agent integration, deep research, and Python tooling. A shared Core package keeps state and host-neutral behavior consistent.
 
 ---
 
@@ -67,9 +67,9 @@ For Codex, Bearer environment indirection is scoped by MCP server owner: `github
 
 | Host or role | Package | Installation | Skills | Background execution and recovery | Management surface |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **OpenCode 1.x and OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**: 18 OmAgents + 15 Superpowers | V1 uses `task(background: true)`; V2 uses native `subagent(...)`, which is always background. Durable Core Job Board, completion delivery, and recovery. | `/ps`, `parallel_status`, `cancel_task`, parent-context results, and OpenCode TUI state |
-| **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **33**: 18 OmAgents + 15 Superpowers | Codex-native subagents. The OpenCode parallel engine and DSH Web Job Board are not installed. | Codex-native interface and skills |
-| **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **33**: 18 OmAgents + 15 Superpowers | Native asynchronous `subagent` lifecycle, durable `job-board.json`, cancellation, recovery, `/ps`, `parallel_status`, and `cancel_task` | Authorized Remote `watchJobs` stream plus a native React Web Job Board |
+| **OpenCode 1.x and OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **34**: 19 OmAgents + 15 Superpowers | V1 uses `task(background: true)`; V2 uses native `subagent(...)`, which is always background. Durable Core Job Board, completion delivery, and recovery. | `/ps`, `parallel_status`, `cancel_task`, parent-context results, and OpenCode TUI state |
+| **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **34**: 19 OmAgents + 15 Superpowers | Codex-native subagents. The OpenCode parallel engine and DSH Web Job Board are not installed. | Codex-native interface and skills |
+| **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **34**: 19 OmAgents + 15 Superpowers | Native asynchronous `subagent` lifecycle, durable `job-board.json`, cancellation, recovery, `/ps`, `parallel_status`, and `cancel_task` | Authorized Remote `watchJobs` stream plus a native React Web Job Board |
 | **Shared library, not a host plugin** | `@omagents/core` | Automatic dependency; no separate user install | Shared skill definitions and Superpowers assets | Host-neutral execution state, persistence, MCP resolution, research assets, and Python environments | No standalone UI |
 
 All host packages depend only on the aligned Core version, never on another host package.
@@ -103,9 +103,9 @@ Deep Research uses `--workspace <dir>` only for public deliverables. Plans, raw 
 
 ## Skills and MCP Servers
 
-The 18 OmAgents skills are:
+The 19 OmAgents skills are:
 
-`deep-research`, `parallel-execution`, `agents-python-tools`, `markitdown-converter`, `officecli`, `playwright-web-scraping`, `init-deep`, `doctor`, `remove-ai-slops`, `remove-deadcode`, `github-triage`, `tech-debt-audit`, `lsp-guide`, `ast-grep`, `work-with-pr`, `pre-publish-review`, `hyperplan`, and `refactor`.
+`deep-research`, `parallel-execution`, `privilege-escalation`, `agents-python-tools`, `markitdown-converter`, `officecli`, `playwright-web-scraping`, `init-deep`, `doctor`, `remove-ai-slops`, `remove-deadcode`, `github-triage`, `tech-debt-audit`, `lsp-guide`, `ast-grep`, `work-with-pr`, `pre-publish-review`, `hyperplan`, and `refactor`.
 
 Superpowers contributes 15 additional process skills. Core renders shared skills for `opencode-v1`, `opencode-v2`, `codex`, and `dsh`, using complete host-specific overrides where control flow differs. For Superpowers skills, every `docs/superpowers` documentation root is rendered as `docs`, preserving all following directories (for example, `docs/specs/` and `docs/plans/`). Existing documents are not migrated automatically. OpenCode V2 and DSH use native `subagent` semantics without a `background` argument.
 

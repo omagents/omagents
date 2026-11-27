@@ -170,10 +170,10 @@ test("V2 setup registers every bundled skill once through Core with flattened Su
       .filter((e) => e.isDirectory() && !e.name.startsWith(".") && !e.name.startsWith("_"))
       .filter((e) => fs.existsSync(path.join(SKILLS_DIR, e.name, "SKILL.md")))
       .map((e) => e.name)
-    assert.ok(expected.length >= 18, "repo should bundle at least 18 skills")
+    assert.ok(expected.length >= 19, "repo should bundle at least 19 skills")
     const registered = new Set(captured.skills.map((s) => s.id))
-    assert.equal(captured.skills.length, 33, "Core is the single registration path for all skills")
-    assert.equal(registered.size, 33, "Superpowers and Core must not register duplicate skills")
+    assert.equal(captured.skills.length, 34, "Core is the single registration path for all skills")
+    assert.equal(registered.size, 34, "Superpowers and Core must not register duplicate skills")
     for (const id of expected) {
       assert.ok(registered.has(id), `skill "${id}" should be registered`)
     }

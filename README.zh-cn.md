@@ -8,7 +8,7 @@
 
 [English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
-OmAgents 是面向 **OpenCode**、**Codex** 和 **DeepSeek Harness (DSH)** 的多宿主 agent 工具包。它打包了 18 个 OmAgents skills、15 个 Superpowers skills、MCP servers、原生后台 agent 集成、深度研究和 Python 工具链；共享的 Core 包负责统一状态及宿主无关行为。
+OmAgents 是面向 **OpenCode**、**Codex** 和 **DeepSeek Harness (DSH)** 的多宿主 agent 工具包。它打包了 19 个 OmAgents skills、15 个 Superpowers skills、MCP servers、原生后台 agent 集成、深度研究和 Python 工具链；共享的 Core 包负责统一状态及宿主无关行为。
 
 ---
 
@@ -67,9 +67,9 @@ Proxy 提供通用的 `search` 和 `fetch` 工具；`fetch` 只接受恰好一�
 
 | 宿主或角色 | 软件包 | 安装 | Skills | 后台执行与恢复 | 管理界面 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **OpenCode 1.x 和 OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **33**：18 个 OmAgents + 15 个 Superpowers | V1 使用 `task(background: true)`；V2 使用原生 `subagent(...)`，始终在后台运行。持久化 Core Job Board、结果投递和恢复。 | `/ps`、`parallel_status`、`cancel_task`、父上下文结果和 OpenCode TUI 状态 |
-| **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **33**：18 个 OmAgents + 15 个 Superpowers | Codex 原生 subagents。不安装 OpenCode 并行引擎或 DSH Web Job Board。 | Codex 原生界面和 skills |
-| **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **33**：18 个 OmAgents + 15 个 Superpowers | 原生异步 `subagent` 生命周期、持久化 `job-board.json`、取消、恢复、`/ps`、`parallel_status` 和 `cancel_task` | 经授权的 Remote `watchJobs` 流和原生 React Web Job Board |
+| **OpenCode 1.x 和 OpenCode 2.x** | `@omagents/omagents` | `npx @omagents/omagents` | **34**：19 个 OmAgents + 15 个 Superpowers | V1 使用 `task(background: true)`；V2 使用原生 `subagent(...)`，始终在后台运行。持久化 Core Job Board、结果投递和恢复。 | `/ps`、`parallel_status`、`cancel_task`、父上下文结果和 OpenCode TUI 状态 |
+| **Codex** | `@omagents/omagents-codex` | `npx @omagents/omagents-codex` | **34**：19 个 OmAgents + 15 个 Superpowers | Codex 原生 subagents。不安装 OpenCode 并行引擎或 DSH Web Job Board。 | Codex 原生界面和 skills |
+| **DeepSeek Harness (DSH)** | `@omagents/omagents-dsh` | `dsh plugin --profile web add @omagents/omagents-dsh` | **34**：19 个 OmAgents + 15 个 Superpowers | 原生异步 `subagent` 生命周期、持久化 `job-board.json`、取消、恢复、`/ps`、`parallel_status` 和 `cancel_task` | 经授权的 Remote `watchJobs` 流和原生 React Web Job Board |
 | **共享库，不是宿主 plugin** | `@omagents/core` | 作为依赖自动安装，无需用户单独安装 | 共享 skill 定义和 Superpowers 资源 | 宿主无关的执行状态、持久化、MCP 解析、研究资源和 Python 环境 | 无独立 UI |
 
 所有宿主软件包只依赖相同版本的 Core，互不依赖。
@@ -103,9 +103,9 @@ Deep Research 的 `--workspace <dir>` 只用于公开交付物。计划、原始
 
 ## Skills 与 MCP Servers
 
-18 个 OmAgents skills 为：
+19 个 OmAgents skills 为：
 
-`deep-research`、`parallel-execution`、`agents-python-tools`、`markitdown-converter`、`officecli`、`playwright-web-scraping`、`init-deep`、`doctor`、`remove-ai-slops`、`remove-deadcode`、`github-triage`、`tech-debt-audit`、`lsp-guide`、`ast-grep`、`work-with-pr`、`pre-publish-review`、`hyperplan` 和 `refactor`。
+`deep-research`、`parallel-execution`、`privilege-escalation`、`agents-python-tools`、`markitdown-converter`、`officecli`、`playwright-web-scraping`、`init-deep`、`doctor`、`remove-ai-slops`、`remove-deadcode`、`github-triage`、`tech-debt-audit`、`lsp-guide`、`ast-grep`、`work-with-pr`、`pre-publish-review`、`hyperplan` 和 `refactor`。
 
 Superpowers 另外提供 15 个流程 skills。Core 为 `opencode-v1`、`opencode-v2`、`codex` 和 `dsh` 渲染共享 skills；控制流程不同时使用完整的宿主专用覆盖版本。对于 Superpowers skills，所有以 `docs/superpowers` 为根目录的文档路径都会渲染为以 `docs` 为根目录，并保留后续目录（例如 `docs/specs/` 和 `docs/plans/`）。现有文档不会自动迁移。OpenCode V2 和 DSH 使用原生 `subagent` 语义，均不带 `background` 参数。
 

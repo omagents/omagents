@@ -15,7 +15,7 @@ function healthyRecords() {
   return createHealthRecords(() => [])
 }
 
-test("DSH registers all 33 bundled skills with absolute resources and native semantics", async (t) => {
+test("DSH registers all 34 bundled skills with absolute resources and native semantics", async (t) => {
   const registrations = []
   const active = new Set()
   const ctx = {
@@ -38,10 +38,10 @@ test("DSH registers all 33 bundled skills with absolute resources and native sem
 
   const dispose = registerDshSkills(ctx, health)
   const definitions = listSkillDefinitions({ host: "dsh" })
-  assert.equal(definitions.length, 33)
-  assert.equal(registrations.length, 33)
-  assert.equal(new Set(registrations.map((skill) => skill.name)).size, 33)
-  assert.equal(registrations.filter((skill) => skill.source === "omagents").length, 18)
+  assert.equal(definitions.length, 34)
+  assert.equal(registrations.length, 34)
+  assert.equal(new Set(registrations.map((skill) => skill.name)).size, 34)
+  assert.equal(registrations.filter((skill) => skill.source === "omagents").length, 19)
   assert.equal(registrations.filter((skill) => skill.source === "superpowers").length, 15)
 
   for (const registration of registrations) {
@@ -96,7 +96,7 @@ test("real DSH skill discovery is invalidated by the composed disposer", async (
 
   const dispose = registerDshSkills(root, health)
   const listed = await root.skills.list()
-  assert.equal(listed.length, 33)
+  assert.equal(listed.length, 34)
   const parallel = await root.skills.get("parallel-execution")
   assert.ok(parallel)
   assert.doesNotMatch(parallel.content, /background:\s*true/)
@@ -123,7 +123,7 @@ test("one skill failure is visible without blocking other skills or capabilities
 
   registerDshSkills(ctx, health)
 
-  assert.equal(registrations.length, 32)
+  assert.equal(registrations.length, 33)
   assert.equal(health.skills.status, "degraded")
   assert.match(health.skills.diagnostics[0].message, /doctor/)
   assert.equal(health.host.status, "ready")

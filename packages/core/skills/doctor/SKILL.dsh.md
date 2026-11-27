@@ -25,7 +25,7 @@ Check that the active DSH profile inserts the bare package-root Loader row:
 
 Inspect the current session's native `<available_skills>` catalog and call `skill` for representative entries.
 
-- **PASS:** all 33 packaged entries are present: 18 OmAgents and 15 Superpowers, including `deep-research`, `parallel-execution`, `brainstorming`, and `using-superpowers`. Additional user/project skills may also appear.
+- **PASS:** all 34 packaged entries are present: 19 OmAgents and 15 Superpowers, including `deep-research`, `parallel-execution`, `brainstorming`, and `using-superpowers`. Additional user/project skills may also appear.
 - **PASS:** a new top-level session automatically contains the Superpowers bootstrap and the DSH tool mapping before the first task action. A creation request such as "Let's make a react todo list" loads `brainstorming` before product code.
 - **PASS:** a delegated session with `session.origin === "subagent"` keeps native skills available but does not restart the controller bootstrap.
 - **FAIL:** if entries are absent, inspect skills health and Loader disposal/reactivation diagnostics. Files on disk alone are not proof of native registration or automatic bootstrap.
@@ -120,7 +120,7 @@ Check the active DSH profile's configured provider/model and the Web Client comp
 | Check | Status | Evidence and next action |
 |-------|--------|--------------------------|
 | Loader Host | PASS | Bare @omagents/omagents-dsh row active |
-| Native skills | PASS | 33 entries (18 OmAgents + 15 Superpowers) |
+| Native skills | PASS | 34 entries (19 OmAgents + 15 Superpowers) |
 | Superpowers bootstrap | PASS | Automatic top-level bootstrap; brainstorming route verified |
 | Native subagents | PASS | Activation, Board settlement, and cancellation verified |
 | MCP | WARN | GitHub token absent; grep.app fallback active |

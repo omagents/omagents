@@ -59,7 +59,7 @@ assertCompleteSearchProxy(corePaths.searchProxyDir)
 assertSearchProxyHandshake(corePaths.searchProxyEntry)
 
 const definitions = core.listSkillDefinitions({ host: "dsh" })
-assert.equal(definitions.filter((skill) => skill.source === "omagents").length, 18)
+assert.equal(definitions.filter((skill) => skill.source === "omagents").length, 19)
 assert.equal(definitions.filter((skill) => skill.source === "superpowers").length, 15)
 for (const definition of definitions) {
   const rendered = core.renderSkillForHost(definition, "dsh")
@@ -163,7 +163,7 @@ for (const name of ["@omagents/core", "@omagents/omagents", "@omagents/omagents-
 console.log(JSON.stringify({
   coreAssets: true,
   bundledSuperpowers: 15,
-  omagentsSkills: 18,
+  omagentsSkills: 19,
   openCodeV1: true,
   openCodeV2: true,
   openCodeCli: true,
@@ -224,7 +224,7 @@ assert.ok(runtime)
 assert.equal(runtime.health.host.status, "ready")
 assert.equal(runtime.health.persistence.status, "ready")
 await new Promise((resolve) => setImmediate(resolve))
-assert.equal(skills.length, 33)
+assert.equal(skills.length, 34)
 assert.ok(tools.has("parallel_status"))
 assert.ok(commands.has("ps"))
 const job = runtime.board.registerLaunch({ host: "dsh", hostTaskId: "packed-loader", parentSessionId: "packed-parent", childName: "packed-loader", agent: "spawn", description: "Packed Loader smoke" })
@@ -319,7 +319,7 @@ test(
       assert.deepEqual(result, {
         coreAssets: true,
         bundledSuperpowers: 15,
-        omagentsSkills: 18,
+        omagentsSkills: 19,
         openCodeV1: true,
         openCodeV2: true,
         openCodeCli: true,
@@ -335,7 +335,7 @@ test(
     await t.test("packed DSH uses the real Loader and serves its built Client", async () => {
       const result = await runProbe("dsh-clean-room-probe", DSH_PROBE, summary.profileDirectory)
       assert.equal(result.realLoader, true)
-      assert.equal(result.skills, 33)
+      assert.equal(result.skills, 34)
       assert.equal(result.clientServed, true)
       assert.equal(result.prepareScriptsRun, 0)
       assert.equal(result.clientArtifact, summary.clientArtifact)

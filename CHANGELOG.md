@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Privilege escalation skill:** a 19th OmAgents skill, `privilege-escalation`, stops agents from dying on bare `sudo` in TTY-less shells. Privileged commands route through a probe-first chain — `sudo -n`, `pkexec`, `run0`, `doas` — with correct pkexec mechanics (absolute executable paths, `tee`/`sh -c` for root file writes), never-rules (no bare sudo, no password piping, no double-wrapping self-elevating commands, no sudoers weakening), platform fallbacks, and a manual hand-off when no tool can prompt. Skill counts move to 19 OmAgents / 34 total across all README languages, AGENTS guides, the DSH doctor skill, and pinned tests.
+
 ## [0.16.3] - 2026-11-27
 
 ### Added
