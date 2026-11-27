@@ -350,6 +350,7 @@ Use the aligned release automation and final gate when implementing a release; d
 | 0.16.2 | v0.16.2 | Superpowers 6.4.2 -> 7.0.2 (brainstorming rewrite, compaction/generate bootstrap parity, SDD helper hardening); no host code changes required |
 | 0.16.3 | v0.16.3 | OpenCode installer defaults built-in websearch off (`--keep-websearch` opts out; explicit websearch settings preserved; applies to already-installed plugins) |
 | 0.17.0 | v0.17.0 | `privilege-escalation` skill (19th OmAgents, 34 total): probe-first `sudo -n` → `pkexec --disable-internal-agent` → `run0` → `doas` chain for TTY-less root commands |
+| 0.17.1 | v0.17.1 | Fix: privilege-escalation decision tree uses `doas -n` (non-interactive) instead of bare `doas`; test pins the tree line |
 
 ## Design Principles
 
