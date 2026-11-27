@@ -66,7 +66,11 @@ test("OpenCode CLI --keep-websearch skips the built-in websearch default", async
   const configPath = path.join(tempProject, "opencode.json")
   const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
   assert.ok(config.plugin.includes("@omagents/omagents"))
-  assert.equal(Object.hasOwn(config, "websearch"), false, "--keep-websearch must not write a websearch key")
+  assert.equal(
+    Object.hasOwn(config, "websearch"),
+    false,
+    "--keep-websearch must not write a websearch key"
+  )
 })
 
 test("OpenCode CLI preserves an explicit websearch setting", async (t) => {
@@ -80,7 +84,11 @@ test("OpenCode CLI preserves an explicit websearch setting", async (t) => {
   assertSuccess(result)
 
   const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
-  assert.deepEqual(config.websearch, { provider: "tinyfish" }, "explicit websearch value must survive installer writes")
+  assert.deepEqual(
+    config.websearch,
+    { provider: "tinyfish" },
+    "explicit websearch value must survive installer writes"
+  )
   assert.ok(config.plugin.includes("@omagents/omagents"))
 })
 
@@ -106,7 +114,8 @@ test("OpenCode CLI leaves an already-configured websearch untouched without rewr
   const tempProject = makeTempDir(t, "omagents-opencode-project-")
   const tempHome = makeTempDir(t, "omagents-opencode-home-")
   const configPath = path.join(tempProject, "opencode.json")
-  const explicit = JSON.stringify({ plugin: ["@omagents/omagents"], websearch: false }, null, 2) + "\n"
+  const explicit =
+    JSON.stringify({ plugin: ["@omagents/omagents"], websearch: false }, null, 2) + "\n"
   fs.writeFileSync(configPath, explicit, "utf8")
 
   const result = runCli([], { cwd: tempProject, home: tempHome })
@@ -140,7 +149,13 @@ test("OpenCode CLI prints its package version without installing", (t) => {
 })
 
 test("OpenCode CLI rejects positional hosts and unknown arguments", async (t) => {
-  for (const args of [["opencode"], ["codex"], ["--unknown"], ["--help", "unexpected"], ["--keep-websearch", "--keep-websearch"]]) {
+  for (const args of [
+    ["opencode"],
+    ["codex"],
+    ["--unknown"],
+    ["--help", "unexpected"],
+    ["--keep-websearch", "--keep-websearch"],
+  ]) {
     const tempProject = makeTempDir(t, "omagents-opencode-project-")
     const tempHome = makeTempDir(t, "omagents-opencode-home-")
     const result = runCli(args, { cwd: tempProject, home: tempHome })
