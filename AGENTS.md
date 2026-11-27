@@ -346,7 +346,7 @@ Use the aligned release automation and final gate when implementing a release; d
 | 0.15.0 | v0.15.0 | Superpowers documentation roots flattened from `docs/superpowers` to `docs`, unified OpenCode V2 skill registration |
 | 0.16.0 | v0.16.0 | Automatic local Search MCP Proxy with Exa → Keenable → You.com fallback, explicit You.com provider, and three-host research integration |
 | 0.16.1 | v0.16.1 | Process-scoped Exa deprioritization after fallback-eligible failures, with Keenable → You.com → Exa routing until Proxy recreation |
-| 0.16.2 | - | Superpowers 6.4.2 -> 7.0.2 (brainstorming rewrite, compaction/generate bootstrap parity, SDD helper hardening); no host code changes required |
+| 0.16.2 | v0.16.2 | Superpowers 6.4.2 -> 7.0.2 (brainstorming rewrite, compaction/generate bootstrap parity, SDD helper hardening); no host code changes required |
 
 ## Design Principles
 

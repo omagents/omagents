@@ -72,7 +72,7 @@ test("OpenCode CLI prints its package version without installing", (t) => {
 
   const result = runCli(["--version"], { cwd: tempProject, home: tempHome })
   assertSuccess(result)
-  assert.equal(result.stdout.trim(), "0.16.1")
+  assert.equal(result.stdout.trim(), "0.16.2")
   assert.equal(fs.existsSync(path.join(tempProject, "opencode.json")), false)
 })
 
