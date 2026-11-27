@@ -315,7 +315,7 @@ Use the aligned release automation and final gate when implementing a release; d
 
 | Dependency | Type | Version |
 |-----------|------|---------|
-| `superpowers` | git (pinned to commit) | 6.4.2 (`8ca22dba`) |
+| `superpowers` | git (pinned to commit) | 7.0.2 (`22f0b46`) |
 | `prettier` | dev | ^3.9.9 |
 
 **superpowers is pinned to a specific commit** to prevent breaking changes from upstream main branch. Core owns both the dependency and `bundledDependencies` entry in `packages/core/package.json`; host packages resolve its plugin and skills through `getCorePaths()`. Core's `prepack` script materializes that pinned installed dependency into ignored `packages/core/node_modules/` so workspace `npm pack` includes it, and `postpack` removes only the marked materialized copy; never commit a duplicate Superpowers source tree. To update, change the commit SHA there, run `npm install`, and verify. Note: superpowers >= 6.4 exports a V2 descriptor object as `default`; the V1 plugin function is `default.server` (also the named export `SuperpowersPlugin`). `loadSuperpowers()` in `packages/opencode/src/index.js` handles both shapes.
@@ -346,6 +346,7 @@ Use the aligned release automation and final gate when implementing a release; d
 | 0.15.0 | v0.15.0 | Superpowers documentation roots flattened from `docs/superpowers` to `docs`, unified OpenCode V2 skill registration |
 | 0.16.0 | v0.16.0 | Automatic local Search MCP Proxy with Exa → Keenable → You.com fallback, explicit You.com provider, and three-host research integration |
 | 0.16.1 | v0.16.1 | Process-scoped Exa deprioritization after fallback-eligible failures, with Keenable → You.com → Exa routing until Proxy recreation |
+| 0.16.2 | - | Superpowers 6.4.2 -> 7.0.2 (brainstorming rewrite, compaction/generate bootstrap parity, SDD helper hardening); no host code changes required |
 
 ## Design Principles
 

@@ -89,7 +89,7 @@ test("Core owns the Superpowers dependency pinned to a commit", () => {
     fs.readFileSync(path.join(ROOT, "packages", "opencode", "package.json"), "utf-8")
   )
   const dep = corePkg.dependencies.superpowers
-  assert.ok(dep.includes("#8ca22dba9a94f28898bbce59f2537ff4d87c747d"))
+  assert.ok(dep.includes("#22f0b463e7a5e579904dd6211a520321035526f7"))
   assert.ok(corePkg.bundledDependencies.includes("superpowers"))
   assert.equal(rootPkg.dependencies?.superpowers, undefined)
   assert.equal(rootPkg.bundledDependencies, undefined)

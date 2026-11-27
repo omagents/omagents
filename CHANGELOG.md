@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.2] - 2026-11-27
+
+### Changed
+
+- **Superpowers upgraded from 6.4.2 to 7.0.2** (pinned to `22f0b46`): the 15 process skills, the dual V1/V2 plugin entry shape, and the `docs/superpowers` documentation roots are unchanged, so host integration needs no code changes. The V2 bootstrap now also registers on the `compaction` and `generate` hooks so every request shape shares the cached prompt prefix, brainstorming was rewritten to ask fewer and sharper questions, and the subagent-driven-development and executing-plans helpers are much harder to point at the wrong repository or the wrong task. Test assertions that pinned the old brainstorming gate sentence and the single-listener compaction hook were updated for the new upstream content and hook surface.
+
 ## [0.16.1] - 2026-11-25
 
 ### Changed

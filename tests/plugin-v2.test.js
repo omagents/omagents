@@ -485,15 +485,18 @@ test("V2 compaction hook appends the state preservation note", async (t) => {
   const { ctx, captured } = makeFakeV2Context(t)
   const cleanup = await mod.default.setup(ctx)
   try {
-    const hook = captured.sessionHooks["compaction"]?.[0]
-    assert.ok(hook, "compaction hook registered")
+    // Superpowers >= 7 registers its own compaction listener (bootstrap
+    // prompt-cache parity) before OmAgents appends the state note, so
+    // dispatch every listener in registration order the way OpenCode does.
+    const hooks = captured.sessionHooks["compaction"] || []
+    assert.ok(hooks.length > 0, "compaction hook registered")
     const event = { system: [] }
-    await hook(event)
+    for (const hook of hooks) await hook(event)
     assert.ok(
       event.system.some((p) => p.text?.includes("OmAgents State Preservation")),
       "note appended"
     )
-    await hook(event)
+    for (const hook of hooks) await hook(event)
     assert.strictEqual(
       event.system.filter((p) => p.text?.includes("OmAgents State Preservation")).length,
       1,

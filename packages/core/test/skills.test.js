@@ -303,15 +303,45 @@ test("all Core hosts render the current Superpowers design and plan paths beneat
   const writingPlans = definitions.find(
     (definition) => definition.source === "superpowers" && definition.id === "writing-plans"
   )
+  const requestingCodeReview = definitions.find(
+    (definition) => definition.source === "superpowers" && definition.id === "requesting-code-review"
+  )
   assert.ok(brainstorming)
   assert.ok(writingPlans)
+  assert.ok(requestingCodeReview)
 
   for (const host of ["opencode-v1", "opencode-v2", "codex", "dsh"]) {
     const design = renderSkillForHost(brainstorming, host).content
     const plan = renderSkillForHost(writingPlans, host).content
+    const review = renderSkillForHost(requestingCodeReview, host).content
     assert.match(design, /docs\/specs\//, host)
     assert.match(plan, /docs\/plans\//, host)
+    // requesting-code-review's example references a plan path too, so the
+    // flattening must reach every Superpowers skill that names one.
+    assert.match(review, /docs\/plans\/deployment-plan\.md/, host)
     assert.doesNotMatch(design, /docs\/superpowers(?:\/|`)/, host)
     assert.doesNotMatch(plan, /docs\/superpowers(?:\/|`)/, host)
+    assert.doesNotMatch(review, /docs\/superpowers(?:\/|`)/, host)
+  }
+})
+
+test("no Superpowers skill retains a docs/superpowers root in any rendered host", () => {
+  // Upstream can add a docs/superpowers reference in any skill (7.0.2 carries
+  // them in brainstorming, writing-plans, and requesting-code-review), so sweep
+  // the whole rendered catalog instead of pinning individual skills.
+  const definitions = listSkillDefinitions({ host: "codex" }).filter(
+    (definition) => definition.source === "superpowers"
+  )
+  assert.ok(definitions.length > 0, "Superpowers skills must be discoverable")
+
+  for (const host of ["opencode-v1", "opencode-v2", "codex", "dsh"]) {
+    for (const definition of definitions) {
+      const content = renderSkillForHost(definition, host).content
+      assert.doesNotMatch(
+        content,
+        /(?<![\w-])docs\/superpowers(?![\w-])/,
+        `${host}/${definition.id}: docs/superpowers root survived rendering`
+      )
+    }
   }
 })

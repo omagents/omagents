@@ -31,7 +31,7 @@ test("OpenCode depends on Core and Core bundles pinned Superpowers assets", () =
   assert.deepEqual(pkg.bin, { omagents: "bin/install.js" })
   assert.equal(pkg.dependencies["@omagents/core"], "0.16.1")
   assert.equal(pkg.dependencies.superpowers, undefined)
-  assert.ok(core.dependencies.superpowers.includes("#8ca22dba9a94f28898bbce59f2537ff4d87c747d"))
+  assert.ok(core.dependencies.superpowers.includes("#22f0b463e7a5e579904dd6211a520321035526f7"))
   assert.ok(core.bundledDependencies.includes("superpowers"))
 })
 

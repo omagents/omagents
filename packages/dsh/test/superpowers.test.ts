@@ -158,7 +158,12 @@ test("clean DSH composition routes the exact React request through real native t
   assert.equal(acceptance.action.args.name, "brainstorming")
   assert.equal(acceptance.result.name, "brainstorming")
   assert.match(acceptance.result.content, /HARD-GATE/)
-  assert.match(acceptance.result.content, /Before taking any implementation action/)
+  // Superpowers 7's gate sentence (6.4 said "Before taking any
+  // implementation action"); pin the gate body, not a transient heading.
+  assert.match(
+    acceptance.result.content,
+    /Nothing gets built until your human partner approves the design doc/
+  )
   assert.equal(backend.writes.length, 0, "the actual backend wrote code before brainstorming")
 
   const debugging = await backend.complete({
