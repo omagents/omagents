@@ -1,6 +1,6 @@
 {
   "name": "@omagents/omagents",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Opencode agent toolkit: bundled skills, MCP servers, parallel execution, and superpowers",
   "type": "module",
   "main": "src/index.js",
@@ -21,6 +21,6 @@
     "url": "https://github.com/omagents/omagents"
   },
   "dependencies": {
-    "@omagents/core": "0.17.0"
+    "@omagents/core": "0.17.1"
   }
 }

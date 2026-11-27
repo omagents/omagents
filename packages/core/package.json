@@ -1,6 +1,6 @@
 {
   "name": "@omagents/core",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Host-neutral state and shared capabilities for OmAgents",
   "type": "module",
   "main": "src/index.js",
