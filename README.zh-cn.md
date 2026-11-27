@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/@omagents/omagents.svg)](https://www.npmjs.com/package/@omagents/omagents)
 [![GitHub stars](https://img.shields.io/github/stars/omagents/omagents?style=social)](https://github.com/omagents/omagents/stargazers)
 
-[English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+[English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Türkçe](README.tr.md)
 
 OmAgents 是面向 **OpenCode**、**Codex** 和 **DeepSeek Harness (DSH)** 的多宿主 agent 工具包。它打包了 19 个 OmAgents skills、15 个 Superpowers skills、MCP servers、原生后台 agent 集成、深度研究和 Python 工具链；共享的 Core 包负责统一状态及宿主无关行为。
 
