@@ -374,7 +374,7 @@ test("Core package has the aligned version and no host runtime dependencies", as
   )
 
   assert.equal(packageJson.name, "@omagents/core")
-  assert.equal(packageJson.version, "0.16.2")
+  assert.equal(packageJson.version, "0.16.3")
   assert.equal(packageJson.type, "module")
   assert.equal(packageJson.main, "src/index.js")
   for (const dependency of Object.keys(packageJson.dependencies || {})) {

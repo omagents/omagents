@@ -58,7 +58,7 @@ test("every README language has exactly the approved host installation surface",
     assert.doesNotMatch(text, /npx\s+@omagents\/omagents\s+codex\b/, file)
     assert.doesNotMatch(text, /npx\s+@omagents\/omagents\s+opencode\b/, file)
     assert.ok(text.includes("@omagents/core"), `${file} must identify the shared Core package`)
-    assert.ok(text.includes("0.16.2"), `${file} must identify the aligned release candidate`)
+    assert.ok(text.includes("0.16.3"), `${file} must identify the aligned release candidate`)
   }
 })
 
@@ -573,11 +573,11 @@ test("README and AGENTS search guards reject every removed semantic clause", () 
 test("release guidance keeps four versions aligned and publishes Core before sequential hosts", () => {
   assert.deepEqual(
     PACKAGE_MANIFESTS.map((file) => readJson(file).version),
-    ["0.16.2", "0.16.2", "0.16.2", "0.16.2"]
+    ["0.16.3", "0.16.3", "0.16.3", "0.16.3"]
   )
   for (const file of HOST_MANIFESTS) {
     const pkg = readJson(file)
-    assert.equal(pkg.dependencies["@omagents/core"], "0.16.2", file)
+    assert.equal(pkg.dependencies["@omagents/core"], "0.16.3", file)
     for (const otherHost of PACKAGE_NAMES.slice(1)) {
       assert.equal(
         pkg.dependencies[otherHost],
@@ -719,6 +719,21 @@ test("root READMEs qualify interrupted recovery with the observed-active cold-mi
     assert.ok(text.includes("active external"), `${file} omits the observed active external run`)
     assert.ok(text.includes("cold session-not-found"), `${file} omits the cold-miss exception`)
     assert.ok(text.includes("interrupted"), `${file} omits interrupted recovery`)
+  }
+})
+
+test("changelog has a versioned built-in websearch defaulting release entry", () => {
+  const changelog = read("CHANGELOG.md")
+  const release = changelog.split("## [0.16.2]")[0]
+  assert.match(release, /^## \[0.16.3\] - 2026-11-27$/m)
+  for (const required of [
+    "Built-in OpenCode websearch defaulting",
+    '"websearch": false',
+    "--keep-websearch",
+    "never overwritten",
+    "already installed",
+  ]) {
+    assert.ok(release.includes(required), `0.16.3 changelog omits ${required}`)
   }
 })
 
