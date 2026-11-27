@@ -6,7 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/@omagents/omagents.svg)](https://www.npmjs.com/package/@omagents/omagents)
 [![GitHub stars](https://img.shields.io/github/stars/omagents/omagents?style=social)](https://github.com/omagents/omagents/stargazers)
 
-[English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+[English](README.md) | [简体中文](README.zh-cn.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Türkçe](README.tr.md)
 
 OmAgents는 **OpenCode**, **Codex**, **DeepSeek Harness (DSH)**를 위한 멀티 호스트 에이전트 툴킷입니다. 19개 OmAgents skills, 15개 Superpowers skills, MCP servers, 네이티브 백그라운드 에이전트 통합, Deep Research, Python 도구를 제공하며, 공유 Core 패키지가 상태와 호스트 독립 동작을 일관되게 유지합니다.
 
