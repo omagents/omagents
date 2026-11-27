@@ -10,7 +10,7 @@ import { runNpm } from "../../../tests/npm-launcher.js"
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..", "..")
 const PACKAGE_NAME = "@omagents/omagents-codex"
-const VERSION = "0.16.3"
+const VERSION = "0.17.0"
 const OLD_CODEX_COMMAND = "npx @omagents/omagents" + " codex"
 const SEARCH_PROXY_MODULES = [
   "backends.mjs",
